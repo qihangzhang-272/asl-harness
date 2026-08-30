@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "asl-harness"
+version = "0.3.0"
+description = "Mode-only local Environment and Host projections for ASL-WEP"
+readme = "README.md"
+license = "MIT"
+authors = [{ name = "qihangzhang-272" }]
+requires-python = ">=3.11"
+dependencies = ["PyYAML>=6.0"]
+
+[project.optional-dependencies]
+test = ["pytest>=9.0"]
+
+[project.scripts]
+asl-harness = "asl_harness.commands:main"
+
+[project.urls]
+Homepage = "https://github.com/qihangzhang-272/asl-harness"
+Repository = "https://github.com/qihangzhang-272/asl-harness"
+Issues = "https://github.com/qihangzhang-272/asl-harness/issues"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = "-q"

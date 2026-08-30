@@ -1,0 +1,9 @@
+apiVersion: asl-wep/v0.3.0-design
+kind: ModeProjection
+metadata:
+  id: skill-foundry
+spec:
+  skills:
+    - source-research
+  permissions:
+    mutateEnvironment: true

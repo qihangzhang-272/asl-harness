@@ -1,0 +1,23 @@
+{
+  "name": "asl-environment-host",
+  "version": "0.3.0",
+  "description": "校验 ASL Personal Harness Environment，并把选定 Mode 投影到当前宿主项目。",
+  "author": {
+    "name": "ASL Maintainers"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "ASL Environment Host",
+    "shortDescription": "校验、刷新和切换个人 ASL Mode。",
+    "longDescription": "使用同一份本地 Harness Environment 管理 WORKSPACE 能力地图，并把 Mode Skill 子图投影到 Codex App、Claude Code 或 DeepSeek Harness。",
+    "developerName": "ASL Maintainers",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "检查我的 ASL Environment，并把合适的 Mode 接入当前项目。"
+    ]
+  }
+}

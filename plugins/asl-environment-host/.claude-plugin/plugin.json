@@ -1,0 +1,9 @@
+{
+  "name": "asl-environment-host",
+  "displayName": "ASL Environment Host",
+  "version": "0.3.0",
+  "description": "校验 ASL Personal Harness Environment，并把选定 Mode 投影到当前宿主项目。",
+  "author": {
+    "name": "ASL Maintainers"
+  }
+}
