@@ -5,11 +5,11 @@
 <h1 align="center">ASL Harness</h1>
 
 <p align="center">
-  <strong>把个人 Skill 库，变成真正能进入工作状态的 AI 工作环境。</strong>
+  <strong>面向个人 Agent Skill 的 Mode 工作环境层。</strong>
 </p>
 
 <p align="center">
-  Modes, not workflows. One skill library, many ways to work.
+  一份 Skill 库，多种工作状态。运行在 Codex、Claude Code 与 DeepSeek Harness。
 </p>
 
 <p align="center">
@@ -20,61 +20,91 @@
 </p>
 
 <p align="center">
-  <a href="#我为什么做这个">为什么做</a> ·
-  <a href="#为什么是-mode">为什么是 Mode</a> ·
-  <a href="#mode-之间是什么关系">Mode 的关系</a> ·
-  <a href="#怎么接入你自己的工作环境">开始使用</a>
+  <a href="#关于-asl">关于 ASL</a> ·
+  <a href="#选择发行版">发行版</a> ·
+  <a href="#推荐实践">推荐实践</a> ·
+  <a href="#mode">Mode</a> ·
+  <a href="#宿主接入">宿主接入</a>
 </p>
 
 ---
 
-## 我为什么做这个
+> [!NOTE]
+> 这是不包含个人技能和项目内容的 Harness 核心。需要开箱即用的精选技能，请使用 [Agent Skill Library](https://github.com/qihangzhang-272/agent-skill-library)。
 
-我最开始维护 Agent Skill Library 时，想法很简单：在 GitHub 上找到好用的 Skill，拉到本地，改成适合自己的版本，然后继续积累。
+## 关于 ASL
 
-这件事一开始很爽。写作、投研、产品分析、排版、搜索……能力越装越多，Agent 看起来也越来越强。
+Agent Skill 库通常只会朝一个方向增长：更多 Prompt、更多工具、更多集成，以及每次任务都要加载的更多上下文。固定 Workflow 虽然容易重复，却也过早规定了任务必须怎么完成。
 
-但很快我发现，**Skill 多，不等于工作状态好。**
+ASL Harness 把能力库和运行环境分开。**Mode** 描述一类工作的能力范围，当前 Host 继续理解目标、选择 Skill，并决定任务如何完成。
 
-写公众号时，Agent 还背着估值和尽调规则；做产品分析时，又带着排版和配图要求。每个任务都能做，但上下文越来越重，Agent 开始把注意力花在理解工具、遵守流程和维护各种 YAML 上。
+```text
+个人 Skill 库 → Mode → Codex / Claude Code / DeepSeek Harness
+```
 
-我也试过 Workflow。把研究、写作、排版拆成一条固定链，看起来稳定，实际任务稍微变化，就要加条件、补分支、重新解释节点之间的关系。最后维护 Workflow 本身，反而成了新的工作。
+Harness 负责校验本地真源、补齐 Skill 依赖、生成宿主原生投影并检查漂移。它不是另一个 Agent，也不会在背后运行第二套调度逻辑。
 
-我真正想要的不是第二个 Agent，也不是更复杂的调度器。
+## 选择发行版
 
-我想要的是：
+ASL 维护两个独立仓库。这样既能保留轻量、通用的原初架构，也不要求每个使用者从零培养全部 Skill。
 
-> 当我要写作时，AI 进入我的写作工作台；当我要投研时，它进入投研工作台。它知道这里有哪些能力，但仍然能根据眼前的目标自己判断怎么做。
+| 仓库 | 定位 | 是否包含技能 | 适合谁 |
+|---|---|---:|---|
+| [ASL Harness](https://github.com/qihangzhang-272/asl-harness) | Mode 模型、校验、宿主投影与 DeepSeek Preset 导出 | 不包含个人 Skill，只带通用示例 | 想从原初架构搭建私有工作环境的人 |
+| [Agent Skill Library](https://github.com/qihangzhang-272/agent-skill-library) | 写作、投资、资本市场、产品分析、编排与技能发现的精选发行版 | 包含已筛选和维护的 Skill | 想直接安装一套可用能力，再按自己需要修改的人 |
 
-这就是 ASL Harness 想解决的问题。
+ASL Harness 是稳定核心，Agent Skill Library 是带有明确取舍的能力发行版。
 
-## 使用前后，有什么变化？
+发行版会随着真实使用不断替换和改进 Skill；核心只在 Mode 模型、校验规则或宿主集成发生变化时更新。两者分开维护，个人能力的变化不会把 Harness 重新变成一个庞大的技能仓库。
 
-| 以前 | 使用 ASL Harness 之后 |
-|---|---|
-| 所有 Skill 堆在同一个全局目录 | 每种工作只看见当前 Mode 的能力 |
-| 换一个 Agent，要重新安装和解释 | 一份本地真源投影到三个 Host |
-| Workflow 规定任务必须怎么走 | Host 根据 Goal 动态选择 Skill |
-| 新能力直接塞进正式工作区 | 先试用和验证，再进入 Mode |
-| Skill 越多，上下文越重 | Mode 只携带少量能力根和必要依赖 |
+## 推荐实践
 
-如果把 Skill Library 比作仓库，Mode 就是已经收拾好的工作台。
+需要马上给 Codex 或 Claude Code 增加可用能力时，直接安装 Agent Skill Library。需要把能力改成自己的职业方法、团队规范或长期偏好时，Fork 它并在自己的仓库里维护。
 
-仓库里可以有很多东西，但坐到写作桌前，不应该同时摆着估值表、测试框架和十几把暂时用不到的工具。
+当 Skill 已经多到需要区分不同工作状态时，再接入 ASL Harness。Harness 保持原样，选中的 Skill、Profile 和 Mode 留在独立的私有 Environment 中；当前项目只接收正在使用的 Mode。
 
-## 为什么是 Mode
+```mermaid
+flowchart LR
+    D["Agent Skill Library\n精选发行版"] --> E["你的 Environment\n选中的 Skills + Modes"]
+    O["其他技能来源"] --> E
+    H["ASL Harness\n纯净核心"] --> E
 
-因为一个人的工作不是一条固定流程，而是几种反复进入的状态。
+    E --> M["当前 Mode"]
+    M --> C["Codex App"]
+    M --> L["Claude Code"]
+    M --> S["DeepSeek Harness"]
+```
 
-写作 Mode 里，我会研究材料、形成判断、写稿、配图和排版，但每篇文章的顺序不完全一样。投研 Mode 也有自己的事实核验、产品判断和估值能力，但不同公司会走出不同的研究路径。
+这套结构允许上游持续更新。新 Skill 先在发行版中审查和验证，再按需要进入某个 Environment，并被一个或多个 Mode 使用。Harness 不需要被复制，个人仓库也不会因为接入新能力而失去边界。
 
-所以 Mode 不保存步骤，只保存三件事：
+Agent Skill Library 目前已经提供 Codex 与 Claude Code 的原生插件安装。完整技能库还没有作为现成 Mode 包随 Harness 发布；本仓库中的 [`personal-environment`](examples/personal-environment) 保持小而通用，只用于说明结构和验证运行方式。
 
-1. **这是一个什么工作场；**
-2. **这里可以使用哪些完整 Skill；**
-3. **这个 Mode 能不能修改长期能力库。**
+## 快速开始
 
-一个最小 Mode 只有这些内容：
+安装纯净核心并验证示例 Environment：
+
+```bash
+git clone https://github.com/qihangzhang-272/asl-harness.git
+cd asl-harness
+python -m pip install -e .
+asl-harness workspace.validate --workspace ./examples/personal-environment
+```
+
+把示例中的 `creator-studio` Mode 接入一个 Codex 项目：
+
+```bash
+asl-harness host.project \
+  --workspace ./examples/personal-environment \
+  --project /path/to/current-project \
+  --mode creator-studio \
+  --host-id codex-app
+```
+
+精选技能的安装方式见 [Agent Skill Library：双端安装与验证](https://github.com/qihangzhang-272/agent-skill-library#双端安装与验证)。它现在可以独立安装；当全局技能库变得过宽时，再把需要的 Skill 组织进 Mode Environment。
+
+## Mode
+
+Mode 是 Skill 图上的具名视图。它说明当前是什么工作环境、这里有哪些根 Skill，以及这个环境是否有权修改长期能力库。
 
 ```yaml
 metadata:
@@ -86,157 +116,63 @@ spec:
     mutateEnvironment: false
 ```
 
-`skills` 不是执行顺序。它只是告诉 Host：进入这个 Mode 后，你拥有这些能力。
+Skill 列表不是执行顺序。示例中的 `product-analysis` 依赖 `source-research`，Harness 会把两者一起带入当前环境；Host 仍然可以根据眼前的目标决定如何使用它们。
 
-真正执行任务的仍然是 Codex、Claude Code 或 DeepSeek Harness。ASL Harness 不接管它们的思考，也不在背后再跑一套 Agent loop。
-
-## Mode 之间是什么关系
-
-Mode 不是彼此隔离的文件夹，也不复制 Skill。它们是同一张个人能力图上的不同视角。
+Mode 不互相继承，也不互相调用。它们通过共享 Skill 形成联系。
 
 ```mermaid
 flowchart LR
-    C["Creator Studio\n日常完成内容任务"] --> P["product-analysis"]
+    C["Creator Studio"] --> P["product-analysis"]
     P --> R["source-research"]
-
-    F["Skill Foundry\n培养与修复能力"] --> R
+    F["Skill Foundry"] --> R
 
     C -. "发现能力缺口" .-> F
-    F -. "验证后的新 Skill" .-> C
+    F -. "验证后的 Skill" .-> C
 ```
 
-这里有三个我很喜欢的设计。
+`Creator Studio` 与 `Skill Foundry` 共用同一份研究能力，不需要维护副本。生产 Mode 交付真实任务；Foundry Mode 可以获得修改 Environment 的权限。验证通过的新 Skill 可以进入任何需要它的 Mode。
 
-### 1. Mode 可以共享同一个 Skill
+固定 Workflow 把可复用对象定义成一条执行链。ASL 把完整 Skill 作为能力单位，把 Mode 作为可复用的工作环境，具体任务计划仍由 Host 根据目标生成。
 
-`source-research` 可以同时服务写作、产品分析和投研。它只在本地维护一份，不需要为每个 Mode 复制一遍。
+## 宿主接入
 
-Mode 之间的联系，不靠继承关系或复杂配置表达，而是自然地体现在它们共享了哪些能力。
+| Host | Skill 投影 | Mode 入口 |
+|---|---|---|
+| Codex App | `.agents/skills/` | `AGENTS.md` |
+| Claude Code | `.claude/skills/` | `CLAUDE.md` |
+| DeepSeek Harness | `.dsh/skills/` | `AGENTS.md` 或 Agent Preset |
 
-### 2. Mode 只选择能力根
+Harness 只处理能够确认属于自身的投影，不覆盖用户已有文件，也不把宿主生成目录当成第二份真源。
 
-示例里的 `creator-studio` 只写了 `product-analysis`，但产品分析本身依赖资料研究，所以 Harness 会自动把 `source-research` 一起带进来。
-
-这意味着 Mode 不会随着 Skill 变多而变成一张越来越长的清单。你只需要说清楚自己真正想用的能力，必要依赖由 Skill 自己说明。
-
-### 3. 工作 Mode 和 Skill Foundry 会形成循环
-
-普通 Mode 负责完成真实任务。任务中发现缺能力、能力不好用，或者用户给出明确反馈时，再进入 `skill-foundry`。
-
-新能力先被本地化、试用和验证，通过后才加入一个或多个 Mode。于是每一次真实工作，都可能让下一次的工作环境更好一点。
-
-这不是 Agent 在运行中随意改自己，而是一个人和 AI 共同维护、Git 可以追溯的能力进化过程。
-
-## 怎么接入你自己的工作环境
-
-ASL Harness 不要求你把个人 Skill 上传到这个公开仓库。你的 Skill、Mode 和 Profile 应该继续留在自己的私有目录或 Git 仓库里。
-
-### 第一步：安装 Harness
-
-```bash
-git clone https://github.com/qihangzhang-272/asl-harness.git
-cd asl-harness
-python -m pip install -e .
-```
-
-### 第二步：准备自己的 Environment
-
-你可以复制 [`examples/personal-environment`](examples/personal-environment)，也可以把已有 Skill 库整理成下面这个最小结构：
-
-```text
-my-environment/
-├── WORKSPACE.md
-├── PROFILE.md
-├── skills/
-│   ├── source-research/SKILL.md
-│   └── product-analysis/SKILL.md
-└── modes/
-    └── creator-studio/
-        ├── MODE.md
-        └── mode.yaml
-```
-
-先检查它是否完整：
-
-```bash
-asl-harness workspace.validate --workspace /path/to/my-environment
-```
-
-### 第三步：选择 Mode，接入当前项目
-
-```bash
-asl-harness host.project \
-  --workspace /path/to/my-environment \
-  --project /path/to/current-project \
-  --mode creator-studio \
-  --host-id codex-app
-```
-
-`--host-id` 可以换成：
-
-| Host | 值 |
-|---|---|
-| Codex App | `codex-app` |
-| Claude Code | `claude-code` |
-| DeepSeek Harness | `deepseek-harness` |
-
-投影完成后，直接在当前 Host 里描述目标即可。你不需要手动逐个调用 Skill，也不需要先写一条 Workflow。
-
-```text
-“分析这个 AI 产品，形成自己的判断，并整理成一篇公众号文章。”
-```
-
-Host 会看到当前 Mode、你的精简 Profile 和可用 Skill，再决定这次任务怎么完成。
-
-## Harness 到底负责什么
-
-它只做四件事：
-
-- 检查你的 Skill 和 Mode 是否完整；
-- 计算当前 Mode 真正需要的 Skill；
-- 投影到 Codex、Claude Code 或 DeepSeek Harness；
-- 当本地真源变化时，提醒投影已经过期。
-
-它不执行业务任务，不保存对话，不建立状态树，也不替 Host 做意图判断。
+DeepSeek Harness 还可以把 Mode 导出为 Agent Preset。ASL 从一份已知可运行的 Preset 出发，只替换 Persona 与 Skill 范围，原有工具和插件保持不变。
 
 <details>
-<summary><strong>查看完整命令和 DeepSeek Agent Preset</strong></summary>
+<summary><strong>CLI 参考</strong></summary>
 
-| 命令 | 作用 |
+| 命令 | 用途 |
 |---|---|
-| `workspace.validate` | 检查 Environment、Skill 和 Mode |
-| `workspace.view.sync` | 刷新人机共读的能力地图 |
-| `host.project` | 把一个 Mode 接入当前项目 |
-| `host.verify` | 检查投影是否完整或过期 |
-| `deepseek.preset.export` | 导出 DeepSeek Agent Preset |
-
-DeepSeek Harness 可以把一个 Mode 导出成长期可选择的 Agent Preset：
-
-```bash
-asl-harness deepseek.preset.export \
-  --workspace /path/to/my-environment \
-  --mode creator-studio \
-  --base-preset /path/to/known-good-preset \
-  --output /path/to/deepseek/user-presets/creator-studio
-```
-
-Harness 保留已知可运行 Preset 的工具和插件，只替换 Persona 与当前 Mode 的 Skill 集合。
+| `workspace.validate` | 校验 Environment、Skill 与 Mode |
+| `workspace.view.sync` | 刷新人和 Agent 共读的能力地图 |
+| `host.project` | 把 Mode 接入当前项目 |
+| `host.verify` | 检查投影完整性与漂移 |
+| `deepseek.preset.export` | 从已知可运行的基础导出 DeepSeek Agent Preset |
 
 </details>
 
-## 当前状态
+## 开发者预览
 
-ASL Harness 目前是 **v0.3 Developer Preview**。
+ASL Harness 当前是可运行的早期核心。Mode 校验、Skill 依赖解析、能力地图、宿主投影、漂移检查和 DeepSeek Preset 结构级导出已经实现，并在 Windows 与 Linux 上持续测试。
 
-已经可以运行：Mode、Skill 依赖、三宿主项目投影、能力地图、漂移检查和 DeepSeek Preset 结构级导出。仓库有 17 项自动化测试，并在 Windows 与 Linux 上持续验证。
+完整 Agent Skill Library 还没有发布为开箱即用的 Mode 发行包，DeepSeek Preset 也仍需要更长时间的真实会话验证。在这些集成完成前，接口可能发生不兼容变化。
 
-还没有完成大型个人能力库的长期使用验证，DeepSeek Preset 也仍缺真实会话的持续验收。它现在更适合愿意一起试验“个人 AI 工作环境”的开发者，而不是希望下载后立刻得到一个全能 Agent 的用户。
+## 开发
 
-如果你也在维护自己的 Skill 库，或者已经被越来越长的 Workflow 折磨过，欢迎试试这个方向。觉得有价值，也欢迎点一个 Star。
+```bash
+python -m pip install -e ".[test]"
+python -m pytest
+```
 
-## 开源边界
-
-这个仓库只包含 Harness 源码、通用示例和宿主适配器。它不包含我的个人 Skill、Mode、Case、Profile、运行产物或凭据。
+架构文档位于 [`docs/plans`](docs/plans)，宿主适配器位于 [`plugins/asl-environment-host`](plugins/asl-environment-host)。
 
 ## License
 
