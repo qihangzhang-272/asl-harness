@@ -55,16 +55,20 @@ def _read_manifest(path: Path) -> dict | None:
 
 
 def _is_junction(path: Path) -> bool:
-    if sys.platform != "win32" or path.is_symlink() or not path.exists():
+    if sys.platform != "win32" or path.is_symlink():
         return False
     try:
         return bool(path.lstat().st_file_attributes & stat.FILE_ATTRIBUTE_REPARSE_POINT)
-    except (AttributeError, OSError):
+    except (AttributeError, FileNotFoundError, OSError):
         return False
 
 
 def _exists(path: Path) -> bool:
-    return path.exists() or path.is_symlink()
+    try:
+        path.lstat()
+        return True
+    except FileNotFoundError:
+        return False
 
 
 def _copy_marker(path: Path) -> dict | None:
@@ -181,11 +185,6 @@ def _mode_instructions(workspace: Workspace, mode_id: str) -> str:
         raise HarnessError("HOST_INSTRUCTION_COLLISION", "PROFILE.md contains ASL markers")
     if MANAGED_START in mode.document or MANAGED_END in mode.document:
         raise HarnessError("HOST_INSTRUCTION_COLLISION", "MODE.md contains ASL markers")
-    mutation = (
-        "The user has explicitly allowed this Mode to maintain the Environment. Keep every durable change in the smallest fitting Profile, Skill, Mode, or explicit-feedback source and leave a reviewable Git diff."
-        if mode.mutate_environment
-        else "Do not modify the Environment in this Mode. Continue the user's work, and use a maintenance Mode only when the user explicitly asks to change long-term capabilities."
-    )
     return f"""## ASL current Mode: {mode_id}
 
 Environment truth: `{workspace.root}`
@@ -202,10 +201,11 @@ Environment truth: `{workspace.root}`
 
 1. This Mode is a broad working environment and Skill subgraph, not a Workflow or fixed sequence.
 2. Choose complete projected Skills dynamically from the user's Goal and current context. Read a Skill's full package before substantive use and satisfy its own completion standards even when it is one part of a larger task.
-3. External Prompt, MCP, Agent, API, model, command, script, or remote Skill may be used only through a projected formal local Skill package; do not call one naked in the middle of a task.
+3. External Prompt, MCP, Agent, API, model, command, script, or remote Skill may be used only through a projected formal local Skill package. A user-directed source may be integrated directly after full review; Candidate and Trial are only for concrete uncertainty.
 4. Keep one-off evidence, screenshots, drafts, and final Artifacts in the current Case or project; do not promote them into the Environment without an explicit maintenance task.
 5. Record durable feedback only when the user clearly evaluates, corrects, or states a preference. Do not infer it from silence, timing, clicks, or other ambiguous behavior.
-6. {mutation}
+6. Do not infer durable Environment changes from ordinary work. When the user explicitly asks to add or change a long-term capability, use the Harness system maintenance path from the current Mode, change the smallest fitting truth, run deterministic validation, and leave a reviewable Git diff.
+7. High-impact deletion, publication, payment, login, private-data access, messages, or external writes still require the current Host's native user-authorization boundary. Mode selection never grants that authority.
 
 The current Host is the only executor. ASL Harness validates and projects this Mode; it does not route Skills, run a graph, or maintain a second Agent loop.
 """
@@ -255,7 +255,6 @@ def project_mode(
     ]
     instruction = _contained(project, layout["instructionFile"])
     _replace_managed_block(instruction, _mode_instructions(workspace, mode_id))
-    mode = workspace.modes[mode_id]
     manifest = {
         "version": PROJECTION_VERSION,
         "environment": str(workspace.root),
@@ -263,7 +262,6 @@ def project_mode(
         "sourceFingerprint": fingerprint,
         "mode": mode_id,
         "hostId": host_id,
-        "permissions": {"mutateEnvironment": mode.mutate_environment},
         "skillProjections": projections,
         "managedSurfaces": [layout["instructionFile"]],
     }
@@ -291,11 +289,9 @@ def verify_mode_projection(
         "sourceFingerprint",
         "mode",
         "hostId",
-        "permissions",
         "skillProjections",
         "managedSurfaces",
     }
-    mode = workspace.modes[mode_id]
     if (
         manifest is None
         or set(manifest) != expected_keys
@@ -303,7 +299,6 @@ def verify_mode_projection(
         or manifest.get("environment") != str(workspace.root)
         or manifest.get("mode") != mode_id
         or manifest.get("hostId") != host_id
-        or manifest.get("permissions") != {"mutateEnvironment": mode.mutate_environment}
         or manifest.get("managedSurfaces") != [layout["instructionFile"]]
     ):
         raise HarnessError("HOST_PROJECTION_INVALID", "Host projection manifest is invalid")

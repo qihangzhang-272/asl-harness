@@ -1,9 +1,7 @@
-apiVersion: asl-wep/v0.3.0-design
+apiVersion: asl-wep/v0.3.0
 kind: ModeProjection
 metadata:
   id: creator-studio
 spec:
   skills:
     - product-analysis
-  permissions:
-    mutateEnvironment: false

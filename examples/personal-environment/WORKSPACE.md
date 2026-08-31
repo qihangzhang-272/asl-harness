@@ -5,6 +5,12 @@
 <!-- ASL:CAPABILITY VIEW START -->
 ## 当前能力（ASL 自动维护）
 
+### 状态摘要
+
+- 正式业务 Skills：2
+- 业务 Modes：1
+- 确定性提醒：无
+
 ### 正式 Skills
 
 - `product-analysis`：结合材料解释一个产品是什么、为什么重要以及仍有哪些不确定性
@@ -12,11 +18,12 @@
 
 ### Modes
 
-- `creator-studio`：product-analysis, source-research；环境维护权=否
-- `skill-foundry`：source-research；环境维护权=是
+- `creator-studio`：product-analysis, source-research
 
 ### 培养区
 
 - Candidates：无
 - Trials：无
+- Feedback：无
+- Archive：`legacy-system-mode-skill-foundry`
 <!-- ASL:CAPABILITY VIEW END -->

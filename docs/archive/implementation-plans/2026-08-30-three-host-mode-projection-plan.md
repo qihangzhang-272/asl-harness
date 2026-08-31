@@ -1,12 +1,12 @@
 # ASL 三宿主 Mode 投影实施计划
 
-> 本计划执行已由用户确认，不再增加设计确认门槛。
+> 历史实施记录。当前实现已经完成本计划，并由 v0.3 SPEC、ADR-0020、23 项测试和实时 Environment 校验继续维护。
 
 ## 1. 重建 Mode-only 领域模型
 
 - 删除 v0.1/v0.2、Workflow、Run、sidecar contract 与旧 manifest 分支。
 - 重写 `Workspace.open()`、Skill/Mode 扫描、依赖闭包、来源指纹。
-- 先用失败测试覆盖旧结构回流、缺失依赖、循环依赖与权限字段错误。
+- 先用失败测试覆盖旧结构回流、缺失依赖、循环依赖与非最小 Mode 字段。
 - 验证：`pytest` 中 Workspace 单元测试全部通过，源文件不再出现旧 API 版本与 Workflow 类型。
 
 ## 2. 收敛宿主投影
@@ -26,7 +26,7 @@
 
 - CLI 只保留 `workspace.validate`、`workspace.view.sync`、`host.project`、`host.verify`、`deepseek.preset.export`。
 - README 改写为 v0.3 当前能力、整体架构图、目录、命令、宿主差异、失败边界与尚未实现事项。
-- 更新协议 README/SPEC 中的实现状态，修正 `mutateWorkspace` 遗留字样。
+- 更新协议 README/SPEC 中的实现状态，删除 Mode 维护权限字段。
 - 验证：帮助文本与 README 一致，协议文档校验通过。
 
 ## 5. 真实最小验收

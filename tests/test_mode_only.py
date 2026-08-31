@@ -7,7 +7,7 @@ import pytest
 
 from asl_harness.adapters import HOST_LAYOUTS, project_mode, verify_mode_projection
 from asl_harness.commands import main
-from asl_harness.deepseek import PRESET_MARKER, export_preset
+from asl_harness.deepseek import PRESET_MARKER, export_preset, verify_preset
 from asl_harness.workspace import HarnessError, Workspace
 
 
@@ -42,9 +42,6 @@ def _mode(
     root: Path,
     mode_id: str,
     skills: tuple[str, ...],
-    *,
-    mutate: bool = False,
-    permission_key: str = "mutateEnvironment",
 ) -> None:
     _write(
         root / "modes" / mode_id / "MODE.md",
@@ -53,15 +50,13 @@ def _mode(
     roots = "\n".join(f"    - {item}" for item in skills)
     _write(
         root / "modes" / mode_id / "mode.yaml",
-        f"""apiVersion: asl-wep/v0.3.0-design
+        f"""apiVersion: asl-wep/v0.3.0
 kind: ModeProjection
 metadata:
   id: {mode_id}
 spec:
   skills:
 {roots}
-  permissions:
-    {permission_key}: {str(mutate).lower()}
 """,
     )
 
@@ -73,22 +68,28 @@ def _environment(tmp_path: Path) -> Path:
     _skill(root, "foundation")
     _skill(root, "creator", ("foundation",))
     _mode(root, "creator-studio", ("creator",))
-    _mode(root, "skill-foundry", ("foundation",), mutate=True)
+    for directory in ("candidates", "trials", "feedback", "archive"):
+        (root / directory).mkdir(parents=True)
     return root
 
 
 def test_workspace_opens_mode_graph_and_ignores_cultivation_areas(tmp_path: Path) -> None:
     root = _environment(tmp_path)
     _write(
-        root / "candidates" / "untrusted" / "SKILL.md",
-        "---\nname: untrusted\ndescription: no\n---\n## 完成标准\nno\n",
+        root / "candidates" / "untrusted" / "SOURCE.md",
+        "# Candidate\n\n- Origin: https://example.com/untrusted\n",
     )
     workspace = Workspace.open(root)
 
     assert list(workspace.skills) == ["creator", "foundation"]
     assert workspace.mode_skill_ids("creator-studio") == ("creator", "foundation")
-    assert workspace.modes["skill-foundry"].mutate_environment is True
     assert workspace.summary()["environmentId"] == "personal-environment"
+    assert workspace.summary()["cultivation"] == {
+        "candidates": ["untrusted"],
+        "trials": [],
+        "feedback": [],
+        "archive": [],
+    }
 
 
 @pytest.mark.parametrize("legacy", ["workspace.yaml", "workflows", ".asl/runs"])
@@ -119,17 +120,90 @@ def test_workspace_rejects_missing_and_cyclic_dependencies(tmp_path: Path) -> No
     assert captured.value.code == "SKILL_DEPENDENCY_CYCLE"
 
 
-def test_mode_requires_the_current_permission_name(tmp_path: Path) -> None:
+def test_mode_rejects_permissions_and_other_non_projection_fields(tmp_path: Path) -> None:
     root = _environment(tmp_path)
-    _mode(
-        root,
-        "creator-studio",
-        ("creator",),
-        permission_key="mutateWorkspace",
+    _write(
+        root / "modes" / "creator-studio" / "mode.yaml",
+        """apiVersion: asl-wep/v0.3.0
+kind: ModeProjection
+metadata:
+  id: creator-studio
+spec:
+  skills:
+    - creator
+  permissions:
+    mutateEnvironment: false
+""",
     )
     with pytest.raises(HarnessError) as captured:
         Workspace.open(root)
     assert captured.value.code == "MODE_INVALID"
+
+
+def test_workspace_requires_all_lifecycle_areas(tmp_path: Path) -> None:
+    root = _environment(tmp_path)
+    (root / "feedback").rmdir()
+
+    with pytest.raises(HarnessError) as captured:
+        Workspace.open(root)
+    assert captured.value.code == "ENVIRONMENT_INVALID"
+    assert "feedback/" in str(captured.value)
+
+
+def test_candidate_requires_source_and_trial_is_a_complete_skill(tmp_path: Path) -> None:
+    missing_source = _environment(tmp_path / "candidate")
+    (missing_source / "candidates" / "unknown").mkdir()
+    with pytest.raises(HarnessError) as captured:
+        Workspace.open(missing_source)
+    assert captured.value.code == "CANDIDATE_INVALID"
+
+    invalid_trial = _environment(tmp_path / "trial")
+    _write(invalid_trial / "trials" / "draft" / "SKILL.md", "# incomplete\n")
+    with pytest.raises(HarnessError) as captured:
+        Workspace.open(invalid_trial)
+    assert captured.value.code == "TRIAL_INVALID"
+
+    valid_trial = _environment(tmp_path / "valid-trial")
+    _write(
+        valid_trial / "trials" / "draft" / "SKILL.md",
+        """---
+name: draft
+description: isolated draft capability
+---
+# Draft
+
+## 完成标准
+
+- 交付可检查结果。
+""",
+    )
+    workspace = Workspace.open(valid_trial)
+    assert workspace.summary()["cultivation"]["trials"] == ["draft"]
+
+
+@pytest.mark.parametrize("name", [".env", "private.pem", "id_rsa"])
+def test_workspace_rejects_secret_bearing_file_names(tmp_path: Path, name: str) -> None:
+    root = _environment(tmp_path)
+    _write(root / "skills" / "creator" / name, "do not inspect values\n")
+
+    with pytest.raises(HarnessError) as captured:
+        Workspace.open(root)
+    assert captured.value.code == "SECRET_FILE_PRESENT"
+    assert name in str(captured.value)
+
+
+def test_generated_directories_are_reported_without_blocking_work(tmp_path: Path) -> None:
+    root = _environment(tmp_path)
+    _write(root / "skills" / "creator" / "__pycache__" / "cache.pyc", "cache\n")
+
+    summary = Workspace.open(root).summary()
+
+    assert summary["warnings"] == [
+        {
+            "code": "GENERATED_CONTENT_PRESENT",
+            "paths": ["skills/creator/__pycache__"],
+        }
+    ]
 
 
 def test_source_fingerprint_detects_uncommitted_content_changes(tmp_path: Path) -> None:
@@ -152,6 +226,9 @@ def test_syncs_workspace_capability_view_without_replacing_user_text(tmp_path: P
     assert refreshed.workspace_view_current() is True
     text = (root / "WORKSPACE.md").read_text(encoding="utf-8")
     assert text.startswith("# 我的工作环境")
+    assert "正式业务 Skills：2" in text
+    assert "业务 Modes：1" in text
+    assert "确定性提醒：无" in text
     assert "`creator`：creator capability" in text
     assert "`creator-studio`：creator, foundation" in text
     assert "Candidates：无" in text
@@ -169,7 +246,7 @@ def test_projects_and_verifies_native_host_surfaces(tmp_path: Path, host_id: str
     manifest = project_mode(workspace, project, "creator-studio", host_id=host_id)
 
     assert manifest["mode"] == "creator-studio"
-    assert manifest["permissions"] == {"mutateEnvironment": False}
+    assert "permissions" not in manifest
     assert [item["skill"] for item in manifest["skillProjections"]] == [
         "creator",
         "foundation",
@@ -191,18 +268,47 @@ def test_switching_mode_removes_only_old_managed_skills(tmp_path: Path) -> None:
     project = tmp_path / "project"
     project_mode(workspace, project, "creator-studio", host_id="codex-app")
 
-    project_mode(workspace, project, "skill-foundry", host_id="codex-app")
+    _skill(root, "research")
+    _mode(root, "research-desk", ("research",))
+    workspace = Workspace.open(root)
+    project_mode(workspace, project, "research-desk", host_id="codex-app")
 
     skill_root = project / ".agents" / "skills"
     assert not (skill_root / "creator").exists()
-    assert (skill_root / "foundation" / "SKILL.md").is_file()
+    assert not (skill_root / "foundation").exists()
+    assert (skill_root / "research" / "SKILL.md").is_file()
     manifest = json.loads(
         (project / ".asl/host-projections/codex-app/current.json").read_text(
             encoding="utf-8"
         )
     )
-    assert manifest["mode"] == "skill-foundry"
-    assert manifest["permissions"] == {"mutateEnvironment": True}
+    assert manifest["mode"] == "research-desk"
+
+
+def test_reproject_removes_broken_managed_junction_after_skill_is_archived(
+    tmp_path: Path,
+) -> None:
+    root = _environment(tmp_path)
+    project = tmp_path / "project"
+    manifest = project_mode(
+        Workspace.open(root), project, "creator-studio", host_id="codex-app"
+    )
+    creator_projection = next(
+        item for item in manifest["skillProjections"] if item["skill"] == "creator"
+    )
+    if creator_projection["projection"] != "junction":
+        pytest.skip("regression is specific to Windows directory junctions")
+
+    target = project / creator_projection["nativePath"]
+    (root / "skills" / "creator").rename(root / "archive" / "creator")
+    _mode(root, "creator-studio", ("foundation",))
+    assert target.exists() is False
+    target.lstat()
+
+    project_mode(Workspace.open(root), project, "creator-studio", host_id="codex-app")
+
+    with pytest.raises(FileNotFoundError):
+        target.lstat()
 
 
 def test_projection_refuses_user_owned_skill_collision(tmp_path: Path) -> None:
@@ -258,7 +364,6 @@ def test_exports_self_contained_deepseek_agent_preset(tmp_path: Path) -> None:
     _write(root / "skills/creator/package.json", '{"private":true}\n')
     _write(root / "skills/creator/node_modules/heavy/index.js", "generated\n")
     _write(root / "skills/creator/__pycache__/cache.pyc", "generated\n")
-    _write(root / "skills/creator/.env", "SECRET=do-not-copy\n")
     _write(root / "skills/creator/.env.example", "SECRET=placeholder\n")
     _write(root / "skills/creator/.git/config", "generated\n")
     workspace = Workspace.open(root)
@@ -286,11 +391,26 @@ def test_exports_self_contained_deepseek_agent_preset(tmp_path: Path) -> None:
     assert "!!js process.platform" in composition
     assert "Generated by ASL Harness" in composition
     assert json.loads((output / PRESET_MARKER).read_text(encoding="utf-8"))["basePreset"] == str(base)
+    assert verify_preset(workspace, "creator-studio", output) == []
 
     with (root / "PROFILE.md").open("a", encoding="utf-8") as stream:
         stream.write("\n刷新。\n")
+    assert verify_preset(workspace, "creator-studio", output) == [
+        "Environment content changed after preset export; run deepseek.preset.export again."
+    ]
     refreshed = export_preset(workspace, "creator-studio", base, output)
     assert refreshed["sourceFingerprint"] != result["sourceFingerprint"]
+
+
+def test_deepseek_verify_rejects_incomplete_preset(tmp_path: Path) -> None:
+    workspace = Workspace.open(_environment(tmp_path))
+    output = tmp_path / ".dsh/.agent-presets/creator-studio"
+    export_preset(workspace, "creator-studio", _deepseek_base(tmp_path / "base"), output)
+    (output / "skills" / "creator" / "SKILL.md").unlink()
+
+    with pytest.raises(HarnessError) as captured:
+        verify_preset(workspace, "creator-studio", output)
+    assert captured.value.code == "DEEPSEEK_PRESET_INVALID"
 
 
 def test_deepseek_export_refuses_unknown_output_and_malformed_base(tmp_path: Path) -> None:
@@ -321,5 +441,4 @@ def test_cli_exposes_only_mode_only_workflows(tmp_path: Path, capsys: pytest.Cap
     assert output["ok"] is True
     assert {item["id"] for item in output["modes"]} == {
         "creator-studio",
-        "skill-foundry",
     }

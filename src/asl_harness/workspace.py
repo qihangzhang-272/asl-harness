@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import re
 import subprocess
 from dataclasses import dataclass
@@ -9,8 +10,18 @@ from pathlib import Path
 import yaml
 
 
-MODE_API_VERSION = "asl-wep/v0.3.0-design"
+MODE_API_VERSION = "asl-wep/v0.3.0"
 SAFE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*\Z")
+LIFECYCLE_AREAS = ("candidates", "trials", "feedback", "archive")
+GENERATED_DIRECTORIES = {
+    "__pycache__",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    "node_modules",
+}
+SECRET_FILE_NAMES = {".env", "id_ed25519", "id_rsa"}
+SECRET_FILE_SUFFIXES = {".key", ".p12", ".pem", ".pfx"}
 VIEW_START = "<!-- ASL:CAPABILITY VIEW START -->"
 VIEW_END = "<!-- ASL:CAPABILITY VIEW END -->"
 SKILL_FRONTMATTER = re.compile(
@@ -116,6 +127,38 @@ def _package_files(package: Path, environment: Path) -> tuple[Path, ...]:
     return tuple(sorted(files, key=lambda item: item.as_posix()))
 
 
+def _scan_authored_material(root: Path) -> tuple[str, ...]:
+    generated: set[str] = set()
+    scan_roots = [root / "skills", root / "modes"] + [
+        root / directory for directory in LIFECYCLE_AREAS
+    ]
+    for scan_root in scan_roots:
+        for current, directories, files in os.walk(scan_root):
+            current_path = Path(current)
+            kept = []
+            for directory in directories:
+                path = current_path / directory
+                if directory in GENERATED_DIRECTORIES:
+                    generated.add(path.relative_to(root).as_posix())
+                elif directory != ".git":
+                    kept.append(directory)
+            directories[:] = kept
+            for filename in files:
+                lower = filename.lower()
+                secret = (
+                    lower in SECRET_FILE_NAMES
+                    or lower.startswith(".env.") and lower != ".env.example"
+                    or Path(lower).suffix in SECRET_FILE_SUFFIXES
+                )
+                if secret:
+                    relative = (current_path / filename).relative_to(root).as_posix()
+                    raise HarnessError(
+                        "SECRET_FILE_PRESENT",
+                        f"secret-bearing file name is not allowed in the Environment: {relative}",
+                    )
+    return tuple(sorted(generated))
+
+
 @dataclass(frozen=True)
 class Skill:
     id: str
@@ -131,7 +174,6 @@ class Mode:
     path: Path
     document: str
     skill_roots: tuple[str, ...]
-    mutate_environment: bool
 
 
 def _read_skill(package: Path, skill_id: str, environment: Path) -> Skill:
@@ -190,7 +232,6 @@ def _read_mode(package: Path, mode_id: str) -> Mode:
     metadata = authored.get("metadata")
     spec = authored.get("spec")
     skills = spec.get("skills") if isinstance(spec, dict) else None
-    permissions = spec.get("permissions") if isinstance(spec, dict) else None
     if (
         set(authored) != {"apiVersion", "kind", "metadata", "spec"}
         or authored.get("apiVersion") != MODE_API_VERSION
@@ -199,14 +240,11 @@ def _read_mode(package: Path, mode_id: str) -> Mode:
         or set(metadata) != {"id"}
         or metadata.get("id") != mode_id
         or not isinstance(spec, dict)
-        or set(spec) != {"skills", "permissions"}
+        or set(spec) != {"skills"}
         or not isinstance(skills, list)
         or not skills
         or any(not isinstance(item, str) or not SAFE_ID.fullmatch(item) for item in skills)
         or len(skills) != len(set(skills))
-        or not isinstance(permissions, dict)
-        or set(permissions) != {"mutateEnvironment"}
-        or not isinstance(permissions.get("mutateEnvironment"), bool)
     ):
         raise HarnessError("MODE_INVALID", f"Mode {mode_id} has an invalid definition")
     return Mode(
@@ -214,8 +252,59 @@ def _read_mode(package: Path, mode_id: str) -> Mode:
         path=package,
         document=document,
         skill_roots=tuple(skills),
-        mutate_environment=permissions["mutateEnvironment"],
     )
+
+
+def _area_names(root: Path) -> tuple[str, ...]:
+    return tuple(
+        sorted(path.name for path in root.iterdir() if not path.name.startswith("."))
+    )
+
+
+def _read_lifecycle_areas(root: Path) -> dict[str, tuple[str, ...]]:
+    areas: dict[str, tuple[str, ...]] = {}
+    missing = [directory for directory in LIFECYCLE_AREAS if not (root / directory).is_dir()]
+    if missing:
+        rendered = ", ".join(f"{directory}/" for directory in missing)
+        raise HarnessError(
+            "ENVIRONMENT_INVALID", f"Environment requires lifecycle areas: {rendered}"
+        )
+    for directory in LIFECYCLE_AREAS:
+        area = root / directory
+        names = _area_names(area)
+        areas[directory] = names
+        if directory == "candidates":
+            for candidate_id in names:
+                package = area / candidate_id
+                if not package.is_dir():
+                    raise HarnessError(
+                        "CANDIDATE_INVALID",
+                        f"Candidate entry must be a directory: {package}",
+                    )
+                try:
+                    _read_nonempty(
+                        package / "SOURCE.md", f"Candidate {candidate_id}/SOURCE.md"
+                    )
+                except HarnessError as error:
+                    raise HarnessError(
+                        "CANDIDATE_INVALID",
+                        f"Candidate {candidate_id} requires a nonempty SOURCE.md",
+                    ) from error
+        if directory == "trials":
+            for trial_id in names:
+                package = area / trial_id
+                if not package.is_dir():
+                    raise HarnessError(
+                        "TRIAL_INVALID", f"Trial entry must be a directory: {package}"
+                    )
+                try:
+                    _read_skill(package, trial_id, root)
+                except HarnessError as error:
+                    raise HarnessError(
+                        "TRIAL_INVALID",
+                        f"Trial {trial_id} must be a complete isolated Skill package",
+                    ) from error
+    return areas
 
 
 @dataclass(frozen=True)
@@ -225,6 +314,8 @@ class Workspace:
     profile: str
     skills: dict[str, Skill]
     modes: dict[str, Mode]
+    cultivation: dict[str, tuple[str, ...]]
+    warnings: tuple[dict, ...]
     git_commit: str
 
     @property
@@ -259,6 +350,8 @@ class Workspace:
             raise HarnessError(
                 "ENVIRONMENT_INVALID", "Environment requires skills/ and modes/ directories"
             )
+        cultivation = _read_lifecycle_areas(resolved)
+        generated = _scan_authored_material(resolved)
 
         skills: dict[str, Skill] = {}
         for package in sorted(skills_root.iterdir(), key=lambda item: item.name):
@@ -284,6 +377,12 @@ class Workspace:
             profile=profile,
             skills=skills,
             modes=modes,
+            cultivation=cultivation,
+            warnings=(
+                ({"code": "GENERATED_CONTENT_PRESENT", "paths": list(generated)},)
+                if generated
+                else ()
+            ),
             git_commit=_git_commit(resolved),
         )
         workspace._validate_graph()
@@ -375,33 +474,42 @@ class Workspace:
                 {
                     "id": mode.id,
                     "skills": list(self.mode_skill_ids(mode.id)),
-                    "mutateEnvironment": mode.mutate_environment,
                 }
                 for mode in self.modes.values()
             ],
+            "cultivation": {
+                directory: list(names) for directory, names in self.cultivation.items()
+            },
+            "warnings": list(self.warnings),
             "workspaceViewCurrent": self.workspace_view_current(),
         }
-
-    def _cultivation_names(self, directory: str) -> list[str]:
-        root = self.root / directory
-        if not root.is_dir():
-            return []
-        return sorted(path.name for path in root.iterdir() if not path.name.startswith("."))
 
     def render_workspace_view(self) -> str:
         skills = "\n".join(
             f"- `{skill.id}`：{skill.description}" for skill in self.skills.values()
         )
         modes = "\n".join(
-            f"- `{mode.id}`：{', '.join(self.mode_skill_ids(mode.id))}；"
-            f"环境维护权={'是' if mode.mutate_environment else '否'}"
+            f"- `{mode.id}`：{', '.join(self.mode_skill_ids(mode.id))}"
             for mode in self.modes.values()
         )
-        candidates = self._cultivation_names("candidates")
-        trials = self._cultivation_names("trials")
-        candidate_text = "、".join(f"`{item}`" for item in candidates) or "无"
-        trial_text = "、".join(f"`{item}`" for item in trials) or "无"
+        rendered_areas = {
+            directory: "、".join(f"`{item}`" for item in names) or "无"
+            for directory, names in self.cultivation.items()
+        }
+        warning_text = (
+            "；".join(
+                f"{warning['code']}：{', '.join(warning['paths'])}"
+                for warning in self.warnings
+            )
+            or "无"
+        )
         return f"""## 当前能力（ASL 自动维护）
+
+### 状态摘要
+
+- 正式业务 Skills：{len(self.skills)}
+- 业务 Modes：{len(self.modes)}
+- 确定性提醒：{warning_text}
 
 ### 正式 Skills
 
@@ -413,8 +521,10 @@ class Workspace:
 
 ### 培养区
 
-- Candidates：{candidate_text}
-- Trials：{trial_text}
+- Candidates：{rendered_areas['candidates']}
+- Trials：{rendered_areas['trials']}
+- Feedback：{rendered_areas['feedback']}
+- Archive：{rendered_areas['archive']}
 """
 
     def workspace_view_current(self) -> bool:

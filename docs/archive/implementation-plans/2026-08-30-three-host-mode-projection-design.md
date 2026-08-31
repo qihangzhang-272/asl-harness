@@ -1,5 +1,7 @@
 # ASL 三宿主 Mode 投影设计
 
+> 历史设计记录。当前字段与系统边界由 `../asl-architecture-views.md`、ASL-WEP v0.3 SPEC 和 ADR-0020 裁决；本文件中的早期权限字段已按当前实现修正。
+
 ## 目标
 
 把 `asl-harness` 从旧版 Workflow/Run 工具重建为一个很薄的本地适配层：同一份 Personal Harness Environment 保存 Profile、Skill 与 Mode；Codex App、Claude Code 和 DeepSeek Harness 只读取由它生成的宿主原生投影。当前宿主仍是唯一执行者，Harness 不理解业务 Goal、不排执行顺序、不维护运行状态。
@@ -8,7 +10,7 @@
 
 1. Harness 只识别 v0.3 Environment、完整本地 Skill 和 Mode，不再兼容 `workspace.yaml`、Workflow 或 Run。
 2. Mode 显式选择 Skill 根，Harness 只补齐 `metadata.asl.requires` 依赖闭包；列表不是执行顺序。
-3. `workspace.validate` 能拒绝缺失 Skill、循环依赖、非法权限、路径逃逸和旧结构回流。
+3. `workspace.validate` 能拒绝缺失 Skill、循环依赖、生命周期边界错误、Secret 文件名、路径逃逸和旧结构回流。
 4. 同一个 Mode 可以投影到 Codex App、Claude Code 和 DeepSeek Harness，投影可删除、可重建、不成为真源。
 5. `host.verify` 能发现投影缺失、被用户文件占位以及同一 Git HEAD 下的来源变化。
 6. DeepSeek Harness 额外支持把一个已有 Agent Preset 复制为 Mode 专属 Preset；工具组合继承已知可运行的起点，Mode 只替换 Persona 与 Skill 可见面。
@@ -30,7 +32,7 @@ Personal Harness Environment（唯一真源）
 ├── skills/<skill>/SKILL.md   唯一业务能力单位
 └── modes/<mode>/
     ├── MODE.md               工作场语义
-    └── mode.yaml             Skill 根与环境修改权
+    └── mode.yaml             Mode ID 与 Skill 根
 
                          host.project
                               │
@@ -52,10 +54,11 @@ Personal Harness Environment（唯一真源）
 2. `skills/` 与 `modes/` 只扫描第一层 package；
 3. Skill frontmatter 的 `name` 必须等于目录名，`description` 与 `## 完成标准` 必须非空；
 4. `metadata.asl.requires` 只能包含唯一的安全 Skill id；
-5. Mode 必须使用 `asl-wep/v0.3.0-design`，权限字段只能是 `mutateEnvironment: boolean`；
+5. Mode 必须使用 `asl-wep/v0.3.0`，`spec` 只允许非空、无重复的 `skills`；
 6. Mode 只能引用正式 `skills/`，依赖必须闭合且无环；
-7. 出现 `workspace.yaml`、`workflows/` 或 `.asl/runs/` 时直接拒绝，防止旧架构静默回流；
-8. Candidate、Trial、Feedback、Case 与 Archive 不被当作活动 Skill，也不常驻注入宿主。
+7. Candidate 必须有来源，Trial 必须是完整隔离 Skill package；Feedback 与 Archive 不进入活动能力面；
+8. Secret 文件名硬阻断，缓存与可重建依赖只提醒；
+9. 出现 `workspace.yaml`、`workflows/` 或 `.asl/runs/` 时直接拒绝，防止旧架构静默回流。
 
 ## 三个宿主的差异
 

@@ -1,0 +1,940 @@
+# ASL 总体架构与专项视图
+
+本文件用多种标准架构图解释 ASL。每张图只回答一种问题，避免把系统上下文、内部组件、运行时序、生命周期和部署关系混在同一张图里。
+
+> 状态快照：2026-08-31。架构边界来自当前 v0.3 协议；绿色实现状态以本地 Harness 的 25 项测试、Personal Environment 实时校验、Agent Skill Library Mode-native 迁移、三宿主项目投影和 DeepSeek Mode Preset 验证为依据。外部仓库逐项拆分只保留映射，不计入架构完成度。
+
+## 颜色约定
+
+- **蓝色**：用户已经明确确认，后续实现必须保持的架构边界；
+- **绿色**：当前代码或真实 Environment 已实现并验证；
+- **橙色**：架构不缺模块，但仍有真实宿主运行验收；
+- **红色**：当前错误分类或旧结构，迁移后删除；
+- **灰色**：可删除重建的宿主生成面，或已经退出活动面的冻结归档；
+- **紫色**：外部来源，不是本地运行真源。
+
+颜色表达节点的当前主状态，不表达执行顺序。可重建投影即使已经验证仍保持灰色，并在节点文字中写明“已验证”；外部来源始终保持紫色。当前快照如下：
+
+| 区域 | 状态 | 当前证据 |
+| --- | --- | --- |
+| Harness Core | 🟢 已实现 | 6 个确定性命令，25 项测试通过 |
+| Steward / Access / Guards | 🟢 已实现 | 同一宿主管理 Skill、最小 Mode schema、生命周期与路径门禁已接入 |
+| Personal Environment | 🟢 已实现 | 37 个正式业务 Skill、4 个业务 Mode、能力视图为当前版本 |
+| Agent Skill Library Environment | 🟢 已迁移并验证 | 37 个可公开正式 Skill、4 个业务 Mode、旧插件入口为零 |
+| Codex / Claude / DeepSeek 项目投影 | ⚪ 可重建且已验证 | 三个 `host.verify` 均为零漂移 |
+| DeepSeek Mode Preset | ⚪ 可重建且已验证 | 4 个活动 Preset 均为零漂移 |
+| DeepSeek 真实长会话 | 🟠 待运行验收 | 导出和漂移校验已完成，尚未证明长会话行为稳定 |
+| Agent Skill Library 三宿主验收 | 🟢 已实现 | 4 Mode × 3 Host 共 12 个项目投影及 4 个 Preset 验证通过 |
+| 旧 `domain / foundation / orchestrator / skill-index` 结构 | ⚪ 已冻结 | 已移出活动根目录，仅保留在 `archive/legacy-plugin-layout/` 追溯 |
+| 本地缓存与构建输出 | 🟢 已清理 | 11 个已确认的可重建目录已删除，Environment 当前零维护警告 |
+
+## 怎么读这些图
+
+| 图 | 类型 | 只回答什么问题 |
+| --- | --- | --- |
+| Master | 总体模块关系图 | 所有模块怎样组成一个系统，哪些关系形成反馈环 |
+| View 1 | 系统上下文图 | 用户、Host、Harness、Environment、Case 和外部来源分别站在哪里 |
+| View 2 | 组件图 | Harness System 与 Personal Environment 内部各自包含什么 |
+| View 3 | 运行时序图 | 一个普通 Goal 从进入到交付怎样发生 |
+| View 4 | 变更时序图 | Skill / Mode 的增删改查怎样与普通业务内容隔离 |
+| View 5 | 生命周期状态图 | 外部能力从发现到采用、合并、依赖、变体、适配或归档怎样流转 |
+| View 5B | 复杂仓库拆解图 | 一个外部仓库应该变成一个 Skill、多个 Skill、共享 Runtime 还是 Adapter |
+| View 5C | 安装与 Mode 绑定时序图 | 用户明确要求引入时，如何直接安装并只绑定指定 Mode |
+| View 5D | 真实仓库解耦图 | 怎样把一个个人技能仓库当作需求样本，去重后映射到不同 Mode |
+| View 6 | 能力图 | Mode 怎样选择 Skill 子图而不退化成固定 Workflow |
+| View 7 | 决策图 | 用户明确反馈应该落在 Case、Skill、Mode 还是 Environment |
+| View 7B | Mode 决策图 | 什么时候新建、修改、合并或退出一个 Mode |
+| View 8 | 部署图 | 同一真源怎样投影到 Codex、Claude Code 与 DeepSeek Harness |
+| View 9 | 迁移图 | 当前已经完成什么、还差什么、哪些旧结构必须删除 |
+
+## 核心对象边界
+
+| 对象 | 它是什么 | 它不是什么 | 由谁改变 |
+| --- | --- | --- | --- |
+| Harness System | 确定性核心、维护保护、访问面和宿主适配 | 第二个 Agent、第二调度器、业务 Mode | Harness 代码与确定性规则变更 |
+| Personal Environment | 用户本地 Git 管理的唯一运行真源 | 上游仓库的镜像、一次 Case、宿主缓存 | 用户授权下由当前 Host 经 Guards 修改 |
+| Skill | 可以独立承担责任的完整本地能力包 | Prompt 碎片、一个 Workflow 节点、裸 MCP/API | 用户明确指定引入时可直接本地化；其余不确定变化可先隔离 Trial |
+| Mode | 一种可反复进入的广域工作状态；选择显式 Skill 根 | Domain、固定顺序、个人能力全集、系统维护功能 | 用代表性 Case 验证最小 Mode diff |
+| Case | 一次目标的材料、证据、过程文件、Artifact 与交付 | 长期架构真源、Mode、正式 Skill | 当前 Host 在任务中持续维护 |
+| Candidate | 尚未决定是否采用的外部能力线索 | 必经审批状态、可以直接运行的正式能力 | 仅在来源或采用方向还不确定时记录 |
+| Trial | 与正式 Skill 隔离的可选试验能力 | 每次引入都必须经过的关卡 | 仅在安全、重合、运行方式或价值仍不确定时使用 |
+| Feedback | 用户明确表达、可能影响长期能力的证据 | 点击、沉默、耗时等含义不明的行为 | 只记录用户明确反馈 |
+| Archive | 拒绝、退出、被替代或迁移后的追溯证据 | 活动能力面、待执行队列 | 经影响检查后归档 |
+| Host Projection | 当前 Mode 在宿主原生目录中的生成视图 | 运行真源、兼容发行层 | Harness 从 Environment 确定性重建 |
+
+---
+
+## Master · 总架构图
+
+回答：发行、系统机制、本地真源、四个循环、Case、能力演化和三宿主投影怎样组成同一个系统？
+
+> 这是一张模块关系图，不是执行顺序图。A、B、C、D 四个循环根据真实信号独立进入；后续专项图分别展开每一部分。
+
+```mermaid
+flowchart TB
+    subgraph SUPPLY["① 用户、发行与外部来源"]
+        direction LR
+        USER["用户<br/>Goal · 材料 · 明确反馈 · 高影响授权"]
+        BLANK["ASL Harness<br/>空白 Core / CLI / Adapters / Example"]
+        FILLED["Agent Skill Library 发行仓库<br/>37 个正式 Skill / 4 个业务 Mode / 来源"]
+        SOURCES["外部能力<br/>Skill / Prompt / MCP / API / Agent / Model / Script"]
+        LEGACY["旧插件布局<br/>domain / foundation / orchestrator / index<br/>已冻结归档"]
+        LEGACY -.只追溯，不运行.-> FILLED
+    end
+
+    subgraph PLATFORM["② Harness System 与本地运行真源"]
+        direction LR
+        subgraph SYSTEM["Harness System · 始终存在 · 不是业务 Mode"]
+            direction TB
+            CORE["Deterministic Core · 已实现<br/>scan / validate / resolve<br/>render / project / verify / export"]
+            STEWARD["Environment Steward · 已实现系统契约<br/>完整读取 · 关系判断 · 本地化 · 最小影响半径<br/>Runtime 边界 · 单 Mode 绑定 · CRUD 保护"]
+            ACCESS["Environment Access · 已实现最小访问面<br/>常驻：Profile / 当前 Mode / Catalog<br/>按需：Skill / Case / Feedback / Archive / Git"]
+            GUARDS["Deterministic Guards · 已实现<br/>结构 / 依赖 / 生命周期 / Secret 文件名 / 路径<br/>旧布局 / 用户文件碰撞 / 来源漂移"]
+            MUTATION["受控修改入口 · 已实现宿主契约<br/>用户明确触发 · 最小真源 · 校验 · Git diff"]
+            CORE --> GUARDS
+            STEWARD --> GUARDS
+            GUARDS --> MUTATION
+        end
+
+        subgraph TRUTH["Environment Instances · 每个本地检出都是独立 Git 真源"]
+            direction TB
+            ENVROOT["Environment Contract<br/>同一结构，不同内容"]
+            PERSONAL["Personal Environment<br/>37 个 Skill · 4 个 Mode<br/>包含私人本地能力"]
+            LIBRARY["Agent Skill Library Environment<br/>37 个公开 Skill · 4 个 Mode<br/>Mode-native 已验证"]
+            ACTIVE["当前选中的 Environment<br/>一次只运行一个本地真源"]
+            PROFILE["PROFILE.md<br/>跨 Mode 精简长期边界"]
+            MODES[("modes/&lt;mode-id&gt;<br/>4 个业务 Mode · 已校验<br/>显式 Skill 根 · 不保存顺序")]
+            SKILLS[("skills/&lt;skill-id&gt;<br/>正式业务 Skill<br/>每项只保存一份")]
+            LEARNING["培养与追溯区<br/>Candidate / Trial / Feedback / Archive"]
+            VIEW["WORKSPACE.md<br/>确定性派生的人机共读总体地图"]
+            GIT["Git<br/>diff 审计 · 历史 · 恢复"]
+            ARCHIVED["已退出活动面<br/>skill-foundry / second-brain<br/>旧系统 Skill 保留于 Archive"]
+
+            ENVROOT --> PERSONAL
+            ENVROOT --> LIBRARY
+            PERSONAL -->|选择本地个人库| ACTIVE
+            LIBRARY -->|选择装填发行版| ACTIVE
+            ACTIVE --> PROFILE
+            ACTIVE --> MODES
+            ACTIVE --> SKILLS
+            ACTIVE --> LEARNING
+            MODES -->|选择能力根| SKILLS
+            SKILLS -->|requires 硬依赖| SKILLS
+            PROFILE -.摘要.-> VIEW
+            MODES -.Mode 地图.-> VIEW
+            SKILLS -.能力地图.-> VIEW
+            LEARNING -.培养状态.-> VIEW
+            VIEW --> GIT
+        end
+
+        MUTATION --> ACTIVE
+        ACTIVE --> ACCESS
+        ARCHIVED -.追溯旧设计.-> STEWARD
+    end
+
+    subgraph RUNTIME["③ 当前 Host 与四个信号循环 · 不是线性 Workflow"]
+        direction LR
+        HOST["当前 Host · 唯一执行者<br/>理解意图 · 组织上下文 · 动态调用完整 Skill · 交付"]
+        A["A · Goal / Case<br/>Mode → 动态 Skill → Artifact<br/>Benchmark → 返工或交付"]
+        B["B · Capability Integration<br/>用户明确指定：完整读取后直接本地化<br/>其他不确定来源：可选 Candidate / Trial"]
+        C["C · Mode Evolution<br/>长期工作状态 → Skill 子图<br/>上下文 / 权限 / 产物表面 → 真实验证"]
+        D["D · Governance / Projection<br/>扫描 → 校验 → 闭包 → 门禁<br/>能力地图 → 投影 → 漂移检查"]
+        CHANGE["长期改变申请<br/>Skill / Mode / Environment 最小 diff"]
+
+        HOST -->|普通 Goal 默认进入| A
+        B --> CHANGE
+        C --> CHANGE
+        D --> CHANGE
+    end
+
+    subgraph CASEAREA["④ Case、明确反馈与演化影响半径"]
+        direction LR
+        CASE["Current Case<br/>Goal · Materials · Evidence<br/>Working Files · Artifacts · Delivery"]
+        RADIUS{"明确反馈的最小影响半径"}
+        CASE_ONLY["Case<br/>只返工本次结果"]
+        SKILL_CHANGE["Skill<br/>直接修改或按不确定性使用 Trial"]
+        MODE_CHANGE["Mode<br/>改能力面、上下文或权限"]
+        ENV_CHANGE["Environment<br/>只接受用户明确的跨 Mode 改变"]
+        CASE --> RADIUS
+        RADIUS --> CASE_ONLY
+        RADIUS --> SKILL_CHANGE
+        RADIUS --> MODE_CHANGE
+        RADIUS --> ENV_CHANGE
+    end
+
+    subgraph PROJECTIONS["⑤ Host Projections · 可删除、可重建"]
+        direction LR
+        CODEX["Codex App · 已实现<br/>.agents/skills + AGENTS.md"]
+        CLAUDE["Claude Code · 已实现<br/>.claude/skills + CLAUDE.md"]
+        DSH_PROJECT["DeepSeek Project · 投影已验证<br/>.dsh/skills + AGENTS.md"]
+        DSH_PRESET["DeepSeek Agent Preset<br/>4 个 Preset 零漂移 · 长会话待验收"]
+        DSH_SHARED["DeepSeek Profile / Bundle<br/>模型 / 存储 / 沙箱 / 凭据<br/>不等于 ASL Mode"]
+        DSH_SHARED --> DSH_PRESET
+    end
+
+    BLANK -->|初始化| ENVROOT
+    FILLED -->|clone 后成为本地真源| LIBRARY
+    SOURCES -->|用户明确指定则直接纳入；否则按需培养| STEWARD
+    USER --> HOST
+    USER -->|只有明确反馈才触发长期判断| RADIUS
+    ACCESS -->|常驻摘要 + 按需读取| HOST
+    MODES -->|当前工作场| A
+    SKILLS -->|完整能力包| A
+
+    A --> CASE
+    CASE_ONLY -->|能力足够，只返工当前任务| A
+    SKILL_CHANGE --> B
+    MODE_CHANGE --> C
+    ENV_CHANGE --> D
+    CASE -->|确认能力缺口 / 失效 / 上游变化| B
+    CASE -->|确认工作场边界问题| C
+    B -->|候选、试验与拒绝依据| LEARNING
+    CHANGE --> GUARDS
+
+    PROFILE --> D
+    MODES --> D
+    SKILLS --> D
+    LEARNING --> D
+    D -->|合法后生成| CODEX
+    D -->|合法后生成| CLAUDE
+    D -->|合法后生成| DSH_PROJECT
+    D -->|合法后生成| DSH_PRESET
+
+    classDef locked fill:#dbeafe,stroke:#2563eb,color:#1e3a8a,stroke-width:2px;
+    classDef done fill:#dcfce7,stroke:#16a34a,color:#14532d;
+    classDef optimize fill:#ffedd5,stroke:#ea580c,color:#7c2d12;
+    classDef remove fill:#fee2e2,stroke:#dc2626,color:#7f1d1d,stroke-width:2px;
+    classDef generated fill:#f3f4f6,stroke:#6b7280,color:#1f2937,stroke-dasharray:4 3;
+    classDef source fill:#f5f3ff,stroke:#7c3aed,color:#4c1d95;
+
+    class USER,HOST,BLANK,ENVROOT,MODES,RADIUS,CASE_ONLY,SKILL_CHANGE,MODE_CHANGE,ENV_CHANGE locked;
+    class FILLED,CORE,STEWARD,ACCESS,GUARDS,MUTATION,PERSONAL,LIBRARY,ACTIVE,PROFILE,SKILLS,LEARNING,VIEW,GIT,A,B,C,D,CHANGE done;
+    class LEGACY,ARCHIVED generated;
+    class CODEX,CLAUDE,DSH_PROJECT,DSH_SHARED generated;
+    class DSH_PRESET optimize;
+    class SOURCES source;
+```
+
+总图的核心关系：
+
+1. 空白 Harness 与装填后的 Agent Skill Library 使用同一种 Environment Contract；
+2. Harness System 管理 Environment，但系统能力不成为业务 Mode；
+3. Environment 是本地 Git 真源，Case 和 Host Projection 都不反向成为真源；
+4. 当前 Host 是唯一执行者，A/B/C/D 是信号触发的循环，不是中央调度的顺序节点；
+5. 外部能力都必须完整本地化并保留来源；用户明确指定引入时直接纳入，Candidate、Trial 和效果 Case 不是必经关卡；
+6. 用户明确反馈先判断 Case、Skill、Mode、Environment 四级影响半径；
+7. 三个宿主只得到当前 Mode 的可重建能力投影。
+
+---
+
+## View 1 · 系统上下文图
+
+回答：ASL 在整个使用场景中处于什么位置，谁负责执行，什么是真源？
+
+```mermaid
+flowchart LR
+    USER["用户<br/>Goal · 材料 · 明确反馈 · 高影响授权"]
+    HOST["当前 Host · 唯一执行者<br/>Codex App / Claude Code / DeepSeek Harness"]
+    HARNESS["ASL Harness<br/>空白框架 · 校验 · 维护保护 · 投影"]
+    LIBRARY["Agent Skill Library<br/>装填后的业务 Environment 发行版"]
+    ENV[("Personal Environment<br/>用户本地 Git 运行真源")]
+    CASE["Case<br/>一次目标、材料、证据、产物与交付"]
+    EXTERNAL["外部能力来源<br/>Skill / Prompt / MCP / API / Agent / Model / Script"]
+    PROJECTION["Host Projection<br/>可删除、可重建"]
+
+    USER -->|提出目标与确认边界| HOST
+    HARNESS -->|初始化或维护| ENV
+    LIBRARY -->|选择、复制或 Fork| ENV
+    ENV -->|Profile + 当前 Mode + Skill Catalog| HOST
+    HOST -->|按需读取完整 Skill| ENV
+    HOST -->|完成真实工作| CASE
+    CASE -->|明确能力缺口或长期反馈| HOST
+    EXTERNAL -->|明确指定则直接本地化；不确定时可先 Candidate / Trial| ENV
+    ENV -->|确定性生成| PROJECTION
+    PROJECTION -->|宿主发现当前 Mode| HOST
+
+    classDef locked fill:#dbeafe,stroke:#2563eb,color:#1e3a8a,stroke-width:2px;
+    classDef done fill:#dcfce7,stroke:#16a34a,color:#14532d;
+    classDef generated fill:#f3f4f6,stroke:#6b7280,color:#1f2937,stroke-dasharray:4 3;
+    classDef source fill:#f5f3ff,stroke:#7c3aed,color:#4c1d95;
+    class USER,HOST,HARNESS,LIBRARY,ENV locked;
+    class CASE done;
+    class PROJECTION generated;
+    class EXTERNAL source;
+```
+
+关键边界：Harness 不理解业务 Goal，也不替 Host 执行；外部能力不能裸调用，但用户明确要求“找来并融入”时，当前 Host 完整读取来源后可以直接写成正式本地 Skill，不必先跑 Trial 或效果 Case。
+
+---
+
+## View 2 · Harness 与 Environment 组件图
+
+回答：空白 Harness 内有什么，个人 Environment 内有什么，两者怎样分工？
+
+```mermaid
+flowchart TB
+    subgraph SYSTEM["Harness System · 始终存在 · 不是业务 Mode"]
+        CORE["Deterministic Core · 已实现<br/>scan / validate / resolve / render / project / verify / export"]
+        STEWARD["Environment Steward · 已实现系统契约<br/>完整读取 / 关系判断 / 本地化 / 最小影响半径<br/>Runtime 边界 / 单 Mode 绑定 / CRUD 保护"]
+        ACCESS["Environment Access · 已实现最小访问面<br/>常驻摘要 / 按需读取 / WORKSPACE 视图"]
+        GUARDS["Deterministic Guards · 已实现<br/>结构 / 依赖 / 生命周期 / Secret 文件名 / 路径<br/>旧布局 / 用户文件碰撞 / 来源漂移"]
+        CORE --> GUARDS
+        STEWARD --> GUARDS
+    end
+
+    subgraph ENV["Personal Environment · 唯一运行真源"]
+        PROFILE["PROFILE.md<br/>跨 Mode 精简长期边界"]
+        SKILLS[("skills/<skill-id><br/>完整正式 Skill Pool")]
+        MODES[("modes/<mode-id><br/>业务工作场 / Skill 子图")]
+        LEARNING["candidates / trials / feedback / archive<br/>培养与追溯证据，不进入活动能力面"]
+        VIEW["WORKSPACE.md<br/>确定性派生的人机共读地图"]
+        GIT["Git<br/>历史、diff 审计和恢复"]
+        SKILLS -->|requires 硬依赖| SKILLS
+        MODES -->|显式 Skill 根| SKILLS
+        PROFILE -.摘要.-> VIEW
+        SKILLS -.能力地图.-> VIEW
+        MODES -.Mode 地图.-> VIEW
+        LEARNING -.状态摘要.-> VIEW
+        PROFILE --> GIT
+        SKILLS --> GIT
+        MODES --> GIT
+        LEARNING --> GIT
+    end
+
+    CORE --> ENV
+    ACCESS --> ENV
+    STEWARD -->|经 Guards 校验后修改| ENV
+
+    classDef locked fill:#dbeafe,stroke:#2563eb,color:#1e3a8a,stroke-width:2px;
+    classDef done fill:#dcfce7,stroke:#16a34a,color:#14532d;
+    class CORE,STEWARD,ACCESS,GUARDS,PROFILE,SKILLS,LEARNING,VIEW,GIT done;
+    class MODES locked;
+```
+
+这里没有管理 Mode。能力发现、培养、增删改查保护和记忆访问属于 Harness 系统层；内容创作、产品分析和投资研究才属于业务 Mode。
+
+Harness 的 Hook / Guard 只处理可确定的边界，不接管业务判断：
+
+| 级别 | 处理方式 | 典型对象 |
+| --- | --- | --- |
+| 硬阻断 | 拒绝相应写入或投影，返回具体错误 | 结构非法、依赖缺失/循环、生命周期目录缺失、Candidate 无来源、Trial 不完整、Secret 文件名、路径逃逸、覆盖非受管文件、固定 Workflow/Run 回流 |
+| 软提醒 | 任务可继续，只提示应刷新或检查 | 缓存或可重建依赖、`WORKSPACE.md` 过期、宿主投影漂移、Candidate 未决定、上游出现新版本、两个 Skill 可能重合 |
+| Host + 用户判断 | 不伪装成确定性规则；当前 Host 起草方案，高影响动作由用户授权 | 是否需要新 Mode、候选是否值得采用、Skill 应合并还是独立、是否发布或外部写入 |
+
+这样既防止 Environment 漂移，也不会因为一个缺失字段、过期视图或语义不确定就阻断用户的普通 Goal。
+
+---
+
+## View 3 · 普通 Goal 的执行时序
+
+回答：用户只给一个目标时，系统怎样工作，什么时候会阻断？
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor U as 用户
+    participant H as 当前 Host
+    participant V as WORKSPACE / Profile
+    participant M as 当前 Mode Projection
+    participant S as Formal Skills
+    participant C as Current Case
+
+    U->>H: 提出 Goal，提供材料
+    H->>V: 读取能力地图和精简长期边界
+    H->>M: 选择最贴近的 Mode
+    alt Mode 存在实质歧义
+        H->>U: 只确认一次必要选择
+        U-->>H: 确认 Mode
+    end
+    H->>S: 按 Goal 加载需要的完整 Skill
+    Note over H,S: Mode 的 Skill 列表不是执行顺序
+    H->>C: 保存输入、证据、过程材料和 Artifact
+    H->>C: 对照本次 Goal / Benchmark 检查结果
+    alt 结果不足，但现有能力足够
+        H->>S: 返工责任 Skill 的本次输出
+        H->>C: 更新 Artifact
+    else 确认存在长期能力缺口
+        H-->>U: 说明缺口；当前任务可继续时先完成可完成部分
+        Note over H: 之后进入 Capability Cultivation Loop
+    else 达标或遇到诚实边界
+        H-->>U: 交付结果或说明无法完成的事实
+    end
+```
+
+普通 Goal 不要求 Session key、Run token 或固定节点状态。视图和缓存提醒不阻断；确定的结构、Secret、路径与覆盖问题由 Harness 拒绝，高影响授权由当前 Host 的原生权限边界处理。
+
+---
+
+## View 4 · Skill / Mode 变更时序
+
+回答：Mode 和 Skill 的增删改查如何与普通内容分开，谁负责起草、校验和授权？
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor U as 用户
+    participant H as 当前 Host
+    participant E as Environment Steward
+    participant W as 隔离变更区
+    participant CLI as Harness Guards
+    participant G as Git Truth
+    participant P as Host Projections
+
+    U->>H: 明确反馈、采用要求或结构变更目标
+    H->>E: 判断最小影响半径与责任对象
+    alt 用户明确指定外部能力并要求融入
+        E->>W: 完整读取来源并直接起草正式本地 Skill
+        Note over H,W: 不强制 Candidate、Trial、示例或效果 Case
+    else 来源、重合、安全或运行方式仍不确定
+        E->>W: 建立可选 Candidate / Trial
+        H->>W: 只做解决该不确定性的最小检查
+    else 修改现有 Skill
+        E->>W: 起草正式 Skill 的最小 diff
+    else 修改 Mode
+        E->>W: 起草隔离的最小 Mode diff
+        H->>W: 用代表性 Case 检查能力面与边界
+    end
+    E->>CLI: 变更前检查结构、依赖、引用、路径与影响面
+    alt 删除、发布、外部写入或其他高影响动作
+        CLI-->>H: 返回结构和引用事实，不代替授权
+        H->>U: 列出路径、原因和影响
+        U-->>H: 授权或拒绝
+    end
+    CLI-->>E: 允许修改或返回确定错误
+    E->>G: 写入最小文件 diff
+    E->>CLI: 变更后重新校验
+    CLI->>P: 刷新受影响 Mode 的可重建投影
+    CLI->>G: 保留可审计结果
+```
+
+AI 负责完整阅读来源并起草完整本地 Skill。用户明确指定引入时，可以直接进入正式 Skill Pool；确定性结构校验和高影响授权仍保留，但不再用 Trial、示例或效果测试拖延采用。普通 Case 内容不能在没有明确长期意图时自动修改正式 Skill 或 Mode。
+
+---
+
+## View 5 · 外部能力生命周期状态图
+
+回答：一个外部能力怎样进入本地，最终可能得到哪些处理结果？
+
+```mermaid
+stateDiagram-v2
+    [*] --> RequestType
+    RequestType --> Directed: 用户明确要求寻找并融入
+    RequestType --> GapConfirmed: Host 自己发现能力缺口
+    Directed --> FullRead: 完整读取来源 package
+    FullRead --> Compare: 直接判断本地关系
+    GapConfirmed --> LocalCheck: 先查正式 Skill / Candidate / Trial / Archive
+    LocalCheck --> ExistingChange: 已有 Skill 可以修订
+    LocalCheck --> ExternalDiscovery: 本地确实不存在
+    ExternalDiscovery --> Uncertainty
+    Uncertainty --> Candidate: 来源或采用方向仍不确定
+    Uncertainty --> FullRead: 已有明确来源且可以直接本地化
+    Candidate --> Trial: 只有运行、安全、重合或价值需要隔离判断
+    Candidate --> FullRead: 不需要试运行即可决定
+    Trial --> Compare: 最小检查解决不确定性
+    ExistingChange --> Compare: 直接形成现有 Skill 最小 diff
+    Compare --> FormalSkill: 独立能力
+    Compare --> ExistingSkill: 吸收或合并
+    Compare --> Dependency: 建立 requires
+    Compare --> Variant: 保留明确质量 / 成本 / 平台变体
+    Compare --> Adapter: 只有宿主接线不同
+    Compare --> Archive: 重复 / 无增量 / 风险过高 / 无法验证
+    FormalSkill --> ModeDecision
+    ExistingSkill --> ModeDecision
+    Dependency --> ModeDecision
+    Variant --> ModeDecision
+    Adapter --> ModeDecision
+    ModeDecision --> StablePool: 进入 Skill Pool，但不自动进入任何 Mode
+    ModeDecision --> ModeUpdated: 明确加入需要它的业务 Mode
+    Archive --> [*]
+    StablePool --> [*]
+    ModeUpdated --> [*]
+```
+
+上游更新在没有用户明确采用时只形成新的 Candidate，不能自动覆盖本地正式 Skill。用户明确要求升级或引入时，可以在完整读取来源后直接修改本地真源。
+
+外部发现有两个入口：用户明确指定寻找或融入时立即执行；否则只有真实 Case 证明现有能力不够、正式 Skill 长期失效、上游发生重要变化，或安全问题要求替换时才进入。一次输出偷懒、一次模型错误和含义不明的行为不会自动触发搜索。
+
+| 查找顺序 | 去哪里看 | 这一层解决什么问题 |
+| --- | --- | --- |
+| 1 | 本地正式 Skill、Candidate、Trial、Archive | 避免重复搜索、重复安装和遗忘历史拒绝原因 |
+| 2 | 用户明确指定的仓库、作者、帖子或工具 | 尊重已知来源，不擅自换题 |
+| 3 | 公开真实使用反馈与可信从业者推荐 | 发现“有人实际用过”的候选，而不是只看宣传 |
+| 4 | GitHub 等代码仓库 | 检查关注度、维护活跃度、Issue、许可证、版本与实现体量 |
+| 5 | 官方文档、官方生态与已安装宿主能力 | 确认接口、支持范围、平台约束和是否已有原生能力 |
+
+对于 Host 主动发现的来源，这些信号只决定“值不值得进入 Candidate”，不自动决定采用；对于用户明确指定的来源，默认目标就是直接纳入。两条路径都先比较本地关系：重叠则吸收或合并，责任边界独立才成为新 Skill，只有硬依赖存在时才声明 `requires`，只有宿主接线不同才保留 Adapter。
+
+---
+
+## View 5B · 复杂外部仓库拆解图（系统规则已实现，实例迁移按需）
+
+回答：类似 Agent Reach 这种同时包含 Runtime、路由、安装器、多个后端和 Skill 入口的仓库，怎样融入 ASL 而不复制整仓、不污染所有 Mode？
+
+> 本图的系统规则已经进入 Environment Steward。当前 Host 按同一规则完成全量盘点与最小 Git diff；只有重复操作被真实证明后，才考虑增加更硬的 CLI，而不是先造一个自动拆仓器。具体外部仓库是否迁移，不影响这套架构机制成立。
+
+```mermaid
+flowchart TB
+    SOURCE["外部仓库 / 本机已有工具 / 官方插件<br/>来源真相，不是本地运行真源"]
+    ACQUIRE["Source Acquisition<br/>用户明确指定：立即获取<br/>Host 主动发现：按缺口搜索"]
+    INVENTORY["完整仓库盘点<br/>能力入口 · Runtime · scripts/assets<br/>依赖 · 安装副作用 · 登录/Secret · 许可 · 更新方式"]
+    SHAPE{"仓库的能力形状"}
+
+    ONE["单一责任<br/>一个完整本地 Skill"]
+    UNIFIED["复杂 Runtime，但对 Agent 是统一责任<br/>一个 Owner Skill<br/>内部保留路由与多个后端"]
+    MULTI["多个可独立调用、完成标准不同的责任<br/>拆成多个正式 Skill<br/>共同来源，但不复制方法正文"]
+    ADAPTER["业务语义相同，仅宿主接线不同<br/>一个 Skill + adapters/"]
+    ABSORB["与现有 Skill 重合<br/>吸收 / 合并 / requires / 明确变体"]
+
+    RUNTIME["Runtime Installation<br/>按宿主只安装一份<br/>版本和命令写入来源/使用说明"]
+    SECRETS["Host-owned State<br/>Cookie · API Key · 浏览器登录态 · Proxy<br/>永不复制进 Skill 或 Mode"]
+    POOL[("Formal Skill Pool<br/>每项责任只保存一份本地真源")]
+    MODE["指定或当前 Mode<br/>只增加 Skill 根引用"]
+    OTHER["其他 Mode<br/>不会因为安装而自动获得能力"]
+    PROJECT["Host Projection<br/>投影 Skill 闭包，不重复安装 Runtime"]
+
+    SOURCE --> ACQUIRE --> INVENTORY --> SHAPE
+    SHAPE -->|一个责任| ONE
+    SHAPE -->|统一入口 + 多后端| UNIFIED
+    SHAPE -->|多个独立责任| MULTI
+    SHAPE -->|仅接线不同| ADAPTER
+    SHAPE -->|本地已有 Owner| ABSORB
+    ONE --> POOL
+    UNIFIED --> POOL
+    MULTI --> POOL
+    ADAPTER --> POOL
+    ABSORB --> POOL
+    INVENTORY --> RUNTIME
+    RUNTIME -.读取但不持有.-> SECRETS
+    POOL -->|显式绑定| MODE
+    POOL -.不自动绑定.-> OTHER
+    MODE --> PROJECT
+
+    classDef locked fill:#dbeafe,stroke:#2563eb,color:#1e3a8a,stroke-width:2px;
+    classDef done fill:#dcfce7,stroke:#16a34a,color:#14532d;
+    classDef generated fill:#f3f4f6,stroke:#6b7280,color:#1f2937,stroke-dasharray:4 3;
+    classDef source fill:#f5f3ff,stroke:#7c3aed,color:#4c1d95;
+    class SOURCE source;
+    class POOL,MODE,OTHER locked;
+    class ACQUIRE,INVENTORY,SHAPE,ONE,UNIFIED,MULTI,ADAPTER,ABSORB,RUNTIME done;
+    class SECRETS,PROJECT generated;
+```
+
+### Agent Reach 应该怎样映射
+
+| 外部仓库里的内容 | ASL 中的位置 | 原因 |
+| --- | --- | --- |
+| Python CLI / library、channel 路由、doctor、installer | 一份宿主 Runtime；由 `agent-reach` Skill 说明如何安装和检查 | 这是统一的网络访问底座，不应复制到每个 Mode |
+| 面向 Agent 的使用入口、平台选择、失败与回退规则 | `skills/agent-reach/SKILL.md` | 对 Agent 是一项完整的“公开网络发现与读取”能力 |
+| 上游地址、观察到的 commit、许可、本地改动 | `skills/agent-reach/SOURCE.md` | 本地 Skill 是运行真源，上游只用于追溯和升级 |
+| Twitter、GitHub、YouTube、小红书等后端 | `agent-reach` 内部路由，不拆成 Mode，也默认不拆成十几个 Skill | 它们共享同一责任和统一入口，只是访问表面不同 |
+| Cookie、API Key、Proxy、浏览器登录态 | Codex / Claude / DeepSeek 的宿主设施 | Secret 和用户登录状态不能进入 Skill、Mode 或 Git |
+| 四个业务 Mode 的使用权 | 每个 Mode 各自显式引用同一份 `agent-reach` | 一份能力、多处复用；Mode 不复制代码，也不隐式继承 |
+
+如果复杂仓库确实包含多个可以独立交付、完成标准不同的能力，才拆成多个正式 Skill。仓库目录多、脚本多或支持平台多，本身都不是拆分理由。
+
+---
+
+## View 5C · 外部能力安装与单 Mode 绑定时序图（系统规则已实现，实例迁移按需）
+
+回答：用户直接说“去找这个技能，融入当前 Mode”时，Host、Harness、Runtime 和 Mode 分别做什么？
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor U as 用户
+    participant H as 当前 Host
+    participant S as 外部来源
+    participant E as Environment Steward
+    participant R as Host Runtime
+    participant F as Formal Skill Pool
+    participant M as 指定 / 当前 Mode
+    participant G as Deterministic Guards
+    participant P as Host Projection
+
+    U->>H: 寻找某外部能力并融入当前或指定 Mode
+    H->>S: 直接搜索并获取完整来源
+    H->>E: 盘点能力入口、Runtime、依赖、副作用、许可与本地重合
+    Note over H,E: 用户已经明确采用方向，不强制 Candidate、Trial、示例或效果 Case
+    E->>E: 决定 adopt / absorb / merge / requires / variant / adapter
+    alt 需要安装 Runtime 或系统依赖
+        E->>R: 生成一次性安装计划与影响清单
+        alt 涉及登录、Secret、系统级安装、后台服务或外部写入
+            H->>U: 只确认对应高影响动作
+            U-->>H: 授权、亲自完成登录，或拒绝
+        end
+        H->>R: 在宿主环境安装或复用一份 Runtime
+    end
+    E->>F: 写入或合并完整本地 Skill + SOURCE.md
+    alt 用户明确指定 Mode，或当前 Mode 无歧义
+        E->>M: 只增加该 Skill 根引用
+    else Mode 存在实质歧义
+        H->>U: 只问一次要绑定哪个 Mode
+        U-->>H: 指定 Mode 或只进入 Skill Pool
+        E->>M: 按选择更新，其他 Mode 不变
+    end
+    E->>G: 运行静态结构、引用、路径、Secret 与投影碰撞校验
+    Note over E,G: 这是结构校验，不是效果测试
+    G->>P: 刷新这个 Mode 的可重建投影
+    H-->>U: 汇报来源、安装位置、Skill 关系、绑定 Mode 和需要的登录/配置
+```
+
+### 建议的硬门槛
+
+| 门槛 | 必须保证 | 不应强制 |
+| --- | --- | --- |
+| 来源 | 保存可追溯 URL/路径、观察到的版本或 commit；不能假装知道未知版本 | 必须先建立 Candidate |
+| 完整读取 | 读取入口说明、必要 references/scripts/assets、依赖、许可、安装与卸载副作用 | 跑作者提供的全部测试 |
+| 本地能力 | 形成完整 `SKILL.md`；外部实现不能作为裸 Prompt/MCP/API 在业务中途偷跑 | 必须先跑示例或效果 benchmark |
+| 重合关系 | 在 adopt、absorb、merge、requires、variant、adapter 中明确一个关系；同一责任只有一个 Owner | 因为仓库作者不同就保留重复 Skill |
+| 安装安全 | Secret、Cookie、登录态不入 Git；系统安装、后台服务、外部写入和用户登录单独确认 | 因为缺少非关键配置就阻断整个 Goal |
+| Mode 绑定 | 只修改用户指定或无歧义的当前 Mode；其他 Mode 不自动获得能力 | 安装后自动加入全部 Mode |
+| 静态校验 | Skill/Mode 结构、依赖、路径、引用和宿主投影必须可解析 | 用真实 Case 证明写作、研究或业务效果后才允许采用 |
+
+### 搜索入口与 Bootstrap
+
+外部搜索优先使用当前 Host 已经可用的网络与代码仓库能力；如果 `agent-reach` 已安装，可以把它作为统一发现层。如果正在寻找或修复的恰好就是 `agent-reach`，Harness 不能形成“没有 Agent Reach 就不能寻找 Agent Reach”的死锁，此时直接使用 Host 原生 Web、GitHub、Git 或浏览器能力。
+
+### 本地化重构的两条路线
+
+| 路线 | 什么时候用 | 可以做什么 | 必须保留什么 |
+| --- | --- | --- | --- |
+| 派生式本地化 | 实际复制或修改了上游文字、代码、脚本、模板或独特资产 | 去掉个人触发词、绝对路径和上游工作区假设；按本地 Skill 契约重组 | 原作者、来源、commit、许可、第三方声明和本地修改 |
+| Clean-room 重构 | 只确认“这个用户需求值得解决”，不需要上游实现 | 重新定义能力责任；从官方接口或许可清楚的公共基础能力独立实现 | 本地设计依据；不得把未复制的内容伪装成上游派生，也不得暗中搬运受限实现 |
+
+两条路线都可以去作者耦合，但不能把“删除可调用界面里的个人品牌”误解为“删除实际使用过的来源”。没有复制实现时，外部个人仓库只是一份需求与组织方式的调研样本；复制了实现时，它的许可边界继续生效。
+
+---
+
+## View 5D · `yichen-skills` 需求样本解耦与 Mode 映射
+
+回答：一个包含搜索、归档、私人数据、音视频、发布和记忆的个人仓库，怎样拆开、去重、重构后进入 ASL，而不是整体成为一个超级 Mode？
+
+```mermaid
+flowchart TB
+    SAMPLE["个人技能仓库样本<br/>mcncarl/yichen-skills<br/>只用于发现真实需求和组合方式"]
+    INVENTORY["完整能力盘点<br/>21 个可调用 package<br/>按责任、依赖、权限、平台与重合度分类"]
+
+    subgraph FAMILIES["能力族 · 不是执行顺序"]
+        direction LR
+        RESEARCH["发现与研究<br/>统一搜索 · 网页研究<br/>外部模型咨询"]
+        CAPTURE["内容与私人数据获取<br/>已知链接 · 收藏 · 公众号语料<br/>微信 / 企微本地数据"]
+        MEDIA["音视频理解与制作<br/>ASR · 对标视频分析<br/>剪映精修 · X 切片"]
+        PUBLISH["外部写入<br/>X 草稿 · 企微文档 / 待办 / 日程"]
+        MEMORY["环境维护<br/>对话沉淀 · Agent Memory"]
+        UTILITY["宿主工具<br/>Mac 微信双开 · 已退役别名"]
+    end
+
+    subgraph DECISIONS["ASL 去重结论"]
+        direction LR
+        ABSORB["吸收进现有 Owner<br/>agent-reach<br/>topic-research-deposition<br/>wechat-account-corpus-research"]
+        REBUILD["Clean-room 重构为独立 Skill<br/>责任独立，完成标准独立"]
+        ADAPT["作为 Skill 内部 Adapter / Runtime<br/>服务商或宿主接线不单独成为 Skill"]
+        SYSTEM["回收进 Harness System<br/>Environment Access / Steward"]
+        DEFER["不绑定当前 Mode<br/>平台不符、私域高风险或暂无重复工作场"]
+        REJECT["不进入运行面<br/>已退役别名或纯宿主工具"]
+    end
+
+    subgraph LOCAL["当前本地真源与 Mode 投影"]
+        direction LR
+        POOL[("Formal Skill Pool<br/>每个责任保存一份")]
+        CREATOR["creator-studio<br/>素材 · 分析 · 视觉 · 发布"]
+        PRODUCT["product-lab<br/>发现 · 归档 · 产品判断"]
+        INVEST["investment-desk<br/>研究 · 访谈 · 判断 · 备忘录"]
+        CAPITAL["capital-markets-desk<br/>公司研究 · 交易材料 · 跟踪"]
+        UNBOUND["Unbound formal Skill<br/>已采用但暂不暴露给任何 Mode"]
+    end
+
+    SAMPLE --> INVENTORY
+    INVENTORY --> RESEARCH
+    INVENTORY --> CAPTURE
+    INVENTORY --> MEDIA
+    INVENTORY --> PUBLISH
+    INVENTORY --> MEMORY
+    INVENTORY --> UTILITY
+    RESEARCH --> ABSORB
+    RESEARCH --> REBUILD
+    CAPTURE --> ABSORB
+    CAPTURE --> REBUILD
+    CAPTURE --> DEFER
+    MEDIA --> REBUILD
+    MEDIA --> ADAPT
+    PUBLISH --> REBUILD
+    PUBLISH --> DEFER
+    MEMORY --> SYSTEM
+    UTILITY --> REJECT
+    ABSORB --> POOL
+    REBUILD --> POOL
+    ADAPT --> POOL
+    POOL --> CREATOR
+    POOL --> PRODUCT
+    POOL --> INVEST
+    POOL --> CAPITAL
+    POOL --> UNBOUND
+    DEFER --> UNBOUND
+
+    classDef locked fill:#dbeafe,stroke:#2563eb,color:#1e3a8a,stroke-width:2px;
+    classDef done fill:#dcfce7,stroke:#16a34a,color:#14532d;
+    classDef optimize fill:#ffedd5,stroke:#ea580c,color:#7c2d12;
+    classDef remove fill:#fee2e2,stroke:#dc2626,color:#7f1d1d,stroke-width:2px;
+    classDef source fill:#f5f3ff,stroke:#7c3aed,color:#4c1d95;
+    class SAMPLE source;
+    class INVENTORY,RESEARCH,CAPTURE,MEDIA,PUBLISH,MEMORY,UTILITY locked;
+    class ABSORB,SYSTEM,POOL,CREATOR,PRODUCT,INVEST,CAPITAL done;
+    class REBUILD,ADAPT,DEFER,UNBOUND optimize;
+    class REJECT remove;
+```
+
+### 逐项解耦映射
+
+下表只证明复杂外部仓库可以怎样解耦，不是待办清单，也不影响 Harness 架构完成度。当前目标不继续迁移这些 package。`Clean-room` 表示未来若有真实需求则重新定义并独立实现；`吸收` 表示由已有本地 Skill 承担，不再保留第二个同义入口。
+
+| 样本 package | 它暴露的真实需求 | ASL 关系 | 目标位置 | 当前状态 |
+| --- | --- | --- | --- | --- |
+| `yichen-agent-memory` | 人机共读记忆、检索与收尾 | 吸收概念，不建业务 Skill | Harness `Environment Access` | 责任已归并；旧 Candidate 已归档 |
+| `yichen-summary` | 把明确要求保存的对话沉淀为笔记 | 吸收 | `Environment Access` + 当前 Case | 不成为 Mode Skill |
+| `yichen-unified-search` | 多平台公开发现和统一候选 | 吸收需求，不复制实现 | `agent-reach` | 已有 Owner；旧 Candidate 已归档 |
+| `yichen-web-research` | 跨来源研究、纵横结构与证据综合 | 拆除总路由后吸收方法 | `topic-research-deposition`、`investment-research` | 仅保留映射；无当前迁移任务 |
+| `yichen-chatgpt-web-research` | 调用另一个模型做研究或复核 | Clean-room 独立 Skill + Host Adapter | `product-lab`、`investment-desk`、`capital-markets-desk` | 仅保留映射；登录态归 Host |
+| `yichen-grok-consult` | 外部模型第二意见与 X 原生搜索 | 作为外部模型 Skill 的 Adapter；X 发现仍归 `agent-reach` | 同上 | 仅保留映射；不建并行搜索 Owner |
+| `yichen-content-archive` | 读取和归档已知内容 | 业务目标独立重构 | `known-content-archive` → `creator-studio`、`product-lab` | **已实现并绑定；旧私有实现已归档** |
+| `yichen-bookmarks-export` | 当轮授权后导出私人收藏链接 | Clean-room 独立 Skill | `creator-studio`、`product-lab` | 仅保留映射；私人读取逐次授权 |
+| `yichen-social-bookmarks-exporter` | 旧兼容别名 | 拒绝 | 无 | 不建立兼容层 |
+| `yichen-wechat-mp-batch-exporter` | 公众号历史与批量语料 | 吸收公开能力和统计口径 | `wechat-account-corpus-research` → `creator-studio` | 已有 Owner，增量待核对 |
+| `yichen-asr` | 在多个 ASR 后端间选择并转写 | Clean-room 独立 Skill | `creator-studio`、`product-lab`、`investment-desk` | 仅保留映射；无当前迁移任务 |
+| `yichen-volc-asr` | 火山引擎 ASR 实现 | `media-transcription` 内部 Adapter | 不单独绑定 Mode | 仅保留映射；凭据归 Host |
+| `yichen-video-content` | 对标视频结构、节奏与可迁移机制分析 | Clean-room 独立 Skill | `reference-video-analysis` → `creator-studio` | **已实现并绑定** |
+| `yichen-jianying-editor` | 桌面视频精修 | Clean-room 独立 Skill | `creator-studio` | 仅保留映射；交互式桌面动作按次授权 |
+| `yichen-x-slicer` | X 内容切片和视频输出 | 业务目标独立重构 | `x-post-card-studio` → `creator-studio` | **已实现并绑定；旧私有实现已归档** |
+| `yichen-x-article-draft-uploader` | 把 Markdown 保存为 X Article 草稿 | 基于许可清楚的公共上游重做 | `creator-studio` | 仅保留映射；默认只保存草稿 |
+| `yichen-wechat-local-vault` | Mac 微信私域解析 | 暂不接入 | Unbound / 未来私域工作场 | 当前 Windows Host 不适用且权限高 |
+| `yichen-wechat-windows-reader` | Windows 脱机微信快照只读分析 | 可独立重做，但暂不绑定 | Unbound | 实验性 schema，待真实需求 |
+| `yichen-wecom-local-vault` | Mac 企微私域解析 | 暂不接入 | Unbound / 未来私域工作场 | 当前 Host 不适用且权限高 |
+| `yichen-wecom-operations` | 企微文档、待办、会议和日程 | 独立 Skill，但不硬塞现有 Mode | Unbound；重复使用后再判断 Mode | 依赖官方 CLI 和组织授权 |
+| `yichen-mac-wechat-dual-open` | Mac 应用双开 | 拒绝进入当前业务能力面 | 无 | 纯宿主工具且平台不适用 |
+
+### 已完成的独立迁移
+
+`reference-video-analysis` 已作为 Clean-room Skill 写入本地 Environment，并且只绑定 `creator-studio`。它保留“对标视频需要细读”的用户需求，但没有复制原仓库的作者触发词、13 模块正文、标题公式、脚本或资产；分析重点改为受众承诺、叙事地图、上下文细读、认知负荷、证据和可迁移机制。
+
+`known-content-archive` 把“已知输入归档”重新设计为无网络、不可覆盖的确定性本地封装；平台读取继续由当前 Host 和现有检索能力负责，因此没有第二个跨平台路由器。`x-post-card-studio` 使用新的 JSON handoff、HTML/CSS 和浏览器截图代码生成 1080×1440 卡片与可选 MP4，不包含原实现的脚本、模板或媒体管线。两项都已进入公开 Agent Skill Library，早期私有实现只在 Personal Environment 的 Archive 追溯。
+
+这些迁移验证的是架构关系：外部个人仓库可以提供产品需求和组合样本；本地 Skill 必须拥有自己的责任、代码、完成标准和 Mode 归属。其余 package 继续按 Owner 判断吸收、独立重构、保持未绑定或拒绝，不按仓库目录批量复制。
+
+---
+
+## View 6 · Mode 是能力子图，不是 Workflow
+
+回答：不同 Mode 如何共享 Skill，又为什么不会跨 Mode 隐式调用？
+
+```mermaid
+flowchart TB
+    AR["agent-reach<br/>共享底层研究能力"]
+    DIAGRAM["baoyu-diagram<br/>共享结构表达能力"]
+    VALUATION["investment-valuation-returns<br/>共享估值能力"]
+
+    CREATOR["creator-studio<br/>业务 Mode"]
+    PRODUCT["product-lab<br/>业务 Mode"]
+    INVEST["investment-desk<br/>业务 Mode"]
+    CAPITAL["capital-markets-desk<br/>业务 Mode"]
+
+    WRITING["public-account-writing-style"]
+    LAYOUT["qihang-wechat-layout"]
+    PUBLISH["baoyu-post-to-wechat"]
+    PRODUCT_JUDGMENT["ai-product-analyzer"]
+    INVEST_RESEARCH["investment-research"]
+    IC_MEMO["investment-ic-memo-writer"]
+    COMPANY["financial-company-profile"]
+    COVERAGE["public-equity-coverage-writer"]
+
+    CREATOR --> AR
+    CREATOR --> WRITING
+    CREATOR --> LAYOUT
+    CREATOR --> PUBLISH
+    PRODUCT --> AR
+    PRODUCT --> PRODUCT_JUDGMENT
+    PRODUCT --> DIAGRAM
+    INVEST --> AR
+    INVEST --> INVEST_RESEARCH
+    INVEST --> VALUATION
+    INVEST --> IC_MEMO
+    CAPITAL --> AR
+    CAPITAL --> COMPANY
+    CAPITAL --> VALUATION
+    CAPITAL --> COVERAGE
+
+    classDef mode fill:#dbeafe,stroke:#2563eb,color:#1e3a8a,stroke-width:2px;
+    classDef shared fill:#dcfce7,stroke:#16a34a,color:#14532d;
+    classDef skill fill:#f3f4f6,stroke:#6b7280,color:#1f2937;
+    class CREATOR,PRODUCT,INVEST,CAPITAL mode;
+    class AR,DIAGRAM,VALUATION shared;
+    class WRITING,LAYOUT,PUBLISH,PRODUCT_JUDGMENT,INVEST_RESEARCH,IC_MEMO,COMPANY,COVERAGE skill;
+```
+
+蓝色节点是 Mode，其他节点是完整 Skill。箭头表示“这个 Mode 能看见这项能力”，不表示先后顺序。同一个正式 Skill 可以被多个 Mode 显式选择，但只保存一份正文。
+
+---
+
+## View 7 · 演化影响半径决策图
+
+回答：收到明确反馈后，应该改当前 Case、Skill、Mode 还是整个 Environment？
+
+```mermaid
+flowchart TD
+    F["用户明确反馈或明确长期改变要求"] --> Q1{"只影响本次材料、表达或交付吗？"}
+    Q1 -->|是| CASE["Case<br/>返工当前 Artifact，不修改长期能力"]
+    Q1 -->|否| Q2{"能否归因于一项可复用能力？"}
+    Q2 -->|是| SKILL["Skill<br/>用户明确要求时直接改；仍有不确定性时才使用 Trial"]
+    Q2 -->|否| Q3{"是否涉及多项 Skill 的可见范围、上下文、权限或产物表面？"}
+    Q3 -->|是| MODE["Mode<br/>最小修改一个业务工作场，再刷新受影响投影"]
+    Q3 -->|否| Q4{"用户是否明确改变跨 Mode 身份、偏好、治理边界或整体组织方式？"}
+    Q4 -->|是| ENV["Environment<br/>修改 Profile 或总体结构，并检查所有受影响 Mode"]
+    Q4 -->|否| STOP["不升级长期真源<br/>保留在 Case 或 Feedback，等待更多真实证据"]
+
+    classDef locked fill:#dbeafe,stroke:#2563eb,color:#1e3a8a,stroke-width:2px;
+    classDef done fill:#dcfce7,stroke:#16a34a,color:#14532d;
+    class F,Q1,Q2,Q3,Q4 locked;
+    class CASE,SKILL,MODE,ENV,STOP done;
+```
+
+原则是最小范围优先。向上升级必须说明为什么较小一层已经不够，不能从点击、耗时、沉默或一次模型错误推断长期偏好。
+
+---
+
+## View 7B · Mode 新建、修改与退出决策图
+
+回答：什么时候应该创建 Mode，什么时候只改现有 Mode，什么时候根本不应该碰 Mode？
+
+```mermaid
+flowchart TD
+    START["真实 Case 或用户明确要求暴露工作场问题"] --> Q1{"问题能否归因于一个 Skill？"}
+    Q1 -->|是| SKILL["直接修改责任 Skill<br/>仍有不确定性时才使用 Trial；不改 Mode"]
+    Q1 -->|否| Q2{"是否同时涉及多项 Skill 的可见范围、长期上下文、权限或产物表面？"}
+    Q2 -->|否| CASE["留在 Case<br/>不制造长期结构"]
+    Q2 -->|是| Q3{"已有 Mode 是否代表同一种长期工作状态？"}
+    Q3 -->|是| MODIFY["修改现有 Mode<br/>只保存最小 Skill 根和必要边界 diff"]
+    Q3 -->|否| Q4{"是否已经在多个代表性 Case 中重复出现，并需要独立进入/退出？"}
+    Q4 -->|否| WAIT["不新建 Mode<br/>继续以 Case / Feedback 收集证据"]
+    Q4 -->|是| CREATE["新建业务 Mode<br/>定义 Goal 范围、上下文、权限、产物表面和 Skill 根"]
+    MODIFY --> VERIFY["代表性 Case 验证 + Guards + 刷新受影响投影"]
+    CREATE --> VERIFY
+    VERIFY --> Q5{"与现有 Mode 的边界仍然清晰吗？"}
+    Q5 -->|是| KEEP["保留独立 Mode"]
+    Q5 -->|否| MERGE["合并或退出 Mode<br/>先检查引用和宿主投影，再删除旧定义"]
+
+    classDef locked fill:#dbeafe,stroke:#2563eb,color:#1e3a8a,stroke-width:2px;
+    classDef done fill:#dcfce7,stroke:#16a34a,color:#14532d;
+    classDef optimize fill:#ffedd5,stroke:#ea580c,color:#7c2d12;
+    class START,Q1,Q2,Q3,Q4,Q5 locked;
+    class SKILL,CASE,WAIT,KEEP done;
+    class MODIFY,CREATE,VERIFY,MERGE optimize;
+```
+
+Mode 的判断单位是“长期工作状态”，不是主题名、项目名或一次任务。系统机制即使经常使用，也不能因此被包装成 Mode。
+
+---
+
+## View 8 · 三宿主部署与投影图
+
+回答：同一份 Environment 怎样接入 Codex、Claude Code 和 DeepSeek Harness？
+
+```mermaid
+flowchart LR
+    ENV[("Selected local Environment<br/>Personal 或 Agent Skill Library<br/>Profile + Modes + Formal Skills")]
+    RESOLVE["Harness Core<br/>validate + resolve Mode Skill closure"]
+    MANIFEST["Managed Manifest<br/>来源指纹与受管理表面"]
+
+    subgraph CODEX["Codex App"]
+        CA[".agents/skills/<skill>"]
+        CI["AGENTS.md managed block"]
+    end
+
+    subgraph CLAUDE["Claude Code"]
+        CS[".claude/skills/<skill>"]
+        CC["CLAUDE.md managed block"]
+    end
+
+    subgraph DSH["DeepSeek Harness"]
+        DP["Project projection<br/>.dsh/skills + AGENTS.md"]
+        BASE["Known-good Agent Preset<br/>Tools + Plugins"]
+        PRESET["Mode Agent Preset<br/>Persona + Mode Skill closure"]
+        SHARED["Profile / Bundle<br/>模型、存储、沙箱、凭据等宿主设施"]
+        BASE --> PRESET
+        SHARED --> BASE
+    end
+
+    ENV --> RESOLVE --> MANIFEST
+    MANIFEST --> CA
+    MANIFEST --> CI
+    MANIFEST --> CS
+    MANIFEST --> CC
+    MANIFEST --> DP
+    RESOLVE -->|只替换 Persona 与 Skill 面| PRESET
+
+    classDef truth fill:#dbeafe,stroke:#2563eb,color:#1e3a8a,stroke-width:2px;
+    classDef done fill:#dcfce7,stroke:#16a34a,color:#14532d;
+    classDef generated fill:#f3f4f6,stroke:#6b7280,color:#1f2937,stroke-dasharray:4 3;
+    class ENV truth;
+    class RESOLVE done;
+    class MANIFEST,CA,CI,CS,CC,DP,PRESET generated;
+```
+
+Codex 与 Claude 使用项目原生 Skill 目录和规则文件。DeepSeek 额外区分宿主级 Profile / Bundle 与会话级 Agent Preset；ASL Mode 对应 Agent Preset，不对应 Profile。
+
+---
+
+## View 9 · 当前状态与迁移图
+
+回答：现在究竟完成了什么、哪里是用户已确认边界、哪里还要优化、哪里必须删除？
+
+```mermaid
+flowchart LR
+    subgraph CURRENT["当前真实状态"]
+        HCORE["Harness Core<br/>6 commands · 25 tests"]
+        PENV["Personal Environment<br/>37 Formal Business Skills"]
+        ALIB["Agent Skill Library Environment<br/>37 Public Skills · 4 Modes<br/>0 Legacy Active Surfaces"]
+        BUSINESS["4 个业务 Mode records<br/>活动分类已对齐"]
+        SYSTEM["Harness System<br/>Steward / Access / Guards<br/>一个管理入口"]
+        ARCHIVED["旧系统 Mode 与系统 Skill<br/>已退出活动面并归档"]
+        CULT["2 Candidate · 0 Trial<br/>0 Feedback · 3 Archive"]
+        LEGACY["旧业务插件布局<br/>已移出活动根目录<br/>冻结于 Archive"]
+        PROJECTS["三宿主项目投影<br/>Codex / Claude / DeepSeek<br/>零漂移"]
+        PRESETS["4 个 DeepSeek Mode Preset<br/>导出与漂移验证通过"]
+    end
+
+    subgraph TARGET["用户已确认的目标"]
+        CONTRACT["空白 Harness 与业务发行版<br/>使用同一个 Environment Contract"]
+        FOUR["只保留 4 个业务 Mode<br/>系统能力不伪装成 Mode"]
+        STEWARD["Environment Steward / Access<br/>已进入 Harness 系统层"]
+        INTEGRATE["外部能力集成规则<br/>复杂仓库拆解 / Runtime / 单 Mode 绑定<br/>已进入 Steward"]
+        GUARDS["确定错误硬阻断<br/>语义判断留给 Host"]
+        MODE_NATIVE["Mode-native 业务发行结构<br/>37 Skills · 4 Modes · 已验证"]
+        DSH_RUNTIME["DeepSeek 真实长会话<br/>待运行验收"]
+        CLEANUP["11 个可重建缓存与构建目录<br/>已确认并清理"]
+    end
+
+    HCORE --> GUARDS
+    PENV --> CONTRACT
+    ALIB --> CONTRACT
+    ALIB --> MODE_NATIVE
+    BUSINESS --> FOUR
+    SYSTEM --> STEWARD
+    ARCHIVED --> STEWARD
+    CULT --> STEWARD
+    CULT --> INTEGRATE
+    LEGACY -.迁移证据.-> MODE_NATIVE
+    PROJECTS --> PRESETS
+    PRESETS --> DSH_RUNTIME
+    HCORE --> CLEANUP
+
+    classDef locked fill:#dbeafe,stroke:#2563eb,color:#1e3a8a,stroke-width:2px;
+    classDef done fill:#dcfce7,stroke:#16a34a,color:#14532d;
+    classDef optimize fill:#ffedd5,stroke:#ea580c,color:#7c2d12;
+    classDef remove fill:#fee2e2,stroke:#dc2626,color:#7f1d1d,stroke-width:2px;
+    classDef generated fill:#f3f4f6,stroke:#6b7280,color:#1f2937,stroke-dasharray:4 3;
+    class HCORE,PENV,ALIB,BUSINESS,SYSTEM,CULT,STEWARD,GUARDS,INTEGRATE,CLEANUP,MODE_NATIVE done;
+    class DSH_RUNTIME optimize;
+    class LEGACY,ARCHIVED,PROJECTS,PRESETS generated;
+    class CONTRACT,FOUR locked;
+```
+
+Agent Skill Library 的 Mode-native 内容迁移已经完成：37 个可公开正式 Skill 与 4 个业务 Mode 成为仓库活动真源，旧插件布局只在 Archive 追溯。当前唯一橙色项是 DeepSeek 真实长会话验收；它不代表缺少架构模块。系统 Mode 和系统 Skill 已退出活动面，11 个已确认的可重建目录已经清理。

@@ -60,11 +60,6 @@ def _clean_generated_composition(text: str) -> str:
 
 def _mode_persona(workspace: Workspace, mode_id: str) -> str:
     mode = workspace.modes[mode_id]
-    mutation = (
-        "This Mode may maintain the Environment only for an explicit user request; keep the smallest durable Git diff."
-        if mode.mutate_environment
-        else "Do not modify the Environment in this Mode; use an explicit maintenance Mode for durable capability changes."
-    )
     text = f"""You are an agent running ASL Mode {mode_id}.
 
 Environment truth: {workspace.root}
@@ -75,7 +70,9 @@ Compact Profile:
 Mode boundary:
 {mode.document.strip()}
 
-Use this as a broad working environment, not a Workflow. Select complete local Skills dynamically from the user's Goal. Read every selected Skill package fully and satisfy its completion standards even inside a larger task. External Prompt, MCP, Agent, API, model, command, script, or remote Skill may be used only through a formal projected local Skill; never call one naked in the middle of a task. Keep one-off evidence and Artifacts in the current Case. Record durable feedback only when the user states it explicitly. {mutation}
+Use this as a broad working environment, not a Workflow. Select complete local Skills dynamically from the user's Goal. Read every selected Skill package fully and satisfy its completion standards even inside a larger task. External Prompt, MCP, Agent, API, model, command, script, or remote Skill may be used only through a formal projected local Skill. A user-directed source may be integrated directly after full review; Candidate and Trial are only for concrete uncertainty. Keep one-off evidence and Artifacts in the current Case. Record durable feedback only when the user states it explicitly.
+
+Do not infer durable Environment changes from ordinary work. For an explicit user request, use the Harness system maintenance path from the current Mode, change the smallest fitting truth, run deterministic validation, and leave a reviewable Git diff. Mode selection never authorizes deletion, publication, payment, login, private-data access, messages, or external writes; those actions remain behind the current Host's native authorization boundary.
 
 The current DeepSeek Harness agent is the only executor. ASL does not add a second scheduler or Agent loop.
 """
@@ -116,6 +113,71 @@ def _description(document: str, mode_id: str) -> str:
         if value and not value.startswith("#"):
             return value
     return f"ASL Mode {mode_id} 的本地能力环境。"
+
+
+def verify_preset(
+    workspace: Workspace,
+    mode_id: str,
+    output: str | Path,
+) -> list[str]:
+    if mode_id not in workspace.modes:
+        raise HarnessError("MODE_NOT_ACTIVE", f"Mode is not active: {mode_id}")
+    target = Path(output).resolve()
+    marker = _read_marker(target)
+    expected_keys = {
+        "version",
+        "hostId",
+        "environment",
+        "environmentCommit",
+        "sourceFingerprint",
+        "mode",
+        "basePreset",
+        "skills",
+    }
+    skill_ids = workspace.mode_skill_ids(mode_id)
+    if (
+        marker is None
+        or set(marker) != expected_keys
+        or marker.get("version") != 1
+        or marker.get("hostId") != "deepseek-harness"
+        or marker.get("environment") != str(workspace.root)
+        or marker.get("mode") != mode_id
+        or marker.get("skills") != list(skill_ids)
+        or not isinstance(marker.get("basePreset"), str)
+    ):
+        raise HarnessError(
+            "DEEPSEEK_PRESET_INVALID", "DeepSeek preset marker is invalid"
+        )
+    composition_path = target / "agent.cordis.yml"
+    preset_path = target / "preset.yml"
+    try:
+        composition = composition_path.read_text(encoding="utf-8")
+        preset_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as error:
+        raise HarnessError(
+            "DEEPSEEK_PRESET_INVALID", "DeepSeek preset metadata is incomplete"
+        ) from error
+    expected_skill_root = json.dumps(str(target / "skills"), ensure_ascii=False)
+    if expected_skill_root not in composition:
+        raise HarnessError(
+            "DEEPSEEK_PRESET_INVALID", "DeepSeek preset Skill root is invalid"
+        )
+    for skill_id in skill_ids:
+        if not (target / "skills" / skill_id / "SKILL.md").is_file():
+            raise HarnessError(
+                "DEEPSEEK_PRESET_INVALID",
+                f"DeepSeek preset Skill is incomplete: {skill_id}",
+            )
+    warnings = []
+    if marker["sourceFingerprint"] != workspace.source_fingerprint(mode_id):
+        warnings.append(
+            "Environment content changed after preset export; run deepseek.preset.export again."
+        )
+    if marker["environmentCommit"] != workspace.git_commit:
+        warnings.append(
+            "Environment Git HEAD changed after preset export; run deepseek.preset.export again."
+        )
+    return warnings
 
 
 def export_preset(

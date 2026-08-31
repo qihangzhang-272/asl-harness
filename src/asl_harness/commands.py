@@ -8,7 +8,7 @@ from collections.abc import Sequence
 import yaml
 
 from .adapters import HOST_LAYOUTS, project_mode, verify_mode_projection
-from .deepseek import export_preset
+from .deepseek import export_preset, verify_preset
 from .workspace import HarnessError, Workspace
 
 
@@ -42,6 +42,11 @@ def _parser() -> argparse.ArgumentParser:
     preset.add_argument("--mode", required=True)
     preset.add_argument("--base-preset", required=True)
     preset.add_argument("--output", required=True)
+
+    verify_preset_command = commands.add_parser("deepseek.preset.verify")
+    verify_preset_command.add_argument("--workspace", required=True)
+    verify_preset_command.add_argument("--mode", required=True)
+    verify_preset_command.add_argument("--output", required=True)
     return parser
 
 
@@ -71,10 +76,15 @@ def _execute(args: argparse.Namespace) -> dict:
             workspace, args.mode, args.base_preset, args.output
         )
         return {"ok": True, "preset": projection}
+    if args.command == "deepseek.preset.verify":
+        warnings = verify_preset(workspace, args.mode, args.output)
+        return {"ok": True, "warnings": warnings}
     raise HarnessError("UNKNOWN_COMMAND", args.command)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
     try:
         result = _execute(_parser().parse_args(argv))
         output = json.dumps(result, ensure_ascii=False, separators=(",", ":"))
