@@ -9,7 +9,7 @@ from uuid import uuid4
 
 import yaml
 
-from .workspace import HarnessError, Workspace
+from .workspace import HarnessError, Workspace, package_fingerprint
 
 
 PRESET_ID = re.compile(r"[a-z0-9][a-z0-9-]*\Z")
@@ -126,6 +126,7 @@ def verify_preset(
     marker = _read_marker(target)
     expected_keys = {
         "version",
+        "operation",
         "hostId",
         "environment",
         "environmentCommit",
@@ -133,16 +134,20 @@ def verify_preset(
         "mode",
         "basePreset",
         "skills",
+        "skillFingerprints",
     }
     skill_ids = workspace.mode_skill_ids(mode_id)
     if (
         marker is None
         or set(marker) != expected_keys
-        or marker.get("version") != 1
+        or marker.get("version") != 2
+        or marker.get("operation") != "mode.export"
         or marker.get("hostId") != "deepseek-harness"
         or marker.get("environment") != str(workspace.root)
         or marker.get("mode") != mode_id
         or marker.get("skills") != list(skill_ids)
+        or not isinstance(marker.get("skillFingerprints"), dict)
+        or set(marker["skillFingerprints"]) != set(skill_ids)
         or not isinstance(marker.get("basePreset"), str)
     ):
         raise HarnessError(
@@ -163,7 +168,12 @@ def verify_preset(
             "DEEPSEEK_PRESET_INVALID", "DeepSeek preset Skill root is invalid"
         )
     for skill_id in skill_ids:
-        if not (target / "skills" / skill_id / "SKILL.md").is_file():
+        skill_path = target / "skills" / skill_id
+        if (
+            not (skill_path / "SKILL.md").is_file()
+            or package_fingerprint(skill_path)
+            != marker["skillFingerprints"].get(skill_id)
+        ):
             raise HarnessError(
                 "DEEPSEEK_PRESET_INVALID",
                 f"DeepSeek preset Skill is incomplete: {skill_id}",
@@ -254,7 +264,8 @@ def export_preset(
             newline="\n",
         )
         marker = {
-            "version": 1,
+            "version": 2,
+            "operation": "mode.export",
             "hostId": "deepseek-harness",
             "environment": str(workspace.root),
             "environmentCommit": workspace.git_commit,
@@ -262,6 +273,10 @@ def export_preset(
             "mode": mode_id,
             "basePreset": str(base),
             "skills": list(workspace.mode_skill_ids(mode_id)),
+            "skillFingerprints": {
+                skill_id: package_fingerprint(workspace.skills[skill_id].path)
+                for skill_id in workspace.mode_skill_ids(mode_id)
+            },
         }
         (temporary / PRESET_MARKER).write_text(
             json.dumps(marker, ensure_ascii=False, sort_keys=True, separators=(",", ":"))

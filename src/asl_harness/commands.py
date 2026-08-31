@@ -23,6 +23,9 @@ def _parser() -> argparse.ArgumentParser:
     validate = commands.add_parser("workspace.validate")
     validate.add_argument("--workspace", required=True, help="Personal Harness Environment root")
 
+    state = commands.add_parser("state")
+    state.add_argument("--workspace", required=True, help="Personal Harness Environment root")
+
     sync_view = commands.add_parser("workspace.view.sync")
     sync_view.add_argument("--workspace", required=True)
 
@@ -75,6 +78,8 @@ def _execute(args: argparse.Namespace) -> dict:
     workspace = Workspace.open(args.workspace)
     if args.command == "workspace.validate":
         return {"ok": True, **workspace.summary()}
+    if args.command == "state":
+        return {"ok": True, **workspace.state()}
     if args.command == "workspace.view.sync":
         path = workspace.sync_workspace_view()
         return {

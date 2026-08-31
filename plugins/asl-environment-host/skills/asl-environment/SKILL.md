@@ -9,7 +9,7 @@ description: 当用户要初始化、检查、维护或演化 ASL Environment，
 ## 读取工作环境
 
 1. 使用用户指定的 Environment；没有明确路径时，只从当前项目及父目录查找同时包含 `WORKSPACE.md`、`PROFILE.md`、`skills/`、`modes/`、`candidates/`、`trials/`、`feedback/` 与 `archive/` 的目录，不做全盘扫描。
-2. 先运行 `asl-harness workspace.validate --workspace <environment>`。常驻只读取精简 `PROFILE.md`、当前 Mode 边界和能力摘要；完整 Skill、Case、Feedback、Archive 与 Git 历史只在当前目标需要时按需读取。
+2. 先运行 `asl-harness state --workspace <environment>` 获取紧凑状态；结构维护前再运行 `workspace.validate`。常驻只读取精简 `PROFILE.md`、当前 Mode 边界和能力摘要；完整 Skill、Case、Feedback、Archive 与 Git 历史只在当前目标需要时按需读取。
 3. `WORKSPACE.md` 视图过期只是一条维护信号。维护任务可以运行 `workspace.view.sync`；普通业务 Goal 不因此被阻断。
 
 ## 选择与投影 Mode
@@ -26,15 +26,16 @@ description: 当用户要初始化、检查、维护或演化 ASL Environment，
 1. 完整读取责任 Skill 与外部来源的说明、引用、脚本、资产、依赖、许可、测试和历史，不凭目录名判断。
 2. 先比较本地 Owner，再选择吸收、合并、硬依赖、独立 Skill、明确变体、宿主 Adapter、Clean-room 重构或拒绝。优先减少重复 Owner。
 3. 用户明确指定来源且关系清楚时可以直接写入正式本地 Skill；来源、许可、重合、安全、Runtime 或采用方向仍不确定时才使用 Candidate 或 Trial。
-4. 外部 Prompt、MCP、Agent、API、模型、命令、脚本或服务正式使用前必须成为或并入完整本地 Skill；不得在业务执行中裸调用。
-5. 复制或改编实现时保留 `SOURCE.md`、许可、版本和本地改动；只借鉴需求或组织思路时不复制实现，按本地契约与许可清楚的公共基础能力独立重构。
+4. 外部 Prompt、MCP、Agent、API、Plugin、模型、命令、脚本或服务正式使用前必须成为或并入完整本地 Skill；不得在业务执行中裸调用。
+5. 每个正式 Skill 都必须保留含非空 `Origin` 的 `SOURCE.md`。复制或改编实现时继续记录许可、版本和本地改动；只借鉴需求或组织思路时不复制实现，按本地契约与许可清楚的公共基础能力独立重构。
+6. 需要运行接线时，把 portable 或宿主专用资产留在完整 Skill package 的 `bindings/` 内。Mode 不增加 MCP、API、Agent、Plugin 或权限字段；真正激活由对应 Host Adapter 或宿主原生命令完成。
 
 ## 受控修改
 
 1. 先判断最小影响半径：一次材料或产物留在 Case；可复用方法改 Skill；长期能力面、上下文或产物表面改 Mode；只有用户明确的跨 Mode 身份或治理变化才改 Profile。
 2. 修改前检查 Git 状态和受保护路径。不要混入来源不明或与当前目标无关的改动。
 3. Skill 删除或移动前检查其他 Skill 的 `requires`、所有 Mode 和活动宿主投影；Mode 删除或移动前检查活动投影。破坏性删除仍需用户逐项授权。
-4. 修改最小真源后运行 `workspace.validate`，必要时运行 `workspace.view.sync`，只刷新受影响的 Host Projection，并向用户展示可读 Git diff。
+4. 修改最小真源后运行 `workspace.validate`，必要时运行 `workspace.view.sync`，只刷新受影响的 Host Projection，并向用户展示可读 Git diff。Environment 导入、宿主投影与 Preset 导出必须以原子操作完成，失败时恢复旧状态。
 5. 校验失败时修复当前修改；找不到事实或操作不可执行时如实记录边界，不把整个任务锁死，也不伪造完成。
 
 ## 边界
@@ -53,5 +54,6 @@ description: 当用户要初始化、检查、维护或演化 ASL Environment，
 - 任何长期修改都有明确触发信号、最小影响半径、完整来源判断和可读 Git diff；
 - 当前 Mode 的 Skill 根、依赖闭包、培养区和 Secret 边界通过校验；
 - 需要宿主接入时，原生目录、规则块和投影清单已经生成并通过 `host.verify`；
+- 导入/导出记录包含 Git HEAD 与轻量内容指纹，受管说明或复制内容被改动时校验会失败；
 - 没有把业务执行责任转移给 Harness，也没有覆盖用户自有文件；
 - 未完成或仅结构验证的 DeepSeek 能力被如实说明。

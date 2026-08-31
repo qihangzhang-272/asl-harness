@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 from pathlib import Path
 
 import pytest
 
+import asl_harness.adapters as adapters
 from asl_harness.adapters import HOST_LAYOUTS, project_mode, verify_mode_projection
 from asl_harness.commands import main
 from asl_harness.deepseek import PRESET_MARKER, export_preset, verify_preset
+from asl_harness.sync import sync_environment
 from asl_harness.workspace import HarnessError, Workspace
 
 
@@ -35,6 +38,10 @@ description: {skill_id} capability
 
 - 交付可独立检查的结果。
 """,
+    )
+    _write(
+        root / "skills" / skill_id / "SOURCE.md",
+        f"# Source\n\n- Origin: local://tests/{skill_id}\n",
     )
 
 
@@ -150,6 +157,16 @@ def test_workspace_requires_all_lifecycle_areas(tmp_path: Path) -> None:
     assert "feedback/" in str(captured.value)
 
 
+def test_formal_skill_requires_a_traceable_source(tmp_path: Path) -> None:
+    root = _environment(tmp_path)
+    (root / "skills" / "creator" / "SOURCE.md").unlink()
+
+    with pytest.raises(HarnessError) as captured:
+        Workspace.open(root)
+
+    assert captured.value.code == "SKILL_SOURCE_INVALID"
+
+
 def test_candidate_requires_source_and_trial_is_a_complete_skill(tmp_path: Path) -> None:
     missing_source = _environment(tmp_path / "candidate")
     (missing_source / "candidates" / "unknown").mkdir()
@@ -176,6 +193,10 @@ description: isolated draft capability
 
 - 交付可检查结果。
 """,
+    )
+    _write(
+        valid_trial / "trials" / "draft" / "SOURCE.md",
+        "# Source\n\n- Origin: local://tests/draft\n",
     )
     workspace = Workspace.open(valid_trial)
     assert workspace.summary()["cultivation"]["trials"] == ["draft"]
@@ -246,6 +267,7 @@ def test_projects_and_verifies_native_host_surfaces(tmp_path: Path, host_id: str
     manifest = project_mode(workspace, project, "creator-studio", host_id=host_id)
 
     assert manifest["mode"] == "creator-studio"
+    assert manifest["operation"] == "mode.export"
     assert "permissions" not in manifest
     assert [item["skill"] for item in manifest["skillProjections"]] == [
         "creator",
@@ -260,6 +282,87 @@ def test_projects_and_verifies_native_host_surfaces(tmp_path: Path, host_id: str
     assert verify_mode_projection(
         workspace, project, "creator-studio", host_id=host_id
     ) == []
+
+
+def test_verify_rejects_tampered_copy_projection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    workspace = Workspace.open(_environment(tmp_path))
+    project = tmp_path / "project"
+
+    def no_link(*_args: object, **_kwargs: object) -> None:
+        raise OSError("links unavailable")
+
+    monkeypatch.setattr(Path, "symlink_to", no_link)
+    monkeypatch.setattr(
+        adapters.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(returncode=1),
+    )
+    manifest = project_mode(
+        workspace, project, "creator-studio", host_id="codex-app"
+    )
+    assert all(item["projection"] == "copy" for item in manifest["skillProjections"])
+    with (project / ".agents/skills/creator/SKILL.md").open(
+        "a", encoding="utf-8"
+    ) as stream:
+        stream.write("\ntampered\n")
+
+    with pytest.raises(HarnessError) as captured:
+        verify_mode_projection(
+            workspace, project, "creator-studio", host_id="codex-app"
+        )
+
+    assert captured.value.code == "HOST_PROJECTION_INVALID"
+
+
+def test_verify_rejects_tampered_managed_instructions(tmp_path: Path) -> None:
+    root = _environment(tmp_path)
+    workspace = Workspace.open(root)
+    project = tmp_path / "project"
+    project_mode(workspace, project, "creator-studio", host_id="codex-app")
+    instruction = project / "AGENTS.md"
+    instruction.write_text(
+        instruction.read_text(encoding="utf-8").replace(
+            "ASL current Mode: creator-studio", "ASL current Mode: tampered"
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(HarnessError) as captured:
+        verify_mode_projection(
+            workspace, project, "creator-studio", host_id="codex-app"
+        )
+
+    assert captured.value.code == "HOST_PROJECTION_INVALID"
+
+
+def test_projection_rolls_back_when_instruction_write_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _environment(tmp_path)
+    workspace = Workspace.open(root)
+    project = tmp_path / "project"
+    original = project_mode(
+        workspace, project, "creator-studio", host_id="codex-app"
+    )
+    _skill(root, "research")
+    _mode(root, "research-desk", ("research",))
+
+    def fail_write(_path: Path, _block: str) -> None:
+        raise OSError("simulated instruction write failure")
+
+    monkeypatch.setattr(adapters, "_replace_managed_block", fail_write)
+    with pytest.raises(OSError, match="simulated"):
+        project_mode(
+            Workspace.open(root), project, "research-desk", host_id="codex-app"
+        )
+
+    manifest_path = project / ".asl/host-projections/codex-app/current.json"
+    assert json.loads(manifest_path.read_text(encoding="utf-8")) == original
+    assert (project / ".agents/skills/creator/SKILL.md").is_file()
+    assert (project / ".agents/skills/foundation/SKILL.md").is_file()
+    assert not (project / ".agents/skills/research").exists()
 
 
 def test_switching_mode_removes_only_old_managed_skills(tmp_path: Path) -> None:
@@ -373,6 +476,7 @@ def test_exports_self_contained_deepseek_agent_preset(tmp_path: Path) -> None:
     result = export_preset(workspace, "creator-studio", base, output)
 
     assert result["mode"] == "creator-studio"
+    assert result["operation"] == "mode.export"
     assert result["skills"] == ["creator", "foundation"]
     assert (output / "skills/creator/SKILL.md").is_file()
     assert (output / "skills/foundation/SKILL.md").is_file()
@@ -444,6 +548,21 @@ def test_cli_exposes_only_mode_only_workflows(tmp_path: Path, capsys: pytest.Cap
     }
 
 
+def test_cli_state_is_compact_and_machine_readable(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = _environment(tmp_path)
+
+    assert main(["state", "--workspace", str(root)]) == 0
+
+    output = json.loads(capsys.readouterr().out)
+    assert output["ok"] is True
+    assert output["skillCount"] == 2
+    assert output["modeCount"] == 1
+    assert output["modes"] == [{"id": "creator-studio", "skillCount": 2}]
+    assert "skills" not in output
+
+
 def test_environment_sync_check_reports_add_without_writing(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -482,7 +601,10 @@ def test_environment_sync_adds_complete_skill_and_binds_one_mode(
     target = _environment(tmp_path / "target")
     _skill(source, "visual")
     _mode(target, "research-desk", ("foundation",))
-    _write(source / "skills/visual/SOURCE.md", "# Source\n\nLocal source record.\n")
+    _write(
+        source / "skills/visual/SOURCE.md",
+        "# Source\n\n- Origin: local://tests/visual-with-assets\n",
+    )
     _write(source / "skills/visual/scripts/render.py", "print('render')\n")
     _write(source / "skills/visual/__pycache__/render.pyc", "generated\n")
 
@@ -516,6 +638,31 @@ def test_environment_sync_adds_complete_skill_and_binds_one_mode(
     assert "visual" in refreshed.modes["creator-studio"].skill_roots
     assert "visual" not in refreshed.modes["research-desk"].skill_roots
     assert refreshed.workspace_view_current() is True
+    assert output["operation"] == "skill.import"
+    assert len(output["sourcePackageFingerprint"]) == 64
+    assert output["targetPackageFingerprint"] == output["sourcePackageFingerprint"]
+
+
+def test_environment_sync_rolls_back_the_whole_change_on_late_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = _environment(tmp_path / "source")
+    target = _environment(tmp_path / "target")
+    _skill(source, "visual")
+    before_mode = (target / "modes/creator-studio/mode.yaml").read_bytes()
+    before_view = (target / "WORKSPACE.md").read_bytes()
+
+    def fail_view(_workspace: Workspace) -> Path:
+        raise OSError("simulated view write failure")
+
+    monkeypatch.setattr(Workspace, "sync_workspace_view", fail_view)
+    with pytest.raises(OSError, match="simulated"):
+        sync_environment(source, target, "visual", mode_id="creator-studio")
+
+    assert not (target / "skills/visual").exists()
+    assert (target / "modes/creator-studio/mode.yaml").read_bytes() == before_mode
+    assert (target / "WORKSPACE.md").read_bytes() == before_view
+    assert Workspace.open(target).modes["creator-studio"].skill_roots == ("creator",)
 
 
 def test_environment_sync_reports_and_refuses_local_conflict(

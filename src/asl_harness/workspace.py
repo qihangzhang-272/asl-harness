@@ -116,6 +116,9 @@ def _git_commit(root: Path) -> str:
 def _package_files(package: Path, environment: Path) -> tuple[Path, ...]:
     files = []
     for path in package.rglob("*"):
+        relative = path.relative_to(package)
+        if any(part in GENERATED_DIRECTORIES or part == ".git" for part in relative.parts):
+            continue
         if path.is_symlink():
             resolved = path.resolve()
             if not resolved.exists() or not resolved.is_relative_to(environment):
@@ -125,6 +128,23 @@ def _package_files(package: Path, environment: Path) -> tuple[Path, ...]:
         if path.is_file():
             files.append(path)
     return tuple(sorted(files, key=lambda item: item.as_posix()))
+
+
+def package_fingerprint(package: Path, *, ignored_names: frozenset[str] = frozenset()) -> str:
+    digest = hashlib.sha256()
+    for path in sorted(package.rglob("*"), key=lambda item: item.as_posix()):
+        relative = path.relative_to(package)
+        if any(
+            part in GENERATED_DIRECTORIES or part == ".git" or part in ignored_names
+            for part in relative.parts
+        ):
+            continue
+        if path.is_file():
+            digest.update(relative.as_posix().encode("utf-8"))
+            digest.update(b"\0")
+            digest.update(path.read_bytes())
+            digest.update(b"\0")
+    return digest.hexdigest()
 
 
 def _scan_authored_material(root: Path) -> tuple[str, ...]:
@@ -178,6 +198,19 @@ class Mode:
 
 def _read_skill(package: Path, skill_id: str, environment: Path) -> Skill:
     text = _read_nonempty(package / "SKILL.md", f"Skill {skill_id}/SKILL.md")
+    try:
+        source = _read_nonempty(package / "SOURCE.md", f"Skill {skill_id}/SOURCE.md")
+    except HarnessError as error:
+        raise HarnessError(
+            "SKILL_SOURCE_INVALID", f"Skill {skill_id} requires a nonempty SOURCE.md"
+        ) from error
+    if not re.search(r"(?m)^#[ \t]+Source[ \t]*$", source) or not re.search(
+        r"(?m)^-[ \t]+Origin:[ \t]*\S+", source
+    ):
+        raise HarnessError(
+            "SKILL_SOURCE_INVALID",
+            f"Skill {skill_id}/SOURCE.md must contain a Source heading and nonempty Origin",
+        )
     match = SKILL_FRONTMATTER.match(text)
     if match is None:
         raise HarnessError("SKILL_INVALID", f"Skill {skill_id} has invalid frontmatter")
@@ -479,6 +512,24 @@ class Workspace:
             ],
             "cultivation": {
                 directory: list(names) for directory, names in self.cultivation.items()
+            },
+            "warnings": list(self.warnings),
+            "workspaceViewCurrent": self.workspace_view_current(),
+        }
+
+    def state(self) -> dict:
+        return {
+            "environment": str(self.root),
+            "environmentId": self.environment_id,
+            "gitCommit": self.git_commit,
+            "skillCount": len(self.skills),
+            "modeCount": len(self.modes),
+            "modes": [
+                {"id": mode.id, "skillCount": len(self.mode_skill_ids(mode.id))}
+                for mode in self.modes.values()
+            ],
+            "cultivation": {
+                directory: len(names) for directory, names in self.cultivation.items()
             },
             "warnings": list(self.warnings),
             "workspaceViewCurrent": self.workspace_view_current(),

@@ -1,35 +1,24 @@
 from __future__ import annotations
 
-import hashlib
 import shutil
 import subprocess
 import tempfile
+from contextlib import contextmanager
 from pathlib import Path
 
 import yaml
 
-from .workspace import GENERATED_DIRECTORIES, HarnessError, Workspace, load_yaml
+from .workspace import (
+    GENERATED_DIRECTORIES,
+    HarnessError,
+    Workspace,
+    load_yaml,
+    package_fingerprint,
+)
 
 
 def _ignore_generated(_directory: str, names: list[str]) -> set[str]:
     return {name for name in names if name in GENERATED_DIRECTORIES or name == ".git"}
-
-
-def _package_fingerprint(package: Path) -> str:
-    digest = hashlib.sha256()
-    for path in sorted(package.rglob("*"), key=lambda item: item.as_posix()):
-        relative = path.relative_to(package)
-        if any(
-            part in GENERATED_DIRECTORIES or part == ".git"
-            for part in relative.parts
-        ):
-            continue
-        if path.is_file():
-            digest.update(relative.as_posix().encode("utf-8"))
-            digest.update(b"\0")
-            digest.update(path.read_bytes())
-            digest.update(b"\0")
-    return digest.hexdigest()
 
 
 def _bind_mode(target: Workspace, mode_id: str, skill_id: str) -> None:
@@ -73,6 +62,46 @@ def _git_status(root: Path, paths: list[str]) -> list[str]:
         return []
 
 
+def _remove_path(path: Path) -> None:
+    if path.is_symlink():
+        path.unlink()
+    elif path.is_dir():
+        shutil.rmtree(path)
+    elif path.exists():
+        path.unlink()
+
+
+@contextmanager
+def _rollback_paths(root: Path, relative_paths: list[str]):
+    with tempfile.TemporaryDirectory(prefix=".asl-sync-rollback-", dir=root) as temporary:
+        backup = Path(temporary)
+        present: set[str] = set()
+        for relative in relative_paths:
+            source = root / relative
+            if source.is_dir():
+                shutil.copytree(source, backup / relative, symlinks=True)
+                present.add(relative)
+            elif source.is_file():
+                destination = backup / relative
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source, destination)
+                present.add(relative)
+        try:
+            yield
+        except BaseException:
+            for relative in reversed(relative_paths):
+                _remove_path(root / relative)
+                if relative in present:
+                    source = backup / relative
+                    destination = root / relative
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    if source.is_dir():
+                        shutil.copytree(source, destination, symlinks=True)
+                    else:
+                        shutil.copy2(source, destination)
+            raise
+
+
 def sync_environment(
     source_root: str | Path,
     target_root: str | Path,
@@ -102,7 +131,7 @@ def sync_environment(
 
     if skill_id not in target.skills:
         skill_action = "add"
-    elif _package_fingerprint(source.skills[skill_id].path) == _package_fingerprint(
+    elif package_fingerprint(source.skills[skill_id].path) == package_fingerprint(
         target.skills[skill_id].path
     ):
         skill_action = "unchanged"
@@ -126,8 +155,17 @@ def sync_environment(
     if changed:
         changed_paths.append("WORKSPACE.md")
     result = {
+        "operation": "skill.import",
         "source": str(source.root),
+        "sourceCommit": source.git_commit,
+        "sourcePackageFingerprint": package_fingerprint(source.skills[skill_id].path),
         "target": str(target.root),
+        "targetCommit": target.git_commit,
+        "targetPackageFingerprint": (
+            package_fingerprint(target.skills[skill_id].path)
+            if skill_id in target.skills
+            else None
+        ),
         "skill": skill_id,
         "skillAction": skill_action,
         "mode": mode_id,
@@ -145,22 +183,26 @@ def sync_environment(
             f"Target Skill has different local content: {skill_id}; use --replace to overwrite",
         )
 
-    if skill_action == "add":
-        destination = target.root / "skills" / skill_id
-        shutil.copytree(
-            source.skills[skill_id].path,
-            destination,
-            symlinks=False,
-            ignore=_ignore_generated,
-        )
-    elif skill_action == "replace":
-        destination = target.root / "skills" / skill_id
-        _replace_package(source.skills[skill_id].path, destination)
-    if mode_id is not None and mode_action == "add":
-        _bind_mode(target, mode_id, skill_id)
     if changed:
-        refreshed = Workspace.open(target.root)
-        refreshed.sync_workspace_view()
-        Workspace.open(target.root)
+        with _rollback_paths(target.root, changed_paths):
+            if skill_action == "add":
+                destination = target.root / "skills" / skill_id
+                shutil.copytree(
+                    source.skills[skill_id].path,
+                    destination,
+                    symlinks=False,
+                    ignore=_ignore_generated,
+                )
+            elif skill_action == "replace":
+                destination = target.root / "skills" / skill_id
+                _replace_package(source.skills[skill_id].path, destination)
+            if mode_id is not None and mode_action == "add":
+                _bind_mode(target, mode_id, skill_id)
+            refreshed = Workspace.open(target.root)
+            refreshed.sync_workspace_view()
+            Workspace.open(target.root)
+        result["targetPackageFingerprint"] = package_fingerprint(
+            target.root / "skills" / skill_id
+        )
     result["gitStatus"] = _git_status(target.root, changed_paths)
     return result

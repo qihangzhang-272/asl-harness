@@ -110,6 +110,9 @@ git clone https://github.com/qihangzhang-272/asl-harness.git
 cd asl-harness
 python -m pip install -e ".[test]"
 
+asl-harness state \
+  --workspace ./examples/personal-environment
+
 asl-harness workspace.validate \
   --workspace ./examples/personal-environment
 ```
@@ -160,12 +163,14 @@ Mode 不互相调用，也不通过隐式继承获得能力。多个 Mode 需要
 Harness 只对可以确定的错误做硬阻断：
 
 - Environment、Skill 或 Mode 结构不合法；
+- 正式 Skill 缺少可追溯的 `SOURCE.md` 与 `Origin`；
 - Skill 依赖缺失或循环；
 - Mode 引用不存在的正式 Skill；
 - Candidate、Trial、正式 Skill 与 Case 边界混用；
 - 删除仍被 Skill、Mode 或活动投影引用的能力；
 - 路径或链接逃出 Environment；
 - 投影覆盖无法证明属于 ASL 的用户文件；
+- 宿主受管说明或复制型 Skill 投影被手工篡改；
 - 密钥、缓存、Git 元数据或可重建依赖进入投影；
 - 固定 Workflow、Run 状态树或第二调度器回流到活动 Environment。
 
@@ -193,17 +198,32 @@ Harness 只对可以确定的错误做硬阻断：
 
 ## 宿主接入
 
-| Host | Skill 投影 | Mode 入口 | 当前状态 |
+| Host | Skill 投影 | Mode 入口 | Adapter 边界 |
 | --- | --- | --- | --- |
-| Codex App | `.agents/skills/` | `AGENTS.md` | 投影机制已实现；当前生成快照需按最新 Environment 刷新 |
-| Claude Code | `.claude/skills/` | `CLAUDE.md` | 投影机制已实现；当前生成快照需按最新 Environment 刷新 |
-| DeepSeek Harness | `.dsh/skills/` | `AGENTS.md` 或 Agent Preset | 项目投影和 4 个 Mode Preset 的生成/验证机制已实现；当前快照待刷新，真实长会话待验收 |
+| Codex App | `.agents/skills/` | `AGENTS.md` | 保留完整 Skill package，由 Codex 原生执行 |
+| Claude Code | `.claude/skills/` | `CLAUDE.md` | 保留完整 Skill package，由 Claude Code 原生执行 |
+| DeepSeek Harness | `.dsh/skills/` | `AGENTS.md` 或 Agent Preset | 复用已知可运行 Preset 的 Tools / Plugins，只替换 Mode 的 Persona 与 Skill 面 |
+
+MCP、API、Agent、Plugin 和工具不成为 Mode 字段，也不能在任务中绕过 Skill 裸接入。需要这些运行能力的 Skill，可以在自己的 package 内保存 portable 或宿主专用 binding 资产；`environment.sync`、项目投影和 Preset 导出必须完整保留它们。真正把 binding 接到宿主配置上的行为只属于对应 Host Adapter，ASL 不发明一份号称通用、实际无法覆盖三家差异的运行时 schema。
+
+### CLI 状态与导入导出记录
+
+- `state` 给人和自动化返回紧凑的 Environment 状态，不展开每个 Skill 的长描述；
+- `environment.sync` 的 JSON 是一次 Skill 导入记录，包含来源/目标 Git HEAD、package SHA-256、受影响路径和 Git 状态；
+- `host.project` 把 Mode 导出记录写入 `.asl/host-projections/<host>/current.json`；
+- `deepseek.preset.export` 把导出记录写入 `.asl-preset-projection.json`；
+- 两类导出记录都保存内容指纹，`verify` 会拒绝被篡改的受管说明或复制内容。
+
+这些记录复用现有文件和 stdout，不建立另一套操作日志数据库。需要保存某次导入结果时，直接把 JSON 输出重定向到 Case 或审计目录。
+
+安装 Harness 或 clone 一份空白/装填版 Environment，就是当前的初始化。只有未来需要从任意空目录生成 Environment 骨架时，独立 `init` 命令才有价值；v0.3 不重复提供它。
 
 <details>
 <summary><strong>CLI 参考</strong></summary>
 
 | 命令 | 当前职责 |
 | --- | --- |
+| `state` | 输出紧凑的 Environment、Mode、Skill 数量、培养区、Git 与视图状态 |
 | `workspace.validate` | 校验 Environment、正式 Skill、依赖图和 Mode |
 | `workspace.view.sync` | 刷新人和 Agent 共读的能力地图 |
 | `environment.sync` | 在两份合法本地 Environment 之间显式同步一个完整 Skill，并可选绑定一个 Mode |
@@ -216,17 +236,7 @@ Harness 只对可以确定的错误做硬阻断：
 
 ## 当前状态
 
-ASL Harness 目前是可运行的开发者预览：七个确定性命令和 31 项自动化测试已经存在。最小 Mode schema、Skill 依赖闭包、Candidate/Trial 边界、显式 Environment 同步、Secret 文件名、缓存提醒、能力视图、Codex App / Claude Code / DeepSeek 项目投影，以及 DeepSeek Preset 导出与漂移验证已经实现。投影刷新也会清理 Manifest 中登记但源 Skill 已经归档的断链 Junction，同时继续拒绝删除用户自有目录。
-
-就 v0.3 的架构范围而言，系统边界、真源、Mode/Skill 关系、四个循环、外部能力进入路径、维护入口、确定性门禁和三宿主投影已经闭环。Agent Skill Library 也已经迁移为同一 Contract 下的 Mode-native Environment。
-
-当前状态颜色和验证证据统一维护在 [ASL Architecture Views](docs/asl-architecture-views.md#view-9--当前状态与迁移图)。已完成的实施计划已经移到 `docs/archive/implementation-plans/`，不再占用活跃架构入口。
-
-当前有两类橙色状态：12 份项目投影和 4 个 Preset 能够通过结构验证，但现存快照落后于最新 Environment；DeepSeek Harness 真实长会话验收后置。两份 Environment 的可重建缓存已清理，`WORKSPACE.md` 视图已刷新并通过校验；这些状态都不改变已经成立的 Mode-only 架构。
-
-`environment.sync` 已经成为唯一的 Environment 间同步入口：它一次处理一个完整 Skill，支持 `--check`、可选 Mode 绑定和显式 `--replace`，默认拒绝覆盖目标的不同内容。它不会变成后台订阅、共享 Skill 目录、自动提交、自动推送或第二调度器。
-
-Environment Steward 与 Access 已由同一个宿主管理 Skill、现有 CLI、投影规则和 Git diff 组成，不再计划增加 CRUD 服务、授权状态机或第二个索引。Case、反馈、Archive 和 Git 是按需读取面，不建立新的“统一访问数据库”。
+动态项目状态、颜色、验证证据和未完成项只维护在 [ASL Architecture Views](docs/asl-architecture-views.md#view-9--当前状态与迁移图)。README 不复制这些易过期信息。
 
 ## 开发
 
