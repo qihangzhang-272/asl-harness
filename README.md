@@ -56,7 +56,7 @@ flowchart TB
     SUPPLY["用户目标 / 空白 Harness / 装填版 Environment / 外部能力来源"]
     SYSTEM["Harness System<br/>Core · Environment Steward · Environment Access · Guards"]
     TRUTH[("Personal Environment · Git 真源<br/>Profile · Skills · Modes · Candidates / Trials / Feedback / Archive")]
-    HOST["当前 Host · 唯一执行者<br/>Codex App / Claude Code / DeepSeek Harness"]
+    HOST["当前 Host · 唯一执行者<br/>自带 Agent Loop / Session / Tools / Sandbox / Auth<br/>Codex App / Claude Code / DeepSeek Harness"]
     LOOPS["四个独立循环<br/>Goal / Case · Capability Cultivation · Mode Evolution · Governance / Projection"]
     CASE["Case<br/>材料 · 证据 · 过程文件 · Artifact · 交付"]
     PROJECTION["Host Projections<br/>可删除、可重建"]
@@ -182,9 +182,9 @@ Harness 只对可以确定的错误做硬阻断：
 
 | Host | Skill 投影 | Mode 入口 | 当前状态 |
 | --- | --- | --- | --- |
-| Codex App | `.agents/skills/` | `AGENTS.md` | 已实现 |
-| Claude Code | `.claude/skills/` | `CLAUDE.md` | 已实现 |
-| DeepSeek Harness | `.dsh/skills/` | `AGENTS.md` 或 Agent Preset | 项目投影和 4 个 Mode Preset 已验证，真实长会话待验收 |
+| Codex App | `.agents/skills/` | `AGENTS.md` | 投影机制已实现；当前生成快照需按最新 Environment 刷新 |
+| Claude Code | `.claude/skills/` | `CLAUDE.md` | 投影机制已实现；当前生成快照需按最新 Environment 刷新 |
+| DeepSeek Harness | `.dsh/skills/` | `AGENTS.md` 或 Agent Preset | 项目投影和 4 个 Mode Preset 的生成/验证机制已实现；当前快照待刷新，真实长会话待验收 |
 
 <details>
 <summary><strong>CLI 参考</strong></summary>
@@ -208,7 +208,9 @@ ASL Harness 目前是可运行的开发者预览：六个确定性命令和 25 �
 
 当前状态颜色和验证证据统一维护在 [ASL Architecture Views](docs/asl-architecture-views.md#view-9--当前状态与迁移图)。已完成的实施计划已经移到 `docs/archive/implementation-plans/`，不再占用活跃架构入口。
 
-当前只剩一个宿主运行验收项：DeepSeek Harness 真实长会话。Agent Skill Library 的 37 个正式 Skill、4 个 Mode、12 个项目投影和 4 个 Preset 已经通过结构与漂移验证。
+当前有三类橙色状态：两份 Environment 的 `WORKSPACE.md` 视图与可重建缓存待维护；12 份项目投影和 4 个 Preset 能够通过结构验证，但现存快照落后于最新 Environment；DeepSeek Harness 真实长会话验收后置。它们都不改变已经成立的 Mode-only 架构。
+
+下一阶段只计划增加一个深接口：在两份合法的本地 Environment 之间显式同步一个完整 Skill，并可选绑定一个目标 Mode。`environment.sync` 当前尚未实现；它不会变成后台订阅、共享 Skill 目录、自动覆盖、自动提交或第二调度器。
 
 Environment Steward 与 Access 已由同一个宿主管理 Skill、现有 CLI、投影规则和 Git diff 组成，不再计划增加 CRUD 服务、授权状态机或第二个索引。Case、反馈、Archive 和 Git 是按需读取面，不建立新的“统一访问数据库”。
 

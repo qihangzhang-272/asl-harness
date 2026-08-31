@@ -2,13 +2,13 @@
 
 本文件用多种标准架构图解释 ASL。每张图只回答一种问题，避免把系统上下文、内部组件、运行时序、生命周期和部署关系混在同一张图里。
 
-> 状态快照：2026-08-31。架构边界来自当前 v0.3 协议；绿色实现状态以本地 Harness 的 25 项测试、Personal Environment 实时校验、Agent Skill Library Mode-native 迁移、三宿主项目投影和 DeepSeek Mode Preset 验证为依据。外部仓库逐项拆分只保留映射，不计入架构完成度。
+> 状态快照：2026-08-31。架构边界来自当前 v0.3 协议；实现状态以本地 Harness 的 25 项测试、两份真实 Environment 校验、12 份三宿主项目投影和 4 个 DeepSeek Mode Preset 的本次复核为依据。外部仓库逐项拆分只保留映射，不计入架构完成度。
 
 ## 颜色约定
 
 - **蓝色**：用户已经明确确认，后续实现必须保持的架构边界；
 - **绿色**：当前代码或真实 Environment 已实现并验证；
-- **橙色**：架构不缺模块，但仍有真实宿主运行验收；
+- **橙色**：尚未实现、当前生成面需要刷新，或仍有真实宿主运行验收；
 - **红色**：当前错误分类或旧结构，迁移后删除；
 - **灰色**：可删除重建的宿主生成面，或已经退出活动面的冻结归档；
 - **紫色**：外部来源，不是本地运行真源。
@@ -19,14 +19,14 @@
 | --- | --- | --- |
 | Harness Core | 🟢 已实现 | 6 个确定性命令，25 项测试通过 |
 | Steward / Access / Guards | 🟢 已实现 | 同一宿主管理 Skill、最小 Mode schema、生命周期与路径门禁已接入 |
-| Personal Environment | 🟢 已实现 | 37 个正式业务 Skill、4 个业务 Mode、能力视图为当前版本 |
-| Agent Skill Library Environment | 🟢 已迁移并验证 | 37 个可公开正式 Skill、4 个业务 Mode、旧插件入口为零 |
-| Codex / Claude / DeepSeek 项目投影 | ⚪ 可重建且已验证 | 三个 `host.verify` 均为零漂移 |
-| DeepSeek Mode Preset | ⚪ 可重建且已验证 | 4 个活动 Preset 均为零漂移 |
+| Personal Environment | 🟢 结构已实现 | 37 个正式业务 Skill、4 个业务 Mode；结构校验通过，但 `WORKSPACE.md` 视图与 4 个可重建缓存目录待刷新/清理 |
+| Agent Skill Library Environment | 🟢 已迁移 | 37 个可公开正式 Skill、4 个业务 Mode、旧插件入口为零；结构校验通过，但能力视图与 4 个可重建缓存目录待刷新/清理 |
+| Codex / Claude / DeepSeek 项目投影 | 🟠 机制已验证，当前快照待刷新 | 4 Mode × 3 Host 共 12 份投影均可验证，但当前都报告 Environment 内容与 Git HEAD 已变化 |
+| DeepSeek Mode Preset | 🟠 机制已验证，当前快照待刷新 | 4 个活动 Preset 均可验证；全部报告 Git HEAD 变化，其中 2 个同时报告内容变化 |
 | DeepSeek 真实长会话 | 🟠 待运行验收 | 导出和漂移校验已完成，尚未证明长会话行为稳定 |
-| Agent Skill Library 三宿主验收 | 🟢 已实现 | 4 Mode × 3 Host 共 12 个项目投影及 4 个 Preset 验证通过 |
+| Agent Skill Library 三宿主验收 | 🟢 能力已实现 | 12 个项目投影与 4 个 Preset 的生成、验证链路成立；现存生成快照需要按最新 Environment 重建 |
 | 旧 `domain / foundation / orchestrator / skill-index` 结构 | ⚪ 已冻结 | 已移出活动根目录，仅保留在 `archive/legacy-plugin-layout/` 追溯 |
-| 本地缓存与构建输出 | 🟢 已清理 | 11 个已确认的可重建目录已删除，Environment 当前零维护警告 |
+| 本地缓存与能力视图 | 🟠 有维护提醒 | 两份 Environment 各有 4 个 `__pycache__` 目录，且 `WORKSPACE.md` 均不是当前视图；不影响结构合法性 |
 
 ## 怎么读这些图
 
@@ -75,7 +75,7 @@ flowchart TB
     subgraph SUPPLY["① 用户、发行与外部来源"]
         direction LR
         USER["用户<br/>Goal · 材料 · 明确反馈 · 高影响授权"]
-        BLANK["ASL Harness<br/>空白 Core / CLI / Adapters / Example"]
+        BLANK["ASL Harness<br/>空白 Core / CLI / Host Adapters / Example"]
         FILLED["Agent Skill Library 发行仓库<br/>37 个正式 Skill / 4 个业务 Mode / 来源"]
         SOURCES["外部能力<br/>Skill / Prompt / MCP / API / Agent / Model / Script"]
         LEGACY["旧插件布局<br/>domain / foundation / orchestrator / index<br/>已冻结归档"]
@@ -87,20 +87,23 @@ flowchart TB
         subgraph SYSTEM["Harness System · 始终存在 · 不是业务 Mode"]
             direction TB
             CORE["Deterministic Core · 已实现<br/>scan / validate / resolve<br/>render / project / verify / export"]
-            STEWARD["Environment Steward · 已实现系统契约<br/>完整读取 · 关系判断 · 本地化 · 最小影响半径<br/>Runtime 边界 · 单 Mode 绑定 · CRUD 保护"]
-            ACCESS["Environment Access · 已实现最小访问面<br/>常驻：Profile / 当前 Mode / Catalog<br/>按需：Skill / Case / Feedback / Archive / Git"]
+            STEWARD["Environment Steward · Host Skill 契约已实现<br/>完整读取 · 关系判断 · 本地化 · 最小影响半径<br/>Runtime 边界 · 单 Mode 绑定 · CRUD 保护"]
+            ACCESS["Environment Access · Host 按需读取契约已实现<br/>常驻：Profile / 当前 Mode / Catalog<br/>按需：Skill / Case / Feedback / Archive / Git"]
             GUARDS["Deterministic Guards · 已实现<br/>结构 / 依赖 / 生命周期 / Secret 文件名 / 路径<br/>旧布局 / 用户文件碰撞 / 来源漂移"]
-            MUTATION["受控修改入口 · 已实现宿主契约<br/>用户明确触发 · 最小真源 · 校验 · Git diff"]
+            MUTATION["受控修改入口 · 当前由 Host + Git 执行<br/>用户明确触发 · 最小真源 · 校验 · Git diff<br/>不是独立 CRUD 服务"]
+            SYNC["Environment Sync CLI · 尚未实现<br/>显式比较 · 单 Skill 同步 · 指定 Mode 绑定<br/>冲突拒绝静默覆盖 · Git diff"]
             CORE --> GUARDS
             STEWARD --> GUARDS
+            STEWARD -.下一阶段.-> SYNC
+            SYNC -.复用现有校验.-> GUARDS
             GUARDS --> MUTATION
         end
 
         subgraph TRUTH["Environment Instances · 每个本地检出都是独立 Git 真源"]
             direction TB
             ENVROOT["Environment Contract<br/>同一结构，不同内容"]
-            PERSONAL["Personal Environment<br/>37 个 Skill · 4 个 Mode<br/>包含私人本地能力"]
-            LIBRARY["Agent Skill Library Environment<br/>37 个公开 Skill · 4 个 Mode<br/>Mode-native 已验证"]
+            PERSONAL["Personal Environment<br/>37 个 Skill · 4 个 Mode<br/>结构通过 · 视图与缓存有提醒"]
+            LIBRARY["Agent Skill Library Environment<br/>37 个公开 Skill · 4 个 Mode<br/>结构通过 · 视图与缓存有提醒"]
             ACTIVE["当前选中的 Environment<br/>一次只运行一个本地真源"]
             PROFILE["PROFILE.md<br/>跨 Mode 精简长期边界"]
             MODES[("modes/&lt;mode-id&gt;<br/>4 个业务 Mode · 已校验<br/>显式 Skill 根 · 不保存顺序")]
@@ -130,11 +133,13 @@ flowchart TB
         MUTATION --> ACTIVE
         ACTIVE --> ACCESS
         ARCHIVED -.追溯旧设计.-> STEWARD
+        LIBRARY -.显式选择来源.-> SYNC
+        SYNC -.完整 Skill + 可选 Mode 引用.-> PERSONAL
     end
 
     subgraph RUNTIME["③ 当前 Host 与四个信号循环 · 不是线性 Workflow"]
         direction LR
-        HOST["当前 Host · 唯一执行者<br/>理解意图 · 组织上下文 · 动态调用完整 Skill · 交付"]
+        HOST["当前 Host · 唯一执行者<br/>自带 Agent Loop / Session / Tools / Sandbox / Auth<br/>理解意图 · 动态调用完整 Skill · 交付"]
         A["A · Goal / Case<br/>Mode → 动态 Skill → Artifact<br/>Benchmark → 返工或交付"]
         B["B · Capability Integration<br/>用户明确指定：完整读取后直接本地化<br/>其他不确定来源：可选 Candidate / Trial"]
         C["C · Mode Evolution<br/>长期工作状态 → Skill 子图<br/>上下文 / 权限 / 产物表面 → 真实验证"]
@@ -164,10 +169,10 @@ flowchart TB
 
     subgraph PROJECTIONS["⑤ Host Projections · 可删除、可重建"]
         direction LR
-        CODEX["Codex App · 已实现<br/>.agents/skills + AGENTS.md"]
-        CLAUDE["Claude Code · 已实现<br/>.claude/skills + CLAUDE.md"]
-        DSH_PROJECT["DeepSeek Project · 投影已验证<br/>.dsh/skills + AGENTS.md"]
-        DSH_PRESET["DeepSeek Agent Preset<br/>4 个 Preset 零漂移 · 长会话待验收"]
+        CODEX["Codex App · 投影机制已实现<br/>.agents/skills + AGENTS.md<br/>当前生成快照待刷新"]
+        CLAUDE["Claude Code · 投影机制已实现<br/>.claude/skills + CLAUDE.md<br/>当前生成快照待刷新"]
+        DSH_PROJECT["DeepSeek Project · 投影机制已实现<br/>.dsh/skills + AGENTS.md<br/>当前生成快照待刷新"]
+        DSH_PRESET["DeepSeek Agent Preset<br/>4 个 Preset 可验证但有漂移提醒<br/>真实长会话待验收"]
         DSH_SHARED["DeepSeek Profile / Bundle<br/>模型 / 存储 / 沙箱 / 凭据<br/>不等于 ASL Mode"]
         DSH_SHARED --> DSH_PRESET
     end
@@ -209,9 +214,9 @@ flowchart TB
 
     class USER,HOST,BLANK,ENVROOT,MODES,RADIUS,CASE_ONLY,SKILL_CHANGE,MODE_CHANGE,ENV_CHANGE locked;
     class FILLED,CORE,STEWARD,ACCESS,GUARDS,MUTATION,PERSONAL,LIBRARY,ACTIVE,PROFILE,SKILLS,LEARNING,VIEW,GIT,A,B,C,D,CHANGE done;
+    class SYNC,DSH_PRESET optimize;
     class LEGACY,ARCHIVED generated;
     class CODEX,CLAUDE,DSH_PROJECT,DSH_SHARED generated;
-    class DSH_PRESET optimize;
     class SOURCES source;
 ```
 
@@ -223,7 +228,8 @@ flowchart TB
 4. 当前 Host 是唯一执行者，A/B/C/D 是信号触发的循环，不是中央调度的顺序节点；
 5. 外部能力都必须完整本地化并保留来源；用户明确指定引入时直接纳入，Candidate、Trial 和效果 Case 不是必经关卡；
 6. 用户明确反馈先判断 Case、Skill、Mode、Environment 四级影响半径；
-7. 三个宿主只得到当前 Mode 的可重建能力投影。
+7. 两份 Environment 之间的能力采用当前仍由 Host 显式完成；下一阶段才用 `environment.sync` 收口，不做后台订阅、共享目录或自动覆盖；
+8. 三个宿主只得到当前 Mode 的可重建能力投影，模型循环、会话、工具、沙箱和授权继续由宿主原生 Runtime 负责。
 
 ---
 
@@ -322,6 +328,81 @@ Harness 的 Hook / Guard 只处理可确定的边界，不接管业务判断：
 | Host + 用户判断 | 不伪装成确定性规则；当前 Host 起草方案，高影响动作由用户授权 | 是否需要新 Mode、候选是否值得采用、Skill 应合并还是独立、是否发布或外部写入 |
 
 这样既防止 Environment 漂移，也不会因为一个缺失字段、过期视图或语义不确定就阻断用户的普通 Goal。
+
+---
+
+## View 2B · 原生 Harness 边界与 Environment Sync CLI
+
+回答：ASL 怎样更像原生 Harness，而不是再造一个 Codex、Claude Code 或 DeepSeek Harness？两份 Environment 又怎样同步？
+
+```mermaid
+flowchart LR
+    subgraph HOST["Host-native Runtime · ASL 不复制"]
+        LOOP["Model / Agent Loop"]
+        SESSION["Session / Context"]
+        TOOLS["Tools / MCP / Plugins"]
+        SANDBOX["Sandbox / Permissions"]
+        STATE["Host Storage / Credentials"]
+    end
+
+    subgraph ASL["ASL Harness · 本地能力环境层"]
+        VALIDATE["validate / resolve / guards"]
+        SYNC["environment.sync · 下一阶段<br/>显式采用，不后台订阅"]
+        PROJECT["project / verify / preset export"]
+        STEWARD["asl-environment<br/>Host-native 管理入口"]
+    end
+
+    subgraph ENVS["Independent Git Environments"]
+        SOURCE["Source Environment<br/>例如 Agent Skill Library"]
+        TARGET["Target Environment<br/>例如 Personal Environment"]
+        MODE["Target Mode<br/>可选显式绑定"]
+    end
+
+    SOURCE -->|check / sync one complete Skill| SYNC
+    SYNC -->|copy or update + Git diff| TARGET
+    SYNC -->|optional explicit reference| MODE
+    TARGET --> VALIDATE --> PROJECT
+    MODE --> VALIDATE
+    STEWARD --> SYNC
+    PROJECT -->|native Skill 目录 / 指令面 / Preset| HOST
+    HOST -->|唯一执行业务 Goal| TARGET
+
+    classDef native fill:#f5f3ff,stroke:#7c3aed,color:#4c1d95;
+    classDef done fill:#dcfce7,stroke:#16a34a,color:#14532d;
+    classDef optimize fill:#ffedd5,stroke:#ea580c,color:#7c2d12;
+    classDef truth fill:#dbeafe,stroke:#2563eb,color:#1e3a8a,stroke-width:2px;
+    class LOOP,SESSION,TOOLS,SANDBOX,STATE native;
+    class VALIDATE,PROJECT,STEWARD done;
+    class SYNC optimize;
+    class SOURCE,TARGET,MODE truth;
+```
+
+“更原生”不是让 ASL 拥有自己的 Agent Loop、会话数据库、工具执行器、权限系统或插件 Runtime，而是让 ASL 通过每个 Host 已经认可的 Skill、指令文件、项目目录和 Preset 接口工作。ASL 只补宿主没有统一解决的个人能力环境、Mode、来源、本地采用、确定性校验和投影。
+
+下一阶段只增加一个深接口，不增加后台服务：
+
+```bash
+asl-harness environment.sync \
+  --source ./agent-skill-library \
+  --target ./personal-harness \
+  --skill x-post-card-studio \
+  --mode creator-studio
+```
+
+| 行为 | 契约 |
+| --- | --- |
+| 来源与目标 | 都必须是可通过 `workspace.validate` 的本地 Environment；CLI 不负责全网搜索或 Git clone |
+| 同步单位 | 一次同步一个完整 Skill package；不拆文件、不把 Prompt、脚本或 Runtime 裸同步 |
+| Mode | `--mode` 可选；提供时只修改目标 Environment 的一个明确 Mode，其他 Mode 不变 |
+| 相同内容 | 返回 no-op，不制造提交、投影或新版本号 |
+| 目标不存在 | 完整复制 Skill，并保留 `SOURCE.md`、许可、scripts、references、assets 与测试 |
+| 目标已修改 | 默认拒绝静默覆盖并展示差异；只有用户显式选择替换时才更新 |
+| 检查模式 | `--check` 只报告将新增、更新、冲突或保持不变的内容，不写文件 |
+| 完成后 | 校验目标 Environment、刷新人机共读视图并输出 Git diff；不自动 commit、push 或刷新所有宿主投影 |
+
+同步结束后，两份 Environment 仍是两个独立 Git 真源。再次运行命令可以显式吸收上游更新，但不会形成实时链接、共享 Skill 目录、后台 watcher 或自动升级关系。宿主投影仍由现有 `host.project` / `deepseek.preset.export` 单独负责。
+
+Mode 切换已经由 `host.project --mode <id>` 完成；未来如需改善可读性，只增加 `mode.use` 这类薄别名，不增加 Mode Router。当前 Host 能唯一判断时直接选择，存在会改变结果的实质歧义时只问用户一个必要问题。
 
 ---
 
@@ -470,7 +551,7 @@ stateDiagram-v2
 
 回答：类似 Agent Reach 这种同时包含 Runtime、路由、安装器、多个后端和 Skill 入口的仓库，怎样融入 ASL 而不复制整仓、不污染所有 Mode？
 
-> 本图的系统规则已经进入 Environment Steward。当前 Host 按同一规则完成全量盘点与最小 Git diff；只有重复操作被真实证明后，才考虑增加更硬的 CLI，而不是先造一个自动拆仓器。具体外部仓库是否迁移，不影响这套架构机制成立。
+> 本图的系统规则已经进入 Environment Steward。`environment.sync` 只负责在两个已合法的本地 Environment 之间显式同步完整 Skill，不负责搜索来源、自动拆仓或代替 Host 做语义关系判断。具体外部仓库是否迁移，不影响这套架构机制成立。
 
 ```mermaid
 flowchart TB
@@ -878,7 +959,7 @@ flowchart LR
     class MANIFEST,CA,CI,CS,CC,DP,PRESET generated;
 ```
 
-Codex 与 Claude 使用项目原生 Skill 目录和规则文件。DeepSeek 额外区分宿主级 Profile / Bundle 与会话级 Agent Preset；ASL Mode 对应 Agent Preset，不对应 Profile。
+Codex 与 Claude 使用项目原生 Skill 目录和规则文件。DeepSeek 额外区分宿主级 Profile / Bundle 与会话级 Agent Preset；ASL Mode 对应 Agent Preset，不对应 Profile。三个 Host 都继续拥有自己的 Agent Loop、会话、工具、沙箱、模型和授权，ASL 不复制这些 Runtime 能力，只生成它们能够原生发现的环境表面。
 
 ---
 
@@ -890,15 +971,16 @@ Codex 与 Claude 使用项目原生 Skill 目录和规则文件。DeepSeek 额�
 flowchart LR
     subgraph CURRENT["当前真实状态"]
         HCORE["Harness Core<br/>6 commands · 25 tests"]
-        PENV["Personal Environment<br/>37 Formal Business Skills"]
-        ALIB["Agent Skill Library Environment<br/>37 Public Skills · 4 Modes<br/>0 Legacy Active Surfaces"]
+        PENV["Personal Environment<br/>37 Skills · 4 Modes · 结构通过<br/>视图与缓存待维护"]
+        ALIB["Agent Skill Library Environment<br/>37 Public Skills · 4 Modes<br/>结构通过 · 视图与缓存待维护"]
         BUSINESS["4 个业务 Mode records<br/>活动分类已对齐"]
         SYSTEM["Harness System<br/>Steward / Access / Guards<br/>一个管理入口"]
         ARCHIVED["旧系统 Mode 与系统 Skill<br/>已退出活动面并归档"]
         CULT["2 Candidate · 0 Trial<br/>0 Feedback · 3 Archive"]
         LEGACY["旧业务插件布局<br/>已移出活动根目录<br/>冻结于 Archive"]
-        PROJECTS["三宿主项目投影<br/>Codex / Claude / DeepSeek<br/>零漂移"]
-        PRESETS["4 个 DeepSeek Mode Preset<br/>导出与漂移验证通过"]
+        PROJECTS["12 份三宿主项目投影<br/>验证链路已实现<br/>当前快照有漂移提醒"]
+        PRESETS["4 个 DeepSeek Mode Preset<br/>验证链路已实现<br/>当前快照有漂移提醒"]
+        NATIVE["Host-native Boundary<br/>Agent Loop / Session / Tools / Sandbox<br/>继续归各宿主"]
     end
 
     subgraph TARGET["用户已确认的目标"]
@@ -908,8 +990,9 @@ flowchart LR
         INTEGRATE["外部能力集成规则<br/>复杂仓库拆解 / Runtime / 单 Mode 绑定<br/>已进入 Steward"]
         GUARDS["确定错误硬阻断<br/>语义判断留给 Host"]
         MODE_NATIVE["Mode-native 业务发行结构<br/>37 Skills · 4 Modes · 已验证"]
-        DSH_RUNTIME["DeepSeek 真实长会话<br/>待运行验收"]
-        CLEANUP["11 个可重建缓存与构建目录<br/>已确认并清理"]
+        SYNC_CLI["environment.sync CLI<br/>下一阶段已确认设计<br/>尚未实现"]
+        MODE_UX["Mode 使用入口<br/>host.project 已实现<br/>mode.use 仅为可选薄别名"]
+        DSH_RUNTIME["DeepSeek 真实长会话<br/>验收后置，不阻塞当前架构"]
     end
 
     HCORE --> GUARDS
@@ -924,17 +1007,20 @@ flowchart LR
     LEGACY -.迁移证据.-> MODE_NATIVE
     PROJECTS --> PRESETS
     PRESETS --> DSH_RUNTIME
-    HCORE --> CLEANUP
+    NATIVE --> CONTRACT
+    ALIB --> SYNC_CLI
+    PENV --> SYNC_CLI
+    HCORE --> MODE_UX
 
     classDef locked fill:#dbeafe,stroke:#2563eb,color:#1e3a8a,stroke-width:2px;
     classDef done fill:#dcfce7,stroke:#16a34a,color:#14532d;
     classDef optimize fill:#ffedd5,stroke:#ea580c,color:#7c2d12;
     classDef remove fill:#fee2e2,stroke:#dc2626,color:#7f1d1d,stroke-width:2px;
     classDef generated fill:#f3f4f6,stroke:#6b7280,color:#1f2937,stroke-dasharray:4 3;
-    class HCORE,PENV,ALIB,BUSINESS,SYSTEM,CULT,STEWARD,GUARDS,INTEGRATE,CLEANUP,MODE_NATIVE done;
-    class DSH_RUNTIME optimize;
-    class LEGACY,ARCHIVED,PROJECTS,PRESETS generated;
-    class CONTRACT,FOUR locked;
+    class HCORE,PENV,ALIB,BUSINESS,SYSTEM,CULT,STEWARD,GUARDS,INTEGRATE,MODE_NATIVE,MODE_UX done;
+    class SYNC_CLI,DSH_RUNTIME,PROJECTS,PRESETS optimize;
+    class LEGACY,ARCHIVED generated;
+    class CONTRACT,FOUR,NATIVE locked;
 ```
 
-Agent Skill Library 的 Mode-native 内容迁移已经完成：37 个可公开正式 Skill 与 4 个业务 Mode 成为仓库活动真源，旧插件布局只在 Archive 追溯。当前唯一橙色项是 DeepSeek 真实长会话验收；它不代表缺少架构模块。系统 Mode 和系统 Skill 已退出活动面，11 个已确认的可重建目录已经清理。
+Agent Skill Library 的 Mode-native 内容迁移已经完成：37 个可公开正式 Skill 与 4 个业务 Mode 成为仓库活动真源，旧插件布局只在 Archive 追溯。当前橙色项包括尚未实现的 `environment.sync`、需要按最新 Environment 重建的项目投影和 Preset，以及后置的 DeepSeek 真实长会话验收。两份 Environment 当前结构合法，但各有 4 个可重建缓存目录，且 `WORKSPACE.md` 视图均待刷新；这些是维护提醒，不是结构失败。
