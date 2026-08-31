@@ -222,7 +222,7 @@ ASL Harness 目前是可运行的开发者预览：七个确定性命令和 31 �
 
 当前状态颜色和验证证据统一维护在 [ASL Architecture Views](docs/asl-architecture-views.md#view-9--当前状态与迁移图)。已完成的实施计划已经移到 `docs/archive/implementation-plans/`，不再占用活跃架构入口。
 
-当前有三类橙色状态：两份 Environment 的 `WORKSPACE.md` 视图与可重建缓存待维护；12 份项目投影和 4 个 Preset 能够通过结构验证，但现存快照落后于最新 Environment；DeepSeek Harness 真实长会话验收后置。它们都不改变已经成立的 Mode-only 架构。
+当前有两类橙色状态：12 份项目投影和 4 个 Preset 能够通过结构验证，但现存快照落后于最新 Environment；DeepSeek Harness 真实长会话验收后置。两份 Environment 的可重建缓存已清理，`WORKSPACE.md` 视图已刷新并通过校验；这些状态都不改变已经成立的 Mode-only 架构。
 
 `environment.sync` 已经成为唯一的 Environment 间同步入口：它一次处理一个完整 Skill，支持 `--check`、可选 Mode 绑定和显式 `--replace`，默认拒绝覆盖目标的不同内容。它不会变成后台订阅、共享 Skill 目录、自动提交、自动推送或第二调度器。
 

@@ -19,14 +19,14 @@
 | --- | --- | --- |
 | Harness Core | 🟢 已实现 | 7 个确定性命令，31 项测试通过；包含显式单 Skill `environment.sync` |
 | Steward / Access / Guards | 🟢 已实现 | 同一宿主管理 Skill、最小 Mode schema、生命周期与路径门禁已接入 |
-| Personal Environment | 🟢 结构已实现 | 37 个正式业务 Skill、4 个业务 Mode；结构校验通过，但 `WORKSPACE.md` 视图与 4 个可重建缓存目录待刷新/清理 |
-| Agent Skill Library Environment | 🟢 已迁移 | 37 个可公开正式 Skill、4 个业务 Mode、旧插件入口为零；结构校验通过，但能力视图与 4 个可重建缓存目录待刷新/清理 |
+| Personal Environment | 🟢 结构已实现 | 37 个正式业务 Skill、4 个业务 Mode；结构校验通过，`WORKSPACE.md` 视图已刷新，可重建缓存已清理 |
+| Agent Skill Library Environment | 🟢 已迁移 | 37 个可公开正式 Skill、4 个业务 Mode、旧插件入口为零；结构校验通过，能力视图已刷新，可重建缓存已清理 |
 | Codex / Claude / DeepSeek 项目投影 | 🟠 机制已验证，当前快照待刷新 | 4 Mode × 3 Host 共 12 份投影均可验证，但当前都报告 Environment 内容与 Git HEAD 已变化 |
 | DeepSeek Mode Preset | 🟠 机制已验证，当前快照待刷新 | 4 个活动 Preset 均可验证；全部报告 Git HEAD 变化，其中 2 个同时报告内容变化 |
 | DeepSeek 真实长会话 | 🟠 待运行验收 | 导出和漂移校验已完成，尚未证明长会话行为稳定 |
 | Agent Skill Library 三宿主验收 | 🟢 能力已实现 | 12 个项目投影与 4 个 Preset 的生成、验证链路成立；现存生成快照需要按最新 Environment 重建 |
 | 旧 `domain / foundation / orchestrator / skill-index` 结构 | ⚪ 已冻结 | 已移出活动根目录，仅保留在 `archive/legacy-plugin-layout/` 追溯 |
-| 本地缓存与能力视图 | 🟠 有维护提醒 | 两份 Environment 各有 4 个 `__pycache__` 目录，且 `WORKSPACE.md` 均不是当前视图；不影响结构合法性 |
+| 本地缓存与能力视图 | 🟢 当前干净 | 两份 Environment 的 `workspace.validate` 均返回 `warnings=[]` 与 `workspaceViewCurrent=true` |
 
 ## 怎么读这些图
 
@@ -103,8 +103,8 @@ flowchart TB
         subgraph TRUTH["Environment Instances · 每个本地检出都是独立 Git 真源"]
             direction TB
             ENVROOT["Environment Contract<br/>同一结构，不同内容"]
-            PERSONAL["Personal Environment<br/>37 个 Skill · 4 个 Mode<br/>结构通过 · 视图与缓存有提醒"]
-            LIBRARY["Agent Skill Library Environment<br/>37 个公开 Skill · 4 个 Mode<br/>结构通过 · 视图与缓存有提醒"]
+            PERSONAL["Personal Environment<br/>37 个 Skill · 4 个 Mode<br/>结构与能力视图当前"]
+            LIBRARY["Agent Skill Library Environment<br/>37 个公开 Skill · 4 个 Mode<br/>结构与能力视图当前"]
             ACTIVE["当前选中的 Environment<br/>一次只运行一个本地真源"]
             PROFILE["PROFILE.md<br/>跨 Mode 精简长期边界"]
             MODES[("modes/&lt;mode-id&gt;<br/>4 个业务 Mode · 已校验<br/>显式 Skill 根 · 不保存顺序")]
@@ -971,8 +971,8 @@ Codex 与 Claude 使用项目原生 Skill 目录和规则文件。DeepSeek 额�
 flowchart LR
     subgraph CURRENT["当前真实状态"]
         HCORE["Harness Core<br/>7 commands · 31 tests"]
-        PENV["Personal Environment<br/>37 Skills · 4 Modes · 结构通过<br/>视图与缓存待维护"]
-        ALIB["Agent Skill Library Environment<br/>37 Public Skills · 4 Modes<br/>结构通过 · 视图与缓存待维护"]
+        PENV["Personal Environment<br/>37 Skills · 4 Modes<br/>结构与能力视图当前"]
+        ALIB["Agent Skill Library Environment<br/>37 Public Skills · 4 Modes<br/>结构与能力视图当前"]
         BUSINESS["4 个业务 Mode records<br/>活动分类已对齐"]
         SYSTEM["Harness System<br/>Steward / Access / Guards<br/>一个管理入口"]
         ARCHIVED["旧系统 Mode 与系统 Skill<br/>已退出活动面并归档"]
@@ -1023,4 +1023,4 @@ flowchart LR
     class CONTRACT,FOUR,NATIVE locked;
 ```
 
-Agent Skill Library 的 Mode-native 内容迁移已经完成：37 个可公开正式 Skill 与 4 个业务 Mode 成为仓库活动真源，旧插件布局只在 Archive 追溯。`environment.sync` 已实现为显式单 Skill CLI。当前橙色项是需要按最新 Environment 重建的项目投影和 Preset，以及后置的 DeepSeek 真实长会话验收。两份 Environment 当前结构合法，但各有 4 个可重建缓存目录，且 `WORKSPACE.md` 视图均待刷新；这些是维护提醒，不是结构失败。
+Agent Skill Library 的 Mode-native 内容迁移已经完成：37 个可公开正式 Skill 与 4 个业务 Mode 成为仓库活动真源，旧插件布局只在 Archive 追溯。`environment.sync` 已实现为显式单 Skill CLI。两份 Environment 当前结构合法，可重建缓存已清理，`WORKSPACE.md` 视图已刷新并通过校验。当前橙色项只剩需要按最新 Environment 重建的项目投影和 Preset，以及后置的 DeepSeek 真实长会话验收。
