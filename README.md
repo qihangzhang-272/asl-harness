@@ -126,6 +126,19 @@ asl-harness host.project \
 
 同一个 Environment 也可以投影到 Claude Code 或导出为 DeepSeek Harness Agent Preset。投影只是宿主视图，可以删除和重建；Environment 才是真源。
 
+先检查一个 Skill 从来源 Environment 纳入目标 Environment 会发生什么：
+
+```bash
+asl-harness environment.sync \
+  --source ./agent-skill-library \
+  --target ./personal-environment \
+  --skill x-post-card-studio \
+  --mode creator-studio \
+  --check
+```
+
+确认后去掉 `--check` 执行。目标已有不同内容时默认拒绝覆盖；只有用户明确接受替换时才增加 `--replace`。
+
 ## 一个 Mode 长什么样
 
 ```yaml
@@ -193,6 +206,7 @@ Harness 只对可以确定的错误做硬阻断：
 | --- | --- |
 | `workspace.validate` | 校验 Environment、正式 Skill、依赖图和 Mode |
 | `workspace.view.sync` | 刷新人和 Agent 共读的能力地图 |
+| `environment.sync` | 在两份合法本地 Environment 之间显式同步一个完整 Skill，并可选绑定一个 Mode |
 | `host.project` | 把一个 Mode 投影到当前项目 |
 | `host.verify` | 检查宿主投影完整性和来源漂移 |
 | `deepseek.preset.export` | 从已知可运行基础导出 Mode Preset |
@@ -202,7 +216,7 @@ Harness 只对可以确定的错误做硬阻断：
 
 ## 当前状态
 
-ASL Harness 目前是可运行的开发者预览：六个确定性命令和 25 项自动化测试已经存在。最小 Mode schema、Skill 依赖闭包、Candidate/Trial 边界、Secret 文件名、缓存提醒、能力视图、Codex App / Claude Code / DeepSeek 项目投影，以及 DeepSeek Preset 导出与漂移验证已经实现。投影刷新也会清理 Manifest 中登记但源 Skill 已经归档的断链 Junction，同时继续拒绝删除用户自有目录。
+ASL Harness 目前是可运行的开发者预览：七个确定性命令和 31 项自动化测试已经存在。最小 Mode schema、Skill 依赖闭包、Candidate/Trial 边界、显式 Environment 同步、Secret 文件名、缓存提醒、能力视图、Codex App / Claude Code / DeepSeek 项目投影，以及 DeepSeek Preset 导出与漂移验证已经实现。投影刷新也会清理 Manifest 中登记但源 Skill 已经归档的断链 Junction，同时继续拒绝删除用户自有目录。
 
 就 v0.3 的架构范围而言，系统边界、真源、Mode/Skill 关系、四个循环、外部能力进入路径、维护入口、确定性门禁和三宿主投影已经闭环。Agent Skill Library 也已经迁移为同一 Contract 下的 Mode-native Environment。
 
@@ -210,7 +224,7 @@ ASL Harness 目前是可运行的开发者预览：六个确定性命令和 25 �
 
 当前有三类橙色状态：两份 Environment 的 `WORKSPACE.md` 视图与可重建缓存待维护；12 份项目投影和 4 个 Preset 能够通过结构验证，但现存快照落后于最新 Environment；DeepSeek Harness 真实长会话验收后置。它们都不改变已经成立的 Mode-only 架构。
 
-下一阶段只计划增加一个深接口：在两份合法的本地 Environment 之间显式同步一个完整 Skill，并可选绑定一个目标 Mode。`environment.sync` 当前尚未实现；它不会变成后台订阅、共享 Skill 目录、自动覆盖、自动提交或第二调度器。
+`environment.sync` 已经成为唯一的 Environment 间同步入口：它一次处理一个完整 Skill，支持 `--check`、可选 Mode 绑定和显式 `--replace`，默认拒绝覆盖目标的不同内容。它不会变成后台订阅、共享 Skill 目录、自动提交、自动推送或第二调度器。
 
 Environment Steward 与 Access 已由同一个宿主管理 Skill、现有 CLI、投影规则和 Git diff 组成，不再计划增加 CRUD 服务、授权状态机或第二个索引。Case、反馈、Archive 和 Git 是按需读取面，不建立新的“统一访问数据库”。
 

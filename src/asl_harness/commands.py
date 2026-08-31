@@ -9,13 +9,14 @@ import yaml
 
 from .adapters import HOST_LAYOUTS, project_mode, verify_mode_projection
 from .deepseek import export_preset, verify_preset
+from .sync import sync_environment
 from .workspace import HarnessError, Workspace
 
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="asl-harness",
-        description="Validate one ASL Environment and project one Mode to a native Host.",
+        description="Validate ASL Environments, sync complete Skills, and project one Mode to a native Host.",
     )
     commands = parser.add_subparsers(dest="command", required=True)
 
@@ -47,10 +48,30 @@ def _parser() -> argparse.ArgumentParser:
     verify_preset_command.add_argument("--workspace", required=True)
     verify_preset_command.add_argument("--mode", required=True)
     verify_preset_command.add_argument("--output", required=True)
+
+    sync = commands.add_parser("environment.sync")
+    sync.add_argument("--source", required=True)
+    sync.add_argument("--target", required=True)
+    sync.add_argument("--skill", required=True)
+    sync.add_argument("--mode")
+    sync.add_argument("--check", action="store_true")
+    sync.add_argument("--replace", action="store_true")
     return parser
 
 
 def _execute(args: argparse.Namespace) -> dict:
+    if args.command == "environment.sync":
+        return {
+            "ok": True,
+            **sync_environment(
+                args.source,
+                args.target,
+                args.skill,
+                mode_id=args.mode,
+                check=args.check,
+                replace=args.replace,
+            ),
+        }
     workspace = Workspace.open(args.workspace)
     if args.command == "workspace.validate":
         return {"ok": True, **workspace.summary()}

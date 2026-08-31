@@ -2,7 +2,7 @@
 
 本文件用多种标准架构图解释 ASL。每张图只回答一种问题，避免把系统上下文、内部组件、运行时序、生命周期和部署关系混在同一张图里。
 
-> 状态快照：2026-08-31。架构边界来自当前 v0.3 协议；实现状态以本地 Harness 的 25 项测试、两份真实 Environment 校验、12 份三宿主项目投影和 4 个 DeepSeek Mode Preset 的本次复核为依据。外部仓库逐项拆分只保留映射，不计入架构完成度。
+> 状态快照：2026-08-31。架构边界来自当前 v0.3 协议；实现状态以本地 Harness 的 31 项测试、两份真实 Environment 校验、12 份三宿主项目投影和 4 个 DeepSeek Mode Preset 的本次复核为依据。外部仓库逐项拆分只保留映射，不计入架构完成度。
 
 ## 颜色约定
 
@@ -17,7 +17,7 @@
 
 | 区域 | 状态 | 当前证据 |
 | --- | --- | --- |
-| Harness Core | 🟢 已实现 | 6 个确定性命令，25 项测试通过 |
+| Harness Core | 🟢 已实现 | 7 个确定性命令，31 项测试通过；包含显式单 Skill `environment.sync` |
 | Steward / Access / Guards | 🟢 已实现 | 同一宿主管理 Skill、最小 Mode schema、生命周期与路径门禁已接入 |
 | Personal Environment | 🟢 结构已实现 | 37 个正式业务 Skill、4 个业务 Mode；结构校验通过，但 `WORKSPACE.md` 视图与 4 个可重建缓存目录待刷新/清理 |
 | Agent Skill Library Environment | 🟢 已迁移 | 37 个可公开正式 Skill、4 个业务 Mode、旧插件入口为零；结构校验通过，但能力视图与 4 个可重建缓存目录待刷新/清理 |
@@ -35,6 +35,7 @@
 | Master | 总体模块关系图 | 所有模块怎样组成一个系统，哪些关系形成反馈环 |
 | View 1 | 系统上下文图 | 用户、Host、Harness、Environment、Case 和外部来源分别站在哪里 |
 | View 2 | 组件图 | Harness System 与 Personal Environment 内部各自包含什么 |
+| View 2B | Runtime 边界与同步图 | ASL 不复制哪些 Host 能力，以及两份 Environment 怎样显式同步完整 Skill |
 | View 3 | 运行时序图 | 一个普通 Goal 从进入到交付怎样发生 |
 | View 4 | 变更时序图 | Skill / Mode 的增删改查怎样与普通业务内容隔离 |
 | View 5 | 生命周期状态图 | 外部能力从发现到采用、合并、依赖、变体、适配或归档怎样流转 |
@@ -91,11 +92,11 @@ flowchart TB
             ACCESS["Environment Access · Host 按需读取契约已实现<br/>常驻：Profile / 当前 Mode / Catalog<br/>按需：Skill / Case / Feedback / Archive / Git"]
             GUARDS["Deterministic Guards · 已实现<br/>结构 / 依赖 / 生命周期 / Secret 文件名 / 路径<br/>旧布局 / 用户文件碰撞 / 来源漂移"]
             MUTATION["受控修改入口 · 当前由 Host + Git 执行<br/>用户明确触发 · 最小真源 · 校验 · Git diff<br/>不是独立 CRUD 服务"]
-            SYNC["Environment Sync CLI · 尚未实现<br/>显式比较 · 单 Skill 同步 · 指定 Mode 绑定<br/>冲突拒绝静默覆盖 · Git diff"]
+            SYNC["Environment Sync CLI · 已实现<br/>check · 单 Skill 同步 · 指定 Mode 绑定<br/>冲突拒绝 · 显式替换 · Git 变更摘要"]
             CORE --> GUARDS
             STEWARD --> GUARDS
-            STEWARD -.下一阶段.-> SYNC
-            SYNC -.复用现有校验.-> GUARDS
+            STEWARD --> SYNC
+            SYNC -->|复用现有校验| GUARDS
             GUARDS --> MUTATION
         end
 
@@ -213,8 +214,8 @@ flowchart TB
     classDef source fill:#f5f3ff,stroke:#7c3aed,color:#4c1d95;
 
     class USER,HOST,BLANK,ENVROOT,MODES,RADIUS,CASE_ONLY,SKILL_CHANGE,MODE_CHANGE,ENV_CHANGE locked;
-    class FILLED,CORE,STEWARD,ACCESS,GUARDS,MUTATION,PERSONAL,LIBRARY,ACTIVE,PROFILE,SKILLS,LEARNING,VIEW,GIT,A,B,C,D,CHANGE done;
-    class SYNC,DSH_PRESET optimize;
+    class FILLED,CORE,STEWARD,ACCESS,GUARDS,MUTATION,SYNC,PERSONAL,LIBRARY,ACTIVE,PROFILE,SKILLS,LEARNING,VIEW,GIT,A,B,C,D,CHANGE done;
+    class DSH_PRESET optimize;
     class LEGACY,ARCHIVED generated;
     class CODEX,CLAUDE,DSH_PROJECT,DSH_SHARED generated;
     class SOURCES source;
@@ -228,7 +229,7 @@ flowchart TB
 4. 当前 Host 是唯一执行者，A/B/C/D 是信号触发的循环，不是中央调度的顺序节点；
 5. 外部能力都必须完整本地化并保留来源；用户明确指定引入时直接纳入，Candidate、Trial 和效果 Case 不是必经关卡；
 6. 用户明确反馈先判断 Case、Skill、Mode、Environment 四级影响半径；
-7. 两份 Environment 之间的能力采用当前仍由 Host 显式完成；下一阶段才用 `environment.sync` 收口，不做后台订阅、共享目录或自动覆盖；
+7. 两份 Environment 之间的能力采用已由 `environment.sync` 收口为显式单 Skill 操作，不做后台订阅、共享目录或静默覆盖；
 8. 三个宿主只得到当前 Mode 的可重建能力投影，模型循环、会话、工具、沙箱和授权继续由宿主原生 Runtime 负责。
 
 ---
@@ -347,7 +348,7 @@ flowchart LR
 
     subgraph ASL["ASL Harness · 本地能力环境层"]
         VALIDATE["validate / resolve / guards"]
-        SYNC["environment.sync · 下一阶段<br/>显式采用，不后台订阅"]
+        SYNC["environment.sync · 已实现<br/>显式采用，不后台订阅"]
         PROJECT["project / verify / preset export"]
         STEWARD["asl-environment<br/>Host-native 管理入口"]
     end
@@ -372,14 +373,13 @@ flowchart LR
     classDef optimize fill:#ffedd5,stroke:#ea580c,color:#7c2d12;
     classDef truth fill:#dbeafe,stroke:#2563eb,color:#1e3a8a,stroke-width:2px;
     class LOOP,SESSION,TOOLS,SANDBOX,STATE native;
-    class VALIDATE,PROJECT,STEWARD done;
-    class SYNC optimize;
+    class VALIDATE,SYNC,PROJECT,STEWARD done;
     class SOURCE,TARGET,MODE truth;
 ```
 
 “更原生”不是让 ASL 拥有自己的 Agent Loop、会话数据库、工具执行器、权限系统或插件 Runtime，而是让 ASL 通过每个 Host 已经认可的 Skill、指令文件、项目目录和 Preset 接口工作。ASL 只补宿主没有统一解决的个人能力环境、Mode、来源、本地采用、确定性校验和投影。
 
-下一阶段只增加一个深接口，不增加后台服务：
+当前只增加了一个深接口，没有增加后台服务：
 
 ```bash
 asl-harness environment.sync \
@@ -398,7 +398,7 @@ asl-harness environment.sync \
 | 目标不存在 | 完整复制 Skill，并保留 `SOURCE.md`、许可、scripts、references、assets 与测试 |
 | 目标已修改 | 默认拒绝静默覆盖并展示差异；只有用户显式选择替换时才更新 |
 | 检查模式 | `--check` 只报告将新增、更新、冲突或保持不变的内容，不写文件 |
-| 完成后 | 校验目标 Environment、刷新人机共读视图并输出 Git diff；不自动 commit、push 或刷新所有宿主投影 |
+| 完成后 | 校验目标 Environment、刷新人机共读视图并输出受影响路径与 Git 状态摘要；不自动 commit、push 或刷新所有宿主投影 |
 
 同步结束后，两份 Environment 仍是两个独立 Git 真源。再次运行命令可以显式吸收上游更新，但不会形成实时链接、共享 Skill 目录、后台 watcher 或自动升级关系。宿主投影仍由现有 `host.project` / `deepseek.preset.export` 单独负责。
 
@@ -970,7 +970,7 @@ Codex 与 Claude 使用项目原生 Skill 目录和规则文件。DeepSeek 额�
 ```mermaid
 flowchart LR
     subgraph CURRENT["当前真实状态"]
-        HCORE["Harness Core<br/>6 commands · 25 tests"]
+        HCORE["Harness Core<br/>7 commands · 31 tests"]
         PENV["Personal Environment<br/>37 Skills · 4 Modes · 结构通过<br/>视图与缓存待维护"]
         ALIB["Agent Skill Library Environment<br/>37 Public Skills · 4 Modes<br/>结构通过 · 视图与缓存待维护"]
         BUSINESS["4 个业务 Mode records<br/>活动分类已对齐"]
@@ -990,7 +990,7 @@ flowchart LR
         INTEGRATE["外部能力集成规则<br/>复杂仓库拆解 / Runtime / 单 Mode 绑定<br/>已进入 Steward"]
         GUARDS["确定错误硬阻断<br/>语义判断留给 Host"]
         MODE_NATIVE["Mode-native 业务发行结构<br/>37 Skills · 4 Modes · 已验证"]
-        SYNC_CLI["environment.sync CLI<br/>下一阶段已确认设计<br/>尚未实现"]
+        SYNC_CLI["environment.sync CLI<br/>单 Skill · check · replace<br/>已实现并测试"]
         MODE_UX["Mode 使用入口<br/>host.project 已实现<br/>mode.use 仅为可选薄别名"]
         DSH_RUNTIME["DeepSeek 真实长会话<br/>验收后置，不阻塞当前架构"]
     end
@@ -1017,10 +1017,10 @@ flowchart LR
     classDef optimize fill:#ffedd5,stroke:#ea580c,color:#7c2d12;
     classDef remove fill:#fee2e2,stroke:#dc2626,color:#7f1d1d,stroke-width:2px;
     classDef generated fill:#f3f4f6,stroke:#6b7280,color:#1f2937,stroke-dasharray:4 3;
-    class HCORE,PENV,ALIB,BUSINESS,SYSTEM,CULT,STEWARD,GUARDS,INTEGRATE,MODE_NATIVE,MODE_UX done;
-    class SYNC_CLI,DSH_RUNTIME,PROJECTS,PRESETS optimize;
+    class HCORE,PENV,ALIB,BUSINESS,SYSTEM,CULT,STEWARD,GUARDS,INTEGRATE,MODE_NATIVE,SYNC_CLI,MODE_UX done;
+    class DSH_RUNTIME,PROJECTS,PRESETS optimize;
     class LEGACY,ARCHIVED generated;
     class CONTRACT,FOUR,NATIVE locked;
 ```
 
-Agent Skill Library 的 Mode-native 内容迁移已经完成：37 个可公开正式 Skill 与 4 个业务 Mode 成为仓库活动真源，旧插件布局只在 Archive 追溯。当前橙色项包括尚未实现的 `environment.sync`、需要按最新 Environment 重建的项目投影和 Preset，以及后置的 DeepSeek 真实长会话验收。两份 Environment 当前结构合法，但各有 4 个可重建缓存目录，且 `WORKSPACE.md` 视图均待刷新；这些是维护提醒，不是结构失败。
+Agent Skill Library 的 Mode-native 内容迁移已经完成：37 个可公开正式 Skill 与 4 个业务 Mode 成为仓库活动真源，旧插件布局只在 Archive 追溯。`environment.sync` 已实现为显式单 Skill CLI。当前橙色项是需要按最新 Environment 重建的项目投影和 Preset，以及后置的 DeepSeek 真实长会话验收。两份 Environment 当前结构合法，但各有 4 个可重建缓存目录，且 `WORKSPACE.md` 视图均待刷新；这些是维护提醒，不是结构失败。

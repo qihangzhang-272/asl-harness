@@ -442,3 +442,218 @@ def test_cli_exposes_only_mode_only_workflows(tmp_path: Path, capsys: pytest.Cap
     assert {item["id"] for item in output["modes"]} == {
         "creator-studio",
     }
+
+
+def test_environment_sync_check_reports_add_without_writing(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    source = _environment(tmp_path / "source")
+    target = _environment(tmp_path / "target")
+    _skill(source, "visual")
+
+    assert (
+        main(
+            [
+                "environment.sync",
+                "--source",
+                str(source),
+                "--target",
+                str(target),
+                "--skill",
+                "visual",
+                "--check",
+            ]
+        )
+        == 0
+    )
+
+    output = json.loads(capsys.readouterr().out)
+    assert output["skillAction"] == "add"
+    assert output["modeAction"] is None
+    assert output["changed"] is True
+    assert output["check"] is True
+    assert not (target / "skills" / "visual").exists()
+
+
+def test_environment_sync_adds_complete_skill_and_binds_one_mode(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    source = _environment(tmp_path / "source")
+    target = _environment(tmp_path / "target")
+    _skill(source, "visual")
+    _mode(target, "research-desk", ("foundation",))
+    _write(source / "skills/visual/SOURCE.md", "# Source\n\nLocal source record.\n")
+    _write(source / "skills/visual/scripts/render.py", "print('render')\n")
+    _write(source / "skills/visual/__pycache__/render.pyc", "generated\n")
+
+    assert (
+        main(
+            [
+                "environment.sync",
+                "--source",
+                str(source),
+                "--target",
+                str(target),
+                "--skill",
+                "visual",
+                "--mode",
+                "creator-studio",
+            ]
+        )
+        == 0
+    )
+
+    output = json.loads(capsys.readouterr().out)
+    assert output["skillAction"] == "add"
+    assert output["modeAction"] == "add"
+    assert output["changed"] is True
+    assert output["check"] is False
+    assert (target / "skills/visual/SKILL.md").is_file()
+    assert (target / "skills/visual/SOURCE.md").is_file()
+    assert (target / "skills/visual/scripts/render.py").is_file()
+    assert not (target / "skills/visual/__pycache__").exists()
+    refreshed = Workspace.open(target)
+    assert "visual" in refreshed.modes["creator-studio"].skill_roots
+    assert "visual" not in refreshed.modes["research-desk"].skill_roots
+    assert refreshed.workspace_view_current() is True
+
+
+def test_environment_sync_reports_and_refuses_local_conflict(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    source = _environment(tmp_path / "source")
+    target = _environment(tmp_path / "target")
+    _mode(target, "research-desk", ("foundation",))
+    with (target / "skills/creator/SKILL.md").open("a", encoding="utf-8") as stream:
+        stream.write("\n目标 Environment 的本地修改。\n")
+
+    assert (
+        main(
+            [
+                "environment.sync",
+                "--source",
+                str(source),
+                "--target",
+                str(target),
+                "--skill",
+                "creator",
+                "--mode",
+                "research-desk",
+                "--check",
+            ]
+        )
+        == 0
+    )
+    check_output = json.loads(capsys.readouterr().out)
+    assert check_output["skillAction"] == "conflict"
+    assert check_output["modeAction"] == "blocked"
+    assert "目标 Environment 的本地修改" in (
+        target / "skills/creator/SKILL.md"
+    ).read_text(encoding="utf-8")
+
+    assert (
+        main(
+            [
+                "environment.sync",
+                "--source",
+                str(source),
+                "--target",
+                str(target),
+                "--skill",
+                "creator",
+                "--mode",
+                "research-desk",
+            ]
+        )
+        == 2
+    )
+    error = json.loads(capsys.readouterr().out)
+    assert error["error"]["code"] == "SYNC_SKILL_CONFLICT"
+
+
+def test_environment_sync_replaces_only_with_explicit_flag(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    source = _environment(tmp_path / "source")
+    target = _environment(tmp_path / "target")
+    with (target / "skills/creator/SKILL.md").open("a", encoding="utf-8") as stream:
+        stream.write("\n只存在于目标的本地修改。\n")
+
+    assert (
+        main(
+            [
+                "environment.sync",
+                "--source",
+                str(source),
+                "--target",
+                str(target),
+                "--skill",
+                "creator",
+                "--replace",
+            ]
+        )
+        == 0
+    )
+
+    output = json.loads(capsys.readouterr().out)
+    assert output["skillAction"] == "replace"
+    assert output["changed"] is True
+    assert (target / "skills/creator/SKILL.md").read_bytes() == (
+        source / "skills/creator/SKILL.md"
+    ).read_bytes()
+
+
+def test_environment_sync_noop_does_not_refresh_unrelated_stale_view(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    source = _environment(tmp_path / "source")
+    target = _environment(tmp_path / "target")
+
+    assert (
+        main(
+            [
+                "environment.sync",
+                "--source",
+                str(source),
+                "--target",
+                str(target),
+                "--skill",
+                "creator",
+            ]
+        )
+        == 0
+    )
+
+    output = json.loads(capsys.readouterr().out)
+    assert output["skillAction"] == "unchanged"
+    assert output["changed"] is False
+    assert output["changedPaths"] == []
+    assert Workspace.open(target).workspace_view_current() is False
+
+
+def test_environment_sync_rejects_missing_target_dependency(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    source = _environment(tmp_path / "source")
+    target = _environment(tmp_path / "target")
+    _skill(source, "visual", ("visual-runtime",))
+    _skill(source, "visual-runtime")
+
+    assert (
+        main(
+            [
+                "environment.sync",
+                "--source",
+                str(source),
+                "--target",
+                str(target),
+                "--skill",
+                "visual",
+            ]
+        )
+        == 2
+    )
+
+    output = json.loads(capsys.readouterr().out)
+    assert output["error"]["code"] == "SYNC_DEPENDENCY_MISSING"
+    assert not (target / "skills/visual").exists()
