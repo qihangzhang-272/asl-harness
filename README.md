@@ -5,107 +5,170 @@
 <h1 align="center">ASL Harness</h1>
 
 <p align="center">
-  <strong>把一套不断增长的 Agent Skill，变成可以切换、可以维护、不会越用越乱的工作环境。</strong>
+  <strong>给越来越多的 Agent Skills，一个真正属于人的工作环境。</strong>
+</p>
+
+<p align="center">
+  管理你的技能，按工作场景隔离它们，并把同一套个人能力带进 Codex、Claude Code 与 DeepSeek Harness。
 </p>
 
 <p align="center">
   <a href="https://github.com/qihangzhang-272/asl-harness/stargazers"><img src="https://img.shields.io/github/stars/qihangzhang-272/asl-harness?style=for-the-badge&logo=github&color=F5C542" alt="GitHub Stars"></a>
-  <a href="https://github.com/qihangzhang-272/asl-harness/actions/workflows/test.yml"><img src="https://github.com/qihangzhang-272/asl-harness/actions/workflows/test.yml/badge.svg" alt="Test"></a>
+  <a href="https://github.com/qihangzhang-272/asl-harness/actions/workflows/test.yml"><img src="https://github.com/qihangzhang-272/asl-harness/actions/workflows/test.yml/badge.svg" alt="Tests"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge" alt="MIT License"></a>
   <img src="https://img.shields.io/badge/status-developer_preview-orange.svg?style=for-the-badge" alt="Developer Preview">
 </p>
 
-> [!NOTE]
-> 这是不包含个人 Skill 和项目材料的空白 Harness。需要已经装填、培养过的工作环境，请使用 [Agent Skill Library](https://github.com/qihangzhang-272/agent-skill-library)。
+<p align="center">
+  <a href="#问题不在于没有-skill">为什么需要它</a> ·
+  <a href="#mode把场景放在-skill-之前">Mode</a> ·
+  <a href="#quick-start">Quick Start</a> ·
+  <a href="#host-support">Host Support</a> ·
+  <a href="docs/asl-architecture-views.md">Architecture</a> ·
+  <a href="https://github.com/qihangzhang-272/agent-skill-library">Starter Environment</a>
+</p>
 
-## 为什么是 Mode
+---
 
-Skill 库通常只会朝一个方向增长。写作、研究、开发、投资、视觉和自动化能力全都堆在一起，Agent 每次工作都要从整个仓库里猜“这次到底该用什么”。
+Agent Skills 正在变成 AI 的通用能力格式。一个 Skill 可以带着说明、脚本、参考资料和模板，在需要时进入模型上下文。
 
-固定 Workflow 能减少猜测，却把解决方式锁成了一条链。任务稍有变化，就要增加分支、状态和新的配置。
+但当一个人开始长期使用 AI，新的问题很快会出现：Skill 从几项变成几十项、几百项；它们来自不同仓库，服务不同工作，彼此还有重合。格式解决了“能力怎样封装”，却没有回答“一个人怎样管理这些能力，以及 AI 在当前场景里究竟应该看见哪些能力”。
 
-ASL Harness 选择 Mode：
+ASL Harness 为这个缺口而生。它在 Agent Skills 和具体 Agent 之间建立一层本地、可读、可维护的个人工作环境：
 
-- Skill 仍是一项完整能力；
-- Mode 只选择当前工作状态需要看见的能力；
-- 当前 Host 根据目标和材料动态工作；
-- Harness 负责校验、投影和保护 Environment，不替 Host 执行业务。
+- 所有长期能力进入同一份 Git 管理的 Environment；
+- Mode 把技能组织成可反复进入的工作场景；
+- 每次只向宿主投影当前 Mode 的能力面；
+- Codex、Claude Code 或 DeepSeek Harness 继续使用自己的模型、工具和 Agent Loop 完成任务；
+- 用户和 AI 在真实工作中共同修改 Skill 与 Mode，让环境逐渐长成自己的样子。
 
-```text
-过去：全部 Skill → 巨型提示词或固定 Workflow → 任务
-现在：Personal Environment → 当前 Mode → Host 动态组合 Skill → Case
+## 问题不在于没有 Skill
+
+今天发现 Skill 很容易：GitHub、技能市场、KOL 推荐、团队仓库和 AI 自己生成的内容，都可以成为来源。真正缺少的是收藏之后的管理机制。
+
+### 技能有地方安装，却没有地方长期管理
+
+同一个 Skill 可能被复制进多个 Agent 目录，也可能随着某个项目一起消失。来源、版本、本地修改、依赖和替代关系散落在不同位置。技能越多，越难回答下面这些问题：
+
+- 这项能力从哪里来，当前使用的是哪个版本？
+- 两个名字不同的 Skill 是否解决同一个问题？
+- 哪些内容已经被本地修改，哪些仍然跟随上游？
+- 删除一项能力会影响哪些工作场景？
+- 换到另一个 Agent 后，怎样继续使用同一套能力？
+
+### 场景与技能之间缺少稳定映射
+
+人不会在每次工作前从全部工具里重新选择一遍。写作、研究、开发、运营和投资，本来就是不同的工作状态；每种状态有自己的材料、语言、工具和质量标准。
+
+普通 Skill 目录通常把所有能力平铺在一起。即使宿主使用渐进式加载，它仍然需要先从越来越长的名称和描述中判断什么与当前任务相关。技能池越大，主动召回越容易被相似描述、跨场景能力和偶然关键词干扰。
+
+### 全部加载和固定 Workflow 都不是答案
+
+把全部 Skill 都放进当前上下文，会带来噪音和注意力竞争。把它们写成固定 Workflow，又会把复杂工作锁进一条顺序链：任务稍微变化，就要继续添加分支、状态和配置。
+
+ASL 选择保留 Agent 的智能，只收窄它工作的环境。
+
+| 常见做法 | 它解决了什么 | 长期使用时的问题 |
+| --- | --- | --- |
+| 把 Skill 全部装进宿主 | 随时都能访问 | 召回面持续膨胀，跨场景内容互相干扰 |
+| 每个项目复制一套 Skill | 项目内相对独立 | 重复、漂移，来源和修改难以同步 |
+| 用固定 Workflow 编排 | 执行路径容易预测 | 复杂任务被流程绑死，分支不断增长 |
+| 只依赖全局搜索或路由 | 安装简单 | 缺少人的长期场景边界和使用习惯 |
+
+## Mode，把场景放在 Skill 之前
+
+**Mode 是一种可反复进入的工作状态，也是当前 Agent 的能力可见面。**
+
+人先进入场景，Agent 再选择工具。ASL 把这件自然的事情做成两级召回：
+
+```mermaid
+flowchart LR
+    ALL["个人 Environment<br/>全部正式 Skill"]
+    MODE["当前 Mode<br/>场景级能力边界"]
+    PROJECT["Host Projection<br/>只包含该 Mode 的 Skill 闭包"]
+    DISCOVERY["宿主原生 Skill Discovery<br/>名称与描述的渐进式召回"]
+    TASK["当前任务<br/>按需读取完整 Skill"]
+
+    ALL -->|选择显式 Skill 根| MODE
+    MODE -->|解析依赖并生成| PROJECT
+    PROJECT --> DISCOVERY
+    DISCOVERY --> TASK
+
+    classDef truth fill:#dcfce7,stroke:#16a34a,color:#14532d;
+    classDef mode fill:#dbeafe,stroke:#2563eb,color:#1e3a8a,stroke-width:2px;
+    classDef host fill:#f3f4f6,stroke:#6b7280,color:#1f2937;
+    class ALL truth;
+    class MODE mode;
+    class PROJECT,DISCOVERY,TASK host;
 ```
 
-## 空白框架与业务发行版
+第一层由 Mode 回答“这是什么工作场景”；第二层由宿主回答“这个任务需要哪个具体 Skill”。AI 不必在资本市场任务里评估公众号排版能力，也不必在内容创作时浏览数据库迁移规范。
 
-| 项目 | ASL Harness | Agent Skill Library |
-| --- | --- | --- |
-| 定位 | 原初架构 | 已培养的业务环境 |
-| 包含内容 | 核心、示例和宿主适配 | 正式 Skill、业务 Mode 和来源记录 |
-| 适合 | 从零维护自己的能力库 | 先拿一套经过使用的能力，再按自己需要修改 |
-| 更新原因 | 领域模型、校验或宿主接入变化 | 真实 Case 促使 Skill 或 Mode 演化 |
+### 这是一种可见性隔离
 
-两者不是两套协议。Agent Skill Library 是一份装入内容的 ASL Environment；ASL Harness 是维护这类 Environment 的空白框架。
+Mode 之间共享同一份 Skill 真源，但不会互相继承或互相调用。投影到目标项目时，Harness 只复制当前 Mode 选择的 Skill 及其必要依赖。切换 Mode 后，上一种场景的 ASL 受管 Skill 会退出当前宿主发现面。
 
-## 总体架构
+这种隔离减少的是**召回噪音和上下文污染**，不是操作系统级安全沙箱。真正的文件权限、网络权限、MCP 授权和执行沙箱仍由宿主负责。
 
-ASL 不是一条从头跑到尾的 Workflow，而是由本地真源、系统维护能力、当前 Host、四个信号循环和可重建宿主投影共同组成的工作环境。
+### Mode 不是 Domain，也不是 Workflow
+
+- Domain 按知识分类，Mode 按人的工作状态组织能力；
+- Workflow 规定任务怎样走，Mode 只决定当前有哪些能力可用；
+- Mode 可以覆盖很宽的工作面，而不是包装一次任务；
+- 多个 Mode 可以显式选择同一个 Skill，但不复制它；
+- Mode 不保存顺序、状态树、条件分支或另一个调度器。
+
+一个 Mode 的活动配置因此可以保持很短：
+
+```yaml
+apiVersion: asl-wep/v0.3.0
+kind: ModeProjection
+metadata:
+  id: research-desk
+spec:
+  skills:
+    - web-research
+    - source-verification
+    - report-writing
+```
+
+当前 Agent 可以先搜索再验证，也可以先阅读材料再决定是否搜索。Mode 不替它写死路径。
+
+## 从工具集合到长期成长的工作环境
+
+ASL 的目标不是提供更多 Skill，而是让 Skill、场景和人的长期反馈形成同一个可维护系统。
 
 ```mermaid
 flowchart TB
-    SUPPLY["用户目标 / 空白 Harness / 装填版 Environment / 外部能力来源"]
-    SYSTEM["Harness System<br/>Core · Environment Steward · Environment Access · Guards"]
-    TRUTH[("Personal Environment · Git 真源<br/>Profile · Skills · Modes · Candidates / Trials / Feedback / Archive")]
-    HOST["当前 Host · 唯一执行者<br/>自带 Agent Loop / Session / Tools / Sandbox / Auth<br/>Codex App / Claude Code / DeepSeek Harness"]
-    LOOPS["四个独立循环<br/>Goal / Case · Capability Cultivation · Mode Evolution · Governance / Projection"]
-    CASE["Case<br/>材料 · 证据 · 过程文件 · Artifact · 交付"]
-    PROJECTION["Host Projections<br/>可删除、可重建"]
+    USER["人<br/>目标 · 场景 · 明确反馈"]
+    ENV["Personal Environment · Git 真源<br/>Profile · Skills · Modes · 培养区"]
+    MODE["当前 Mode<br/>隔离后的能力面"]
+    HOST["当前 Host<br/>Codex · Claude Code · DeepSeek Harness"]
+    CASE["真实工作<br/>材料 · 过程 · 产物"]
+    CHANGE["长期改变<br/>修改 Skill、Mode 或 Environment"]
 
-    SUPPLY --> SYSTEM
-    SYSTEM -->|校验后维护| TRUTH
-    TRUTH -->|常驻摘要 + 按需读取| HOST
-    HOST --> LOOPS
-    LOOPS --> CASE
-    LOOPS -->|长期改变经 Guards 回写| SYSTEM
-    TRUTH -->|确定性生成| PROJECTION
-    PROJECTION -.供 Host 发现当前 Mode.-> HOST
+    USER -->|选择场景并提出目标| MODE
+    ENV --> MODE
+    MODE -->|可重建投影| HOST
+    HOST --> CASE
+    CASE -->|只有明确反馈或能力缺口| CHANGE
+    CHANGE -->|最小修改并校验| ENV
 
-    classDef locked fill:#dbeafe,stroke:#2563eb,color:#1e3a8a,stroke-width:2px;
-    classDef done fill:#dcfce7,stroke:#16a34a,color:#14532d;
-    classDef generated fill:#f3f4f6,stroke:#6b7280,color:#1f2937,stroke-dasharray:4 3;
-    class SUPPLY,HOST,TRUTH locked;
-    class CASE,SYSTEM done;
-    class LOOPS locked;
-    class PROJECTION generated;
+    classDef human fill:#fff7ed,stroke:#ea580c,color:#7c2d12;
+    classDef truth fill:#dcfce7,stroke:#16a34a,color:#14532d;
+    classDef active fill:#dbeafe,stroke:#2563eb,color:#1e3a8a;
+    class USER human;
+    class ENV truth;
+    class MODE,HOST,CASE,CHANGE active;
 ```
 
-完整的复杂总图，以及系统上下文图、组件图、两张时序图、生命周期状态图、Mode 能力图、演化决策图、三宿主部署图和当前迁移图，统一维护在 [ASL Architecture Views](docs/asl-architecture-views.md)。
+Environment 是普通文件夹，也是本地 Git 真源。人可以直接阅读和修改，Agent 也可以在授权下维护。普通任务不会自动改写长期环境；只有用户明确反馈、明确采用外部能力，或者真实 Case 暴露出稳定缺口时，才进入长期变化。
 
-颜色直接表达项目判断：
+随着使用积累，Environment 会越来越像它的主人：保留常用判断，淘汰无效能力，把反复出现的工作组织成 Mode，而不是把每一次对话都永久写进系统。
 
-- **蓝色**：用户已经明确确认、后续实现不得走回头路的架构边界；
-- **绿色**：当前代码或真实 Environment 已经实现并验证；
-- **橙色**：架构不缺模块，但仍有内容迁移、真实运行验收或已确认清理；
-- **红色**：当前错误分类或旧结构，迁移后删除，不建立兼容层；
-- **灰色**：宿主投影或冻结归档，允许删除重建或只读追溯；
-- **紫色**：外部来源，不是本地运行真源。
+## Quick Start
 
-完整架构图同时包含发行关系、Harness 系统层、Environment 真源、四个运行循环、外部能力进入路径、演化影响半径、Case 和三宿主投影。图上的编号是阅读分区，不是执行顺序。
-
-它不是 CLI、Hook 或 CI/CD 三选一：Git 仓库保存个人 Environment；CLI 负责安装、校验、同步和投影；宿主原生 Hook 在合适的生命周期点调用同一组 CLI 检查；GitHub Actions 只在提交后守住仓库。日常任务仍由 Codex、Claude Code、DeepSeek Harness 或其他 Agent 自己执行。
-
-### 四个循环怎样协作
-
-| 循环 | 进入条件 | 读取 | 保存 | 退出或转交 |
-| --- | --- | --- | --- | --- |
-| A · Goal / Case | 用户给出目标，或者当前 Case 需要返工 | 对话、材料、Profile、当前 Mode、正式 Skill | Case 证据、过程材料和最终 Artifact | 达标则交付；确认能力缺口转 B；确认工作场边界问题转 C；投影问题转 D |
-| B · Capability Integration | 用户明确要求引入外部能力，或 Host 确认存在本地能力缺口、失效和重要上游变化 | 正式 Skill、可选 Candidate/Trial、Archive 和外部来源 | 直接本地化的正式 Skill，或用于解决不确定性的 Candidate/Trial | 用户明确指定时直接纳入；其他来源按不确定性决定是否隔离；需要进入长期工作场时转 C |
-| C · Mode Evolution | 一类工作长期重复出现，或现有 Mode 的能力面、上下文、授权边界和产物表面已经不合适 | Profile、正式 Skill、真实 Case 和明确反馈 | `MODE.md` 与最小 `mode.yaml` | Mode 定义稳定后转 D；缺少能力转 B；普通执行问题回 A |
-| D · Governance / Projection | Profile、Skill 或 Mode 变化；切换 Host；能力地图或投影发生漂移 | Environment 真源、依赖图和宿主 Adapter | `WORKSPACE.md` 与可重建宿主投影 | 校验通过后回 A；不评价业务内容 |
-
-四个循环没有统一时钟，也不存在中央调度器。普通任务默认只进入 A；只有真实信号出现，当前 Host 才进入 B、C 或 D。
-
-## 快速开始
+### 使用空白 Environment
 
 ```bash
 git clone https://github.com/qihangzhang-272/asl-harness.git
@@ -119,7 +182,7 @@ asl-harness workspace.validate \
   --workspace ./examples/personal-environment
 ```
 
-把一个 Mode 接入 Codex 项目：
+把示例 Mode 接入一个 Codex 项目：
 
 ```bash
 asl-harness host.project \
@@ -135,13 +198,84 @@ asl-harness host.verify \
   --host-id codex-app
 ```
 
-第一条命令让当前项目进入这个 Environment 的一个 Mode：它解析 Mode 选择的 Skill，把完整 package 和简短 Mode 边界放到 Codex 原生目录。第二条命令检查投影是否完整；随后直接用 Codex 打开该项目即可。它不启动第二个 Agent，也不代理 Codex 的模型、Tool、MCP 或权限。
+完成后直接用 Codex 打开目标项目。Codex 看到的是当前 Mode、对应的 Skill 闭包和简短边界说明；ASL 不接管它的模型、工具、MCP 或权限。
 
-命令返回的 `activation` 会明确列出：应该打开的项目、宿主规则文件、Skill 目录、当前 Mode 中含运行依赖说明的 Skill、Hook 状态和下一步。投影完成意味着 Mode 已可用；Hook 是自动检查增强，不是运行前置条件。
+### 使用已经培养好的 Environment
 
-同一个 Environment 也可以投影到 Claude Code 或导出为 DeepSeek Harness Agent Preset。投影只是宿主视图，可以删除和重建；Environment 才是真源。MCP 等运行依赖由 Skill 说明，目标 Host 用自己的原生配置满足。
+如果你希望先从一套真实使用过的工作环境开始：
 
-DeepSeek Agent Preset 从本机一份已经可以启动的 Preset 复制，不重新猜测 Tools / Plugins；导出时会同时写入 ASL 命令 Hook，并用 DeepSeek 官方 `@deepseek-ai/dsh-hooks-codex` 接到 Cordis 生命周期：
+```bash
+git clone https://github.com/qihangzhang-272/agent-skill-library.git
+
+asl-harness workspace.validate \
+  --workspace ./agent-skill-library
+```
+
+[Agent Skill Library](https://github.com/qihangzhang-272/agent-skill-library) 是 ASL Harness 的装填版参考环境，包含内容创作、AI 产品分析和投资研究等 Mode。clone 后，本地检出就是你可以删改和继续培养的真源。
+
+## What ASL Manages
+
+### 一个可读的 Skill 真源
+
+正式 Skill 只在 `skills/` 保存一份。每个 Skill 是完整能力包，可以包含：
+
+```text
+skills/<skill-id>/
+├── SKILL.md              能力说明与运行依赖
+├── SOURCE.md             来源、版本、许可和本地变化
+├── scripts/              确定性执行脚本
+├── references/           按需读取的专业资料
+└── assets/               模板和资源
+```
+
+MCP、命令、环境变量名称或必要宿主插件由责任 Skill 按需声明；安装、登录和权限继续交给宿主原生机制。
+
+### 场景与能力的显式关系
+
+Mode 只保存 Skill 根。Harness 解析依赖闭包，检查不存在的引用与循环，并生成当前能力地图。删除或替换 Skill 前，可以看见它影响哪些 Mode。
+
+### 外部能力的本地化入口
+
+Skill 可以来自 GitHub、官方文档、技能市场、公开推荐或另一份 ASL Environment。进入长期环境前，当前 Host 必须完整读取来源并判断它与现有能力的关系：
+
+- 直接采用为新的完整 Skill；
+- 吸收进已有 Skill；
+- 合并重合能力；
+- 作为显式依赖或变体保留；
+- 为宿主差异建立 Adapter；
+- 仅借鉴需求，基于官方接口独立实现；
+- 拒绝或归档。
+
+用户明确要求引入时，不强制建立表演性的 Candidate、Trial 或效果 Case。只有来源、许可、安全、重合关系、运行方式或采用方向仍不确定时，才使用隔离的培养区。
+
+先预览一次 Environment 间的同步：
+
+```bash
+asl-harness environment.sync \
+  --source ./source-environment \
+  --target ./personal-environment \
+  --skill skill-id \
+  --mode research-desk \
+  --check
+```
+
+确认后去掉 `--check`。目标已有不同内容时默认拒绝覆盖，只有明确接受替换时才增加 `--replace`。
+
+### 人和 Agent 共读的能力地图
+
+`WORKSPACE.md` 从当前真源确定性生成，显示 Environment 里有哪些 Mode、Skill 和培养状态。它不是第二份手写 Skill Index；内容变化后可以重建，Git 负责保存历史和差异。
+
+## Host Support
+
+同一份 Environment 可以进入不同 Agent，不需要为每个平台维护一套内容。
+
+| Host | 当前 Mode 的 Skill 投影 | Mode 入口 | 执行边界 |
+| --- | --- | --- | --- |
+| Codex App | `.agents/skills/` | `AGENTS.md` | Codex 原生执行 |
+| Claude Code | `.claude/skills/` | `CLAUDE.md` | Claude Code 原生执行 |
+| DeepSeek Harness | `.dsh/skills/` | `AGENTS.md` / Agent Preset | DeepSeek Harness 原生执行 |
+
+把 `host-id` 换成 `claude-code` 或 `deepseek-harness` 即可生成对应项目投影。DeepSeek Harness 也可以从本机一份已经能够运行的 Agent Preset 导出 Mode：
 
 ```bash
 asl-harness deepseek.preset.export \
@@ -149,96 +283,16 @@ asl-harness deepseek.preset.export \
   --mode creator-studio \
   --base-preset /path/to/known-good-preset \
   --output /path/to/.dsh/.agent-presets/asl-creator-studio
-
-asl-harness deepseek.preset.verify \
-  --workspace ./agent-skill-library \
-  --mode creator-studio \
-  --output /path/to/.dsh/.agent-presets/asl-creator-studio
 ```
 
-先检查一个 Skill 从来源 Environment 纳入目标 Environment 会发生什么：
+ASL 只替换 Persona 与 Skill 面，不重新猜测 DeepSeek 的模型、存储、工具、插件、凭据和沙箱配置。
+
+### Optional Hooks
+
+Mode 投影本身完成后就可以工作。需要在宿主会话开始和受管写入后自动检查投影状态时，再安装可选 Plugin：
 
 ```bash
-asl-harness environment.sync \
-  --source ./agent-skill-library \
-  --target ./personal-environment \
-  --skill x-post-card-studio \
-  --mode creator-studio \
-  --check
-```
-
-确认后去掉 `--check` 执行。目标已有不同内容时默认拒绝覆盖；只有用户明确接受替换时才增加 `--replace`。
-
-## 一个 Mode 长什么样
-
-```yaml
-apiVersion: asl-wep/v0.3.0
-kind: ModeProjection
-metadata:
-  id: creator-studio
-spec:
-  skills:
-    - product-analysis
-```
-
-这里只保存 Skill 根，不保存执行顺序、用户编号、手写 revision 或环境修改权限。Harness 会补齐正式 Skill 的依赖闭包；当前 Host 决定如何完成当前任务。
-
-Mode 不互相调用，也不通过隐式继承获得能力。多个 Mode 需要同一项能力时，分别显式选择同一个 Skill。
-
-## Harness 应该硬在哪里
-
-Harness 只对可以确定的错误做硬阻断：
-
-- Environment、Skill 或 Mode 结构不合法；
-- 正式 Skill 缺少可追溯的 `SOURCE.md` 与 `Origin`；
-- Skill 依赖缺失或循环；
-- Mode 引用不存在的正式 Skill；
-- Candidate、Trial、正式 Skill 与 Case 边界混用；
-- 删除仍被 Skill、Mode 或活动投影引用的能力；
-- 路径或链接逃出 Environment；
-- 投影覆盖无法证明属于 ASL 的用户文件；
-- 宿主受管说明或复制型 Skill 投影被手工篡改；
-- 密钥、缓存、Git 元数据或可重建依赖进入投影；
-- 固定 Workflow、Run 状态树或第二调度器回流到活动 Environment。
-
-下面这些只提醒，不阻断任务：
-
-- `WORKSPACE.md` 视图过期；
-- 宿主投影需要刷新；
-- 上游能力有新版本；
-- Candidate 尚未决定是否采用；
-- 两个 Skill 可能重合。
-
-是否需要新 Mode、外部能力值不值得吸收、两个 Skill 是否应该合并，仍由当前 Host 和用户判断。Harness 不把语义判断伪装成一组僵硬规则。
-
-## Mode 与 Skill 如何变化
-
-文件和 Git 就是真源，不需要额外数据库。
-
-用户明确说“寻找这个外部能力并融入”时，当前 Host 直接完整读取来源，判断是采用、吸收、合并、依赖、变体、Adapter、Clean-room 重构还是拒绝，然后写成完整正式 Skill；不强制建立 Candidate、Trial、示例或效果 Case。来源或采用方向仍不确定时，才使用 Candidate；安全、重合、运行方式或价值需要隔离判断时，才使用 Trial。
-
-复制或改编上游文字、代码、脚本、模板或独特资产时，必须保留来源、许可和第三方声明。只借鉴“这个需求值得解决”或个人仓库的组织思路时，不复制它的实现，而是从本地需求、官方接口和许可清楚的公共基础能力独立重构。
-
-无论走哪条路径，外部能力都不能在任务中裸调用：正式使用前必须成为本地完整 Skill，并保留必要来源记录。删除 Skill 前检查依赖、Mode 和活动投影。新建 Mode 只用于会反复出现、确实需要独立能力边界的广域工作状态，不用于包装一次任务。
-
-普通 Case 的材料和产物不会自动改写 Environment。只有用户明确反馈、明确采用或明确授权，才会进入维护流程。
-
-## 宿主接入
-
-| Host | Skill 投影 | Mode 入口 | Adapter 边界 |
-| --- | --- | --- | --- |
-| Codex App | `.agents/skills/` | `AGENTS.md` | 保留完整 Skill package，由 Codex 原生执行 |
-| Claude Code | `.claude/skills/` | `CLAUDE.md` | 保留完整 Skill package，由 Claude Code 原生执行 |
-| DeepSeek Harness | `.dsh/skills/` | `AGENTS.md` 或 Agent Preset | 复用已知可运行 Preset 的 Tools / Plugins，只替换 Mode 的 Persona 与 Skill 面 |
-
-### Codex / Claude Code 的自动检查
-
-业务 Mode 只依赖 `host.project`，不要求安装 Plugin。希望会话自动读取 Mode 状态并在受管写入后检查漂移时，再安装 `asl-environment-host`：
-
-```bash
-python -m pip install -e /path/to/asl-harness
-
-# Codex：注册后在 Codex App 的 Plugins 中安装 ASL Environment Host
+# Codex
 codex plugin marketplace add /path/to/asl-harness
 
 # Claude Code
@@ -246,50 +300,141 @@ claude plugin marketplace add /path/to/asl-harness
 claude plugin install asl-environment-host@asl-harness
 ```
 
-Plugin 安装或更新后从新会话进入已经完成投影的项目。没有 `.asl/host-projections/<host-id>/current.json` 时 Hook 静默退出，不影响普通项目。
+Hook 复用同一套 CLI 校验，只处理结构、来源、Secret 和投影漂移。没有 ASL 投影时静默退出，不评价内容质量，也不阻断普通业务任务。
 
-Mode 仍只选择完整 Skill。MCP、命令、环境变量名称和确有必要的宿主插件，由责任 Skill 在 `SKILL.md` 的运行依赖中按需说明；没有依赖就不创建空章节或空目录。MCP 的安装、登录和权限继续使用宿主原生机制，宿主已经提供的 Tool、Agent、模型和沙箱不再被 ASL 包装一层。可复用的确定性脚本直接跟随 Skill 的 `scripts/` 被同步和投影。
+## Guardrails
 
-Hooks 也不成为新的运行层。Codex 与 Claude Code 的 Host Plugin 已携带同一份无状态 Hook Adapter；DeepSeek Preset 通过官方 `dsh-hooks-codex` bridge 复用同一命令 Hook，不再维护第二份 TypeScript 实现。没有 Hook 的 Host 仍能手动运行 CLI，GitHub Actions 继续复用同一校验命令。Hook 只处理结构、来源、Secret、投影漂移等机械边界，不评价内容质量，也不阻断普通业务 Goal。
+Harness 对机器可以确定的错误保持严格，对语义判断保持克制。
 
-### CLI 状态与导入导出记录
+**拒绝相应写入或投影：**
 
-- `state` 给人和自动化返回紧凑的 Environment 状态，不展开每个 Skill 的长描述；
-- `environment.sync` 的 JSON 是一次 Skill 导入记录，包含来源/目标 Git HEAD、package SHA-256、受影响路径和 Git 状态；
-- `host.project` 把 Mode 导出记录写入 `.asl/host-projections/<host>/current.json`；
-- `deepseek.preset.export` 把导出记录写入 `.asl-preset-projection.json`；
-- 两类导出记录都保存内容指纹，`verify` 会拒绝被篡改的受管说明或复制内容。
+- Environment、Skill 或 Mode 结构不合法；
+- 正式 Skill 缺少来源记录；
+- Skill 依赖缺失或循环；
+- Mode 引用了不存在的 Skill；
+- Candidate、Trial、正式 Skill、Case 和 Archive 混用；
+- 投影试图覆盖非 ASL 管理的用户文件；
+- Secret、缓存、Git 元数据或可重建依赖进入投影；
+- 受管内容指纹不一致；
+- 固定 Workflow、Run 状态树或第二调度器回流到活动 Environment。
 
-这些记录复用现有文件和 stdout，不建立另一套操作日志数据库。需要保存某次导入结果时，直接把 JSON 输出重定向到 Case 或审计目录。
+**提醒但不阻断当前任务：**
 
-安装 Harness 或 clone 一份空白/装填版 Environment，就是当前的初始化。只有未来需要从任意空目录生成 Environment 骨架时，独立 `init` 命令才有价值；v0.3 不重复提供它。
+- 能力地图或宿主投影需要刷新；
+- Candidate 尚未决定是否采用；
+- 上游 Skill 出现新版本；
+- 两项能力可能重合。
+
+是否需要新 Mode、外部能力值不值得留下、两个 Skill 应合并还是共存，仍由当前 Agent 提出判断，由用户决定长期方向。
+
+## Repository Layout
+
+```text
+personal-environment/
+├── PROFILE.md             跨 Mode 的精简长期边界
+├── WORKSPACE.md           自动生成的能力地图
+├── skills/                正式 Skill 的唯一活动真源
+├── modes/                 工作场景与 Skill 根
+├── candidates/            尚未决定是否采用的来源
+├── trials/                需要隔离判断的能力
+├── feedback/              用户明确反馈
+└── archive/               已退出活动面的历史内容
+```
+
+Harness 自己由确定性 Core、Environment 维护契约、Guards、Host Adapters、Hooks 和 CLI 组成。完整组件关系、变更时序、生命周期和三宿主部署图统一维护在 [ASL Architecture Views](docs/asl-architecture-views.md)。
+
+## Blank Harness and Starter Environment
+
+| | [ASL Harness](https://github.com/qihangzhang-272/asl-harness) | [Agent Skill Library](https://github.com/qihangzhang-272/agent-skill-library) |
+| --- | --- | --- |
+| 定位 | 创建和维护个人工作环境的空白框架 | 已经装入真实业务能力的参考环境 |
+| 内容 | CLI、约束、示例、Host Adapter 和 Hook | 正式 Skill、业务 Mode 与来源记录 |
+| 使用方式 | 从零定义自己的 Mode | 先运行，再删除、替换和培养成自己的环境 |
+| 本地真源 | 你创建或选择的 Environment | clone 后的本地 Agent Skill Library |
+
+两者使用同一种 Environment Contract。装填版不是另一个产品，也不是远程技能市场。
+
+## Who Is This For
+
+ASL 适合已经开始长期使用 Agent Skills，并遇到下列情况的人或团队：
+
+- 技能收藏持续增长，已经难以追踪来源和版本；
+- 同时使用多个 Agent，希望能力可以迁移而不是反复复制；
+- 工作横跨多个场景，需要明确的能力隔离面；
+- 不希望复杂任务被固定 Workflow 锁死；
+- 希望 AI 能在真实反馈中持续改善自己的工作环境；
+- 希望所有长期能力都保留在本地、可读、可回退的 Git 仓库中。
+
+如果只有少量 Skill，直接使用宿主原生目录通常已经足够。Mode 的价值会随着技能数量、工作场景和长期维护需求增长而出现。
+
+## FAQ
 
 <details>
-<summary><strong>CLI 参考</strong></summary>
+<summary><strong>Mode 和文件夹分类有什么区别？</strong></summary>
 
-| 命令 | 当前职责 |
-| --- | --- |
-| `state` | 输出紧凑的 Environment、Mode、Skill 数量、培养区、Git 与视图状态 |
-| `workspace.validate` | 校验 Environment、正式 Skill、依赖图和 Mode |
-| `workspace.view.sync` | 刷新人和 Agent 共读的能力地图 |
-| `environment.sync` | 在两份合法本地 Environment 之间显式同步一个完整 Skill，并可选绑定一个 Mode |
-| `host.project` | 把一个 Mode 投影到当前项目 |
-| `host.verify` | 检查宿主投影完整性和来源漂移 |
-| `deepseek.preset.export` | 从已知可运行基础导出 Mode Preset |
-| `deepseek.preset.verify` | 检查 Agent Preset 完整性、Skill 闭包和来源漂移 |
+文件夹主要帮助人浏览。Mode 会被 Harness 解析为显式 Skill 子图，并投影到宿主原生发现目录，从而真正改变当前 Agent 可以召回的能力面。
 
 </details>
 
-## 当前状态
+<details>
+<summary><strong>Mode 会不会变成另一种 Workflow？</strong></summary>
 
-动态项目状态、颜色、验证证据和未完成项只维护在 [ASL Architecture Views](docs/asl-architecture-views.md#view-9--当前项目状态)。README 不复制这些易过期信息。
+不会。Mode 不保存顺序、分支、状态或执行器。它只选择当前场景需要的完整 Skill，具体路径仍由宿主 Agent 根据任务决定。
 
-## 开发
+</details>
 
-```bash
-python -m pip install -e ".[test]"
-python -m pytest
-```
+<details>
+<summary><strong>ASL 会替换 Codex、Claude Code 或 DeepSeek Harness 吗？</strong></summary>
+
+不会。当前 Host 始终是唯一执行者。ASL 只维护 Environment、校验边界并生成宿主投影。
+
+</details>
+
+<details>
+<summary><strong>一个 Skill 可以属于多个 Mode 吗？</strong></summary>
+
+可以。多个 Mode 显式选择同一份 Skill 真源即可；它不会被复制，也不会通过隐式继承进入其他 Mode。
+
+</details>
+
+<details>
+<summary><strong>切换 Mode 会删除我的文件吗？</strong></summary>
+
+Harness 只管理带有 ASL 归属记录的投影内容。如果目标路径存在无法证明属于 ASL 的用户文件，投影会拒绝覆盖。
+
+</details>
+
+## Documentation
+
+- [Architecture Views](docs/asl-architecture-views.md)
+- [Host Plugin and Hooks](plugins/asl-environment-host/README.md)
+- [Filled Agent Skill Library](https://github.com/qihangzhang-272/agent-skill-library)
+
+<details>
+<summary><strong>CLI Reference</strong></summary>
+
+| Command | Purpose |
+| --- | --- |
+| `state` | 查看 Environment、Mode、Skill、Git 与投影状态 |
+| `workspace.validate` | 校验 Environment、Skill 依赖与 Mode |
+| `workspace.view.sync` | 重建人和 Agent 共读的能力地图 |
+| `environment.sync` | 在两份 Environment 之间同步一个完整 Skill |
+| `host.project` | 把一个 Mode 投影到当前项目 |
+| `host.verify` | 检查宿主投影完整性和来源漂移 |
+| `deepseek.preset.export` | 从已知可运行基础导出 Mode Preset |
+| `deepseek.preset.verify` | 校验 DeepSeek Agent Preset |
+
+</details>
+
+## Developer Preview
+
+ASL Harness 仍处于快速演进阶段，可能出现破坏兼容性的变化。当前已经实现三宿主项目投影、DeepSeek Agent Preset、Skill 同步、结构校验、来源与依赖检查、内容指纹和轻量 Hook；Windows 与 Ubuntu CI 均已通过。
+
+动态数量、真实宿主验收证据与未完成项只维护在 [Architecture Views · Current Status](docs/asl-architecture-views.md#view-9--当前项目状态)，避免 README 成为第二份状态台账。
+
+## Contributing
+
+欢迎通过 [Issues](https://github.com/qihangzhang-272/asl-harness/issues) 提交宿主兼容问题、真实使用反馈和可复现的架构缺口。ASL 优先删除、合并和复用；新增层级必须证明它能降低技能管理、场景隔离或宿主接入的复杂度。
 
 ## License
 
