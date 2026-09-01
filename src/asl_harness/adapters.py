@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -22,6 +23,12 @@ HOST_LAYOUTS = {
     "claude-code": {"skillRoot": ".claude/skills", "instructionFile": "CLAUDE.md"},
     "deepseek-harness": {"skillRoot": ".dsh/skills", "instructionFile": "AGENTS.md"},
 }
+HOST_DISPLAY_NAMES = {
+    "codex-app": "Codex App",
+    "claude-code": "Claude Code",
+    "deepseek-harness": "DeepSeek Harness",
+}
+RUNTIME_REQUIREMENTS = re.compile(r"(?m)^##[ \t]+运行依赖[ \t]*$")
 
 
 def _layout(host_id: str) -> dict[str, str]:
@@ -190,7 +197,7 @@ Environment truth: `{workspace.root}`
 
 1. This Mode is a broad working environment and Skill subgraph, not a Workflow or fixed sequence.
 2. Choose complete projected Skills dynamically from the user's Goal and current context. Read a Skill's full package before substantive use and satisfy its own completion standards even when it is one part of a larger task.
-3. External Prompt, MCP, Agent, API, model, command, script, or remote Skill may be used only through a projected formal local Skill package. A user-directed source may be integrated directly after full review; Candidate and Trial are only for concrete uncertainty.
+3. External Prompt, MCP, Agent, API, model, command, script, or remote Skill may be used only through a projected formal local Skill package. Follow that Skill's runtime dependency notes and use this Host's native MCP, login, permission, and plugin mechanisms; ASL does not add a second connection runtime. A user-directed source may be integrated directly after full review; Candidate and Trial are only for concrete uncertainty.
 4. Keep one-off evidence, screenshots, drafts, and final Artifacts in the current Case or project; do not promote them into the Environment without an explicit maintenance task.
 5. Record durable feedback only when the user clearly evaluates, corrects, or states a preference. Do not infer it from silence, timing, clicks, or other ambiguous behavior.
 6. Do not infer durable Environment changes from ordinary work. When the user explicitly asks to add or change a long-term capability, use the Harness system maintenance path from the current Mode, change the smallest fitting truth, run deterministic validation, and leave a reviewable Git diff.
@@ -463,3 +470,46 @@ def verify_mode_projection(
     if manifest["environmentCommit"] != workspace.git_commit:
         warnings.append("Environment Git HEAD changed after projection; run host.project again.")
     return warnings
+
+
+def activation_report(
+    workspace: Workspace, project_root: str | Path, mode_id: str, *, host_id: str
+) -> dict:
+    project = Path(project_root).resolve()
+    layout = _layout(host_id)
+    runtime_skills = []
+    for skill_id in workspace.mode_skill_ids(mode_id):
+        text = (workspace.skills[skill_id].path / "SKILL.md").read_text(encoding="utf-8")
+        if RUNTIME_REQUIREMENTS.search(text):
+            runtime_skills.append(skill_id)
+
+    next_steps = [f"Open {project} in {HOST_DISPLAY_NAMES[host_id]}."]
+    if runtime_skills:
+        next_steps.append(
+            "Read runtime dependency notes in: " + ", ".join(runtime_skills) + "."
+        )
+    if host_id in {"codex-app", "claude-code"}:
+        hook_integration = "asl-environment-host-plugin"
+        hook_activation = "install-or-enable-in-host"
+        next_steps.append(
+            "Install or enable the asl-environment-host plugin for automatic checks; "
+            "the Mode itself is already usable without Hooks."
+        )
+    else:
+        hook_integration = "@deepseek-ai/dsh-hooks-codex"
+        hook_activation = "included-by-deepseek-preset-export"
+        next_steps.append(
+            "For automatic checks, export this Mode as a DeepSeek Agent Preset; "
+            "the preset includes the official Cordis Hook bridge."
+        )
+
+    return {
+        "hostId": host_id,
+        "openProject": str(project),
+        "instructionFile": layout["instructionFile"],
+        "skillRoot": layout["skillRoot"],
+        "runtimeRequirementSkills": runtime_skills,
+        "hookIntegration": hook_integration,
+        "hookActivation": hook_activation,
+        "nextSteps": next_steps,
+    }

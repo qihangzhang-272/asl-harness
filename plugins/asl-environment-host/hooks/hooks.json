@@ -1,0 +1,43 @@
+{
+  "description": "ASL Environment checks for projected projects.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "asl-harness-hook",
+            "timeout": 5,
+            "statusMessage": "Reading the active ASL Mode"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "apply_patch|Edit|Write|edit|write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "asl-harness-hook",
+            "timeout": 10,
+            "statusMessage": "Checking the ASL Environment"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "asl-harness-hook",
+            "timeout": 10,
+            "statusMessage": "Checking ASL projection drift"
+          }
+        ]
+      }
+    ]
+  }
+}

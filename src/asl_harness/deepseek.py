@@ -10,10 +10,13 @@ from uuid import uuid4
 import yaml
 
 from .workspace import HarnessError, Workspace, package_fingerprint
+from .hooks import hook_config
 
 
 PRESET_ID = re.compile(r"[a-z0-9][a-z0-9-]*\Z")
 PRESET_MARKER = ".asl-preset-projection.json"
+HOOK_CONFIG_FILE = "asl-hooks.json"
+HOOK_BRIDGE_PACKAGE = "@deepseek-ai/dsh-hooks-codex"
 TOP_LEVEL_ROW = re.compile(r"(?ms)^- id: (?P<id>[^\r\n]+)\r?\n.*?(?=^- id: |\Z)")
 GENERATED_DIRECTORIES = {
     ".git",
@@ -52,6 +55,23 @@ def _replace_top_level_row(text: str, row_id: str, replacement: str) -> str:
     return text[: match.start()] + replacement.rstrip() + "\n" + text[match.end() :]
 
 
+def _replace_or_append_plugin_row(text: str, package: str, replacement: str) -> str:
+    matches = [
+        match
+        for match in TOP_LEVEL_ROW.finditer(text)
+        if re.search(rf"(?m)^  name: ['\"]?{re.escape(package)}['\"]?[ \t]*$", match.group(0))
+    ]
+    if len(matches) > 1:
+        raise HarnessError(
+            "DEEPSEEK_BASE_INVALID",
+            f"base preset must contain at most one {package!r} row",
+        )
+    if not matches:
+        return text.rstrip() + "\n" + replacement.rstrip() + "\n"
+    match = matches[0]
+    return text[: match.start()] + replacement.rstrip() + "\n" + text[match.end() :]
+
+
 def _clean_generated_composition(text: str) -> str:
     lines = [line for line in text.splitlines() if not line.startswith("#")]
     cleaned = re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
@@ -70,7 +90,7 @@ Compact Profile:
 Mode boundary:
 {mode.document.strip()}
 
-Use this as a broad working environment, not a Workflow. Select complete local Skills dynamically from the user's Goal. Read every selected Skill package fully and satisfy its completion standards even inside a larger task. External Prompt, MCP, Agent, API, model, command, script, or remote Skill may be used only through a formal projected local Skill. A user-directed source may be integrated directly after full review; Candidate and Trial are only for concrete uncertainty. Keep one-off evidence and Artifacts in the current Case. Record durable feedback only when the user states it explicitly.
+Use this as a broad working environment, not a Workflow. Select complete local Skills dynamically from the user's Goal. Read every selected Skill package fully and satisfy its completion standards even inside a larger task. External Prompt, MCP, Agent, API, model, command, script, or remote Skill may be used only through a formal projected local Skill. Follow that Skill's runtime dependency notes and use DeepSeek Harness native Cordis, MCP, login, permission, and plugin mechanisms; ASL does not add a second connection runtime. A user-directed source may be integrated directly after full review; Candidate and Trial are only for concrete uncertainty. Keep one-off evidence and Artifacts in the current Case. Record durable feedback only when the user states it explicitly.
 
 Do not infer durable Environment changes from ordinary work. For an explicit user request, use the Harness system maintenance path from the current Mode, change the smallest fitting truth, run deterministic validation, and leave a reviewable Git diff. Mode selection never authorizes deletion, publication, payment, login, private-data access, messages, or external writes; those actions remain behind the current Host's native authorization boundary.
 
@@ -96,6 +116,15 @@ def _skill_filesystem_row(final_skill_root: Path) -> str:
     includeDefaultRoots: false
     customSkillDirs:
       - {rendered_path}
+"""
+
+
+def _hook_bridge_row(final_config: Path) -> str:
+    rendered_path = json.dumps(str(final_config), ensure_ascii=False)
+    return f"""- id: asl-hooks
+  name: '{HOOK_BRIDGE_PACKAGE}'
+  config:
+    configPath: {rendered_path}
 """
 
 
@@ -158,14 +187,33 @@ def verify_preset(
     try:
         composition = composition_path.read_text(encoding="utf-8")
         preset_path.read_text(encoding="utf-8")
+        installed_hook_config = json.loads(
+            (target / HOOK_CONFIG_FILE).read_text(encoding="utf-8")
+        )
     except (OSError, UnicodeDecodeError) as error:
         raise HarnessError(
             "DEEPSEEK_PRESET_INVALID", "DeepSeek preset metadata is incomplete"
         ) from error
+    except json.JSONDecodeError as error:
+        raise HarnessError(
+            "DEEPSEEK_PRESET_INVALID", "DeepSeek preset Hook config is invalid"
+        ) from error
     expected_skill_root = json.dumps(str(target / "skills"), ensure_ascii=False)
+    expected_hook_config = json.dumps(
+        str(target / HOOK_CONFIG_FILE), ensure_ascii=False
+    )
     if expected_skill_root not in composition:
         raise HarnessError(
             "DEEPSEEK_PRESET_INVALID", "DeepSeek preset Skill root is invalid"
+        )
+    if (
+        HOOK_BRIDGE_PACKAGE not in composition
+        or expected_hook_config not in composition
+        or installed_hook_config
+        != hook_config("asl-harness-hook --host-id deepseek-harness")
+    ):
+        raise HarnessError(
+            "DEEPSEEK_PRESET_INVALID", "DeepSeek preset Hook bridge is invalid"
         )
     for skill_id in skill_ids:
         skill_path = target / "skills" / skill_id
@@ -252,7 +300,22 @@ def export_preset(
             "skill-filesystem",
             _skill_filesystem_row(target / "skills"),
         )
+        composition = _replace_or_append_plugin_row(
+            composition,
+            HOOK_BRIDGE_PACKAGE,
+            _hook_bridge_row(target / HOOK_CONFIG_FILE),
+        )
         composition_path.write_text(composition, encoding="utf-8", newline="\n")
+        (temporary / HOOK_CONFIG_FILE).write_text(
+            json.dumps(
+                hook_config("asl-harness-hook --host-id deepseek-harness"),
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+            newline="\n",
+        )
 
         metadata = {
             "name": f"ASL · {mode_id}",
@@ -295,7 +358,11 @@ def export_preset(
             raise
         if backup.exists():
             shutil.rmtree(backup)
-        return marker | {"output": str(target)}
+        return marker | {
+            "output": str(target),
+            "hookIntegration": HOOK_BRIDGE_PACKAGE,
+            "hookActivation": "included-in-preset",
+        }
     finally:
         if temporary.exists():
             shutil.rmtree(temporary)

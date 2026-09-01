@@ -92,6 +92,8 @@ flowchart TB
 
 完整架构图同时包含发行关系、Harness 系统层、Environment 真源、四个运行循环、外部能力进入路径、演化影响半径、Case 和三宿主投影。图上的编号是阅读分区，不是执行顺序。
 
+它不是 CLI、Hook 或 CI/CD 三选一：Git 仓库保存个人 Environment；CLI 负责安装、校验、同步和投影；宿主原生 Hook 在合适的生命周期点调用同一组 CLI 检查；GitHub Actions 只在提交后守住仓库。日常任务仍由 Codex、Claude Code、DeepSeek Harness 或其他 Agent 自己执行。
+
 ### 四个循环怎样协作
 
 | 循环 | 进入条件 | 读取 | 保存 | 退出或转交 |
@@ -125,9 +127,34 @@ asl-harness host.project \
   --project /path/to/current-project \
   --mode creator-studio \
   --host-id codex-app
+
+asl-harness host.verify \
+  --workspace ./examples/personal-environment \
+  --project /path/to/current-project \
+  --mode creator-studio \
+  --host-id codex-app
 ```
 
-同一个 Environment 也可以投影到 Claude Code 或导出为 DeepSeek Harness Agent Preset。投影只是宿主视图，可以删除和重建；Environment 才是真源。
+第一条命令让当前项目进入这个 Environment 的一个 Mode：它解析 Mode 选择的 Skill，把完整 package 和简短 Mode 边界放到 Codex 原生目录。第二条命令检查投影是否完整；随后直接用 Codex 打开该项目即可。它不启动第二个 Agent，也不代理 Codex 的模型、Tool、MCP 或权限。
+
+命令返回的 `activation` 会明确列出：应该打开的项目、宿主规则文件、Skill 目录、当前 Mode 中含运行依赖说明的 Skill、Hook 状态和下一步。投影完成意味着 Mode 已可用；Hook 是自动检查增强，不是运行前置条件。
+
+同一个 Environment 也可以投影到 Claude Code 或导出为 DeepSeek Harness Agent Preset。投影只是宿主视图，可以删除和重建；Environment 才是真源。MCP 等运行依赖由 Skill 说明，目标 Host 用自己的原生配置满足。
+
+DeepSeek Agent Preset 从本机一份已经可以启动的 Preset 复制，不重新猜测 Tools / Plugins；导出时会同时写入 ASL 命令 Hook，并用 DeepSeek 官方 `@deepseek-ai/dsh-hooks-codex` 接到 Cordis 生命周期：
+
+```bash
+asl-harness deepseek.preset.export \
+  --workspace ./agent-skill-library \
+  --mode creator-studio \
+  --base-preset /path/to/known-good-preset \
+  --output /path/to/.dsh/.agent-presets/asl-creator-studio
+
+asl-harness deepseek.preset.verify \
+  --workspace ./agent-skill-library \
+  --mode creator-studio \
+  --output /path/to/.dsh/.agent-presets/asl-creator-studio
+```
 
 先检查一个 Skill 从来源 Environment 纳入目标 Environment 会发生什么：
 
@@ -204,7 +231,26 @@ Harness 只对可以确定的错误做硬阻断：
 | Claude Code | `.claude/skills/` | `CLAUDE.md` | 保留完整 Skill package，由 Claude Code 原生执行 |
 | DeepSeek Harness | `.dsh/skills/` | `AGENTS.md` 或 Agent Preset | 复用已知可运行 Preset 的 Tools / Plugins，只替换 Mode 的 Persona 与 Skill 面 |
 
-MCP、API、Agent、Plugin 和工具不成为 Mode 字段，也不能在任务中绕过 Skill 裸接入。需要这些运行能力的 Skill，可以在自己的 package 内保存 portable 或宿主专用 binding 资产；`environment.sync`、项目投影和 Preset 导出必须完整保留它们。真正把 binding 接到宿主配置上的行为只属于对应 Host Adapter，ASL 不发明一份号称通用、实际无法覆盖三家差异的运行时 schema。
+### Codex / Claude Code 的自动检查
+
+业务 Mode 只依赖 `host.project`，不要求安装 Plugin。希望会话自动读取 Mode 状态并在受管写入后检查漂移时，再安装 `asl-environment-host`：
+
+```bash
+python -m pip install -e /path/to/asl-harness
+
+# Codex：注册后在 Codex App 的 Plugins 中安装 ASL Environment Host
+codex plugin marketplace add /path/to/asl-harness
+
+# Claude Code
+claude plugin marketplace add /path/to/asl-harness
+claude plugin install asl-environment-host@asl-harness
+```
+
+Plugin 安装或更新后从新会话进入已经完成投影的项目。没有 `.asl/host-projections/<host-id>/current.json` 时 Hook 静默退出，不影响普通项目。
+
+Mode 仍只选择完整 Skill。MCP、命令、环境变量名称和确有必要的宿主插件，由责任 Skill 在 `SKILL.md` 的运行依赖中按需说明；没有依赖就不创建空章节或空目录。MCP 的安装、登录和权限继续使用宿主原生机制，宿主已经提供的 Tool、Agent、模型和沙箱不再被 ASL 包装一层。可复用的确定性脚本直接跟随 Skill 的 `scripts/` 被同步和投影。
+
+Hooks 也不成为新的运行层。Codex 与 Claude Code 的 Host Plugin 已携带同一份无状态 Hook Adapter；DeepSeek Preset 通过官方 `dsh-hooks-codex` bridge 复用同一命令 Hook，不再维护第二份 TypeScript 实现。没有 Hook 的 Host 仍能手动运行 CLI，GitHub Actions 继续复用同一校验命令。Hook 只处理结构、来源、Secret、投影漂移等机械边界，不评价内容质量，也不阻断普通业务 Goal。
 
 ### CLI 状态与导入导出记录
 
@@ -236,7 +282,7 @@ MCP、API、Agent、Plugin 和工具不成为 Mode 字段，也不能在任务�
 
 ## 当前状态
 
-动态项目状态、颜色、验证证据和未完成项只维护在 [ASL Architecture Views](docs/asl-architecture-views.md#view-9--当前状态与迁移图)。README 不复制这些易过期信息。
+动态项目状态、颜色、验证证据和未完成项只维护在 [ASL Architecture Views](docs/asl-architecture-views.md#view-9--当前项目状态)。README 不复制这些易过期信息。
 
 ## 开发
 

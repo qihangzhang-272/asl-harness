@@ -1,0 +1,15 @@
+{
+  "name": "asl-harness",
+  "description": "Use an ASL Environment as a Mode-native working environment in Claude Code.",
+  "owner": {
+    "name": "ASL Maintainers"
+  },
+  "plugins": [
+    {
+      "name": "asl-environment-host",
+      "source": "./plugins/asl-environment-host",
+      "version": "0.3.0",
+      "description": "Project one ASL Mode into the current Host and run deterministic Environment checks."
+    }
+  ]
+}

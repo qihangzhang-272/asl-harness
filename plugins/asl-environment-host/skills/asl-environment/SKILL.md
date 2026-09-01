@@ -17,7 +17,7 @@ description: 当用户要初始化、检查、维护或演化 ASL Environment，
 1. Mode 是会反复进入的广域工作状态，只选择完整 Skill 根，不保存顺序、用户、revision、plane 或维护权限。
 2. 用户明确选择时直接使用。只有一个合理 Mode 时当前 Host 可以判断；实质歧义会改变结果时只问一个简短问题。
 3. Codex App、Claude Code 与 DeepSeek 项目分别使用 `host.project --host-id codex-app|claude-code|deepseek-harness`，随后运行同宿主的 `host.verify`。
-4. DeepSeek 长期工作状态使用 `deepseek.preset.export` 从已知可启动的 base preset 复制并替换 persona 与 Skill 根，随后运行 `deepseek.preset.verify`。Mode 映射为 Agent Preset，不映射成整个 Profile。
+4. DeepSeek 长期工作状态使用 `deepseek.preset.export` 从已知可启动的 base preset 复制并替换 persona 与 Skill 根，同时写入官方 `dsh-hooks-codex` bridge 的 ASL Hook 配置，随后运行 `deepseek.preset.verify`。Mode 映射为 Agent Preset，不映射成整个 Profile。
 
 ## 接入或修改能力
 
@@ -28,7 +28,7 @@ description: 当用户要初始化、检查、维护或演化 ASL Environment，
 3. 用户明确指定来源且关系清楚时可以直接写入正式本地 Skill；来源、许可、重合、安全、Runtime 或采用方向仍不确定时才使用 Candidate 或 Trial。
 4. 外部 Prompt、MCP、Agent、API、Plugin、模型、命令、脚本或服务正式使用前必须成为或并入完整本地 Skill；不得在业务执行中裸调用。
 5. 每个正式 Skill 都必须保留含非空 `Origin` 的 `SOURCE.md`。复制或改编实现时继续记录许可、版本和本地改动；只借鉴需求或组织思路时不复制实现，按本地契约与许可清楚的公共基础能力独立重构。
-6. 需要运行接线时，把 portable 或宿主专用资产留在完整 Skill package 的 `bindings/` 内。Mode 不增加 MCP、API、Agent、Plugin 或权限字段；真正激活由对应 Host Adapter 或宿主原生命令完成。
+6. 需要外部运行能力时，在责任 Skill 的 `## 运行依赖` 中写清 MCP、命令、环境变量名称、必要插件、检查方式和缺失时的处理；可复用代码放在同一 Skill 的 `scripts/`。没有依赖就不创建空章节或目录。Mode 不增加 MCP、API、Agent、Plugin 或权限字段；真正激活由宿主原生机制完成。
 
 ## 受控修改
 
@@ -46,6 +46,7 @@ description: 当用户要初始化、检查、维护或演化 ASL Environment，
 - 不把所有 Skill、Case、反馈和历史一次性塞入上下文；按目标逐层读取。
 - 不覆盖项目原有 `AGENTS.md`、`CLAUDE.md` 或 Skill；Harness 只能维护自己的标记区域和能够证明属于它的投影。
 - Mode 选择不授权发布、付费、登录、消息、私人数据访问、外部写入或破坏性删除；这些继续使用当前 Host 的原生确认边界。
+- 宿主原生 Hook 只调用 `state`、`workspace.validate` 或 `host.verify` 等确定性命令。它不搜索能力、不评价内容、不记录含义不明确的行为，也不能因为缺少 Hook 或可选 MCP 阻断普通 Goal。
 
 ## 完成标准
 
@@ -56,4 +57,4 @@ description: 当用户要初始化、检查、维护或演化 ASL Environment，
 - 需要宿主接入时，原生目录、规则块和投影清单已经生成并通过 `host.verify`；
 - 导入/导出记录包含 Git HEAD 与轻量内容指纹，受管说明或复制内容被改动时校验会失败；
 - 没有把业务执行责任转移给 Harness，也没有覆盖用户自有文件；
-- 未完成或仅结构验证的 DeepSeek 能力被如实说明。
+- DeepSeek Preset 的结构、Skill、Hook bridge 与来源指纹已经验证；若尚未做真实长会话测试，要如实说明宿主运行验收仍待完成。

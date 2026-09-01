@@ -17,6 +17,7 @@ test = ["pytest>=9.0"]
 
 [project.scripts]
 asl-harness = "asl_harness.commands:main"
+asl-harness-hook = "asl_harness.hooks:main"
 
 [project.urls]
 Homepage = "https://github.com/qihangzhang-272/asl-harness"

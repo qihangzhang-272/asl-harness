@@ -7,7 +7,12 @@ from collections.abc import Sequence
 
 import yaml
 
-from .adapters import HOST_LAYOUTS, project_mode, verify_mode_projection
+from .adapters import (
+    HOST_LAYOUTS,
+    activation_report,
+    project_mode,
+    verify_mode_projection,
+)
 from .deepseek import export_preset, verify_preset
 from .sync import sync_environment
 from .workspace import HarnessError, Workspace
@@ -91,7 +96,13 @@ def _execute(args: argparse.Namespace) -> dict:
         projection = project_mode(
             workspace, args.project, args.mode, host_id=args.host_id
         )
-        return {"ok": True, "projection": projection}
+        return {
+            "ok": True,
+            "projection": projection,
+            "activation": activation_report(
+                workspace, args.project, args.mode, host_id=args.host_id
+            ),
+        }
     if args.command == "host.verify":
         warnings = verify_mode_projection(
             workspace, args.project, args.mode, host_id=args.host_id

@@ -2,7 +2,7 @@
 
 本文件用多种标准架构图解释 ASL。每张图只回答一种问题，避免把系统上下文、内部组件、运行时序、生命周期和部署关系混在同一张图里。
 
-> 状态快照：2026-08-31。架构边界来自当前 v0.3 协议；实现状态以本地 Harness 的 37 项测试、两份真实 Environment 校验，以及现有三宿主投影与 DeepSeek Mode Preset 的本次复核为依据。外部仓库逐项拆分只保留映射，不计入架构完成度。
+> 状态快照：2026-08-31。架构边界来自当前 v0.3 协议；实现状态以本地 Harness 的 41 项测试、两份真实 Environment 校验，以及现有三宿主投影与 DeepSeek Mode Preset 的本次复核为依据。外部仓库逐项拆分只保留映射，不计入架构完成度。
 
 ## 颜色约定
 
@@ -13,7 +13,7 @@
 - **灰色**：可删除重建的宿主生成面，或已经退出活动面的冻结归档；
 - **紫色**：外部来源，不是本地运行真源。
 
-颜色表达节点的当前主状态，不表达执行顺序。可重建投影即使已经验证仍保持灰色，并在节点文字中写明“已验证”；外部来源始终保持紫色。动态项目状态、验证数字和未完成项只在 [View 9](#view-9--当前状态与迁移图) 的受管区域维护，README 和其他协议文档只链接这里。
+颜色表达节点的当前主状态，不表达执行顺序。可重建投影即使已经验证仍保持灰色，并在节点文字中写明“已验证”；外部来源始终保持紫色。动态项目状态、验证数字和未完成项只在 [View 9](#view-9--当前项目状态) 的受管区域维护，README 和其他协议文档只链接这里。
 
 ## 怎么读这些图
 
@@ -23,6 +23,7 @@
 | View 1 | 系统上下文图 | 用户、Host、Harness、Environment、Case 和外部来源分别站在哪里 |
 | View 2 | 组件图 | Harness System 与 Personal Environment 内部各自包含什么 |
 | View 2B | Runtime 边界与同步图 | ASL 不复制哪些 Host 能力，以及两份 Environment 怎样显式同步完整 Skill |
+| View 2C | Hook 接线图 | 宿主在什么时机调用哪些现有检查，什么时候提醒或阻断 |
 | View 3 | 运行时序图 | 一个普通 Goal 从进入到交付怎样发生 |
 | View 4 | 变更时序图 | Skill / Mode 的增删改查怎样与普通业务内容隔离 |
 | View 5 | 生命周期状态图 | 外部能力从发现到采用、合并、依赖、变体、适配或归档怎样流转 |
@@ -96,7 +97,7 @@ flowchart TB
             PROFILE["PROFILE.md<br/>跨 Mode 精简长期边界"]
             MODES[("modes/&lt;mode-id&gt;<br/>4 个业务 Mode · 已校验<br/>显式 Skill 根 · 不保存顺序")]
             SKILLS[("skills/&lt;skill-id&gt;<br/>正式业务 Skill<br/>每项只保存一份")]
-            BINDINGS["Skill 内可选 Host Bindings<br/>portable / Codex / Claude / DeepSeek<br/>不是新的业务单位"]
+            RUNTIME_NEEDS["Skill 内运行依赖说明<br/>MCP / command / env name / optional plugin<br/>不新增独立连接层"]
             LEARNING["培养与追溯区<br/>Candidate / Trial / Feedback / Archive"]
             VIEW["WORKSPACE.md<br/>确定性派生的人机共读总体地图"]
             GIT["Git<br/>diff 审计 · 历史 · 恢复"]
@@ -112,7 +113,7 @@ flowchart TB
             ACTIVE --> LEARNING
             MODES -->|选择能力根| SKILLS
             SKILLS -->|requires 硬依赖| SKILLS
-            SKILLS -->|需要运行能力时携带| BINDINGS
+            SKILLS -->|确有外部依赖时声明| RUNTIME_NEEDS
             PROFILE -.摘要.-> VIEW
             MODES -.Mode 地图.-> VIEW
             SKILLS -.能力地图.-> VIEW
@@ -130,6 +131,7 @@ flowchart TB
     subgraph RUNTIME["③ 当前 Host 与四个信号循环 · 不是线性 Workflow"]
         direction LR
         HOST["当前 Host · 唯一执行者<br/>原生模型、Tools / MCP / Plugins 与授权<br/>理解意图 · 动态调用完整 Skill · 交付"]
+        HOOK_BRIDGE["Host-native Hooks · 接线已实现<br/>Codex / Claude Plugin + DeepSeek 官方 Cordis bridge<br/>真实宿主激活待验收"]
         A["A · Goal / Case<br/>Mode → 动态 Skill → Artifact<br/>Benchmark → 返工或交付"]
         B["B · Capability Integration<br/>用户明确指定：完整读取后直接本地化<br/>其他不确定来源：可选 Candidate / Trial"]
         C["C · Mode Evolution<br/>长期工作状态 → Skill 子图<br/>上下文 / 权限 / 产物表面 → 真实验证"]
@@ -137,6 +139,7 @@ flowchart TB
         CHANGE["长期改变申请<br/>Skill / Mode / Environment 最小 diff"]
 
         HOST -->|普通 Goal 默认进入| A
+        HOOK_BRIDGE -.确定性提醒与门禁.-> D
         B --> CHANGE
         C --> CHANGE
         D --> CHANGE
@@ -159,10 +162,10 @@ flowchart TB
 
     subgraph PROJECTIONS["⑤ Host Projections · 可删除、可重建"]
         direction LR
-        CODEX["Codex App · v2 投影机制已实现<br/>完整 Skill + bindings + AGENTS.md<br/>当前生成快照待重建"]
-        CLAUDE["Claude Code · v2 投影机制已实现<br/>完整 Skill + bindings + CLAUDE.md<br/>当前生成快照待重建"]
-        DSH_PROJECT["DeepSeek Project · v2 投影机制已实现<br/>完整 Skill + bindings + AGENTS.md<br/>当前生成快照待重建"]
-        DSH_PRESET["DeepSeek Agent Preset v2<br/>完整性指纹与原子导出已实现<br/>当前快照待重建 / 长会话待验收"]
+        CODEX["Codex App · v2 投影机制已实现<br/>完整 Skill + AGENTS.md<br/>当前生成快照待重建"]
+        CLAUDE["Claude Code · v2 投影机制已实现<br/>完整 Skill + CLAUDE.md<br/>当前生成快照待重建"]
+        DSH_PROJECT["DeepSeek Project · v2 投影机制已实现<br/>完整 Skill + AGENTS.md<br/>当前生成快照待重建"]
+        DSH_PRESET["DeepSeek Agent Preset v2<br/>完整性指纹、原子导出、官方 Hook bridge 已实现<br/>当前快照待重建 / 长会话待验收"]
         DSH_SHARED["DeepSeek Profile / Bundle<br/>模型 / 存储 / 沙箱 / 凭据<br/>不等于 ASL Mode"]
         DSH_SHARED --> DSH_PRESET
     end
@@ -203,8 +206,8 @@ flowchart TB
     classDef source fill:#f5f3ff,stroke:#7c3aed,color:#4c1d95;
 
     class USER,HOST,BLANK,ENVROOT,MODES,RADIUS,CASE_ONLY,SKILL_CHANGE,MODE_CHANGE,ENV_CHANGE locked;
-    class FILLED,CORE,STEWARD,ACCESS,GUARDS,MUTATION,SYNC,PERSONAL,LIBRARY,ACTIVE,PROFILE,SKILLS,BINDINGS,LEARNING,VIEW,GIT,A,B,C,D,CHANGE done;
-    class DSH_PRESET optimize;
+    class FILLED,CORE,STEWARD,ACCESS,GUARDS,MUTATION,SYNC,PERSONAL,LIBRARY,ACTIVE,PROFILE,SKILLS,RUNTIME_NEEDS,LEARNING,VIEW,GIT,A,B,C,D,CHANGE done;
+    class DSH_PRESET,HOOK_BRIDGE optimize;
     class LEGACY,ARCHIVED generated;
     class CODEX,CLAUDE,DSH_PROJECT,DSH_SHARED generated;
     class SOURCES source;
@@ -219,7 +222,7 @@ flowchart TB
 5. 外部能力都必须完整本地化并保留来源；用户明确指定引入时直接纳入，Candidate、Trial 和效果 Case 不是必经关卡；
 6. 用户明确反馈先判断 Case、Skill、Mode、Environment 四级影响半径；
 7. 两份 Environment 之间的能力采用已由 `environment.sync` 收口为显式单 Skill 操作，不做后台订阅、共享目录或静默覆盖；
-8. 三个宿主只得到当前 Mode 的可重建能力投影；Skill package 内的 MCP、API、Agent、Plugin 或工具 binding 被完整保留，激活方式由各 Host Adapter 决定；
+8. 三个宿主只得到当前 Mode 的可重建能力投影；MCP、命令、环境变量名称和必要插件只在责任 Skill 内声明，激活仍由宿主原生机制处理；
 9. 安装空白 Harness 或 clone 一份 Environment 即完成初始化，当前不再增加重复的 `init` 命令。
 
 ---
@@ -340,7 +343,8 @@ flowchart LR
         STATE["state · 已实现<br/>紧凑读视图，不建状态库"]
         SYNC["environment.sync · 已实现<br/>原子导入 + SHA-256 记录"]
         PROJECT["atomic project / verify / preset export"]
-        PORT["Host Binding Seam<br/>完整 Skill package 内的可选资产"]
+        NEEDS["Runtime requirements<br/>从 Skill 说明派生 MCP / command / env 提示"]
+        HOOKS["Host Hook bridge · 已实现<br/>Codex / Claude Plugin + DeepSeek Preset<br/>不自建 Runtime"]
         STEWARD["asl-environment<br/>Host-native 管理入口"]
     end
 
@@ -358,8 +362,10 @@ flowchart LR
     MODE --> VALIDATE
     STEWARD --> SYNC
     PROJECT -->|native Skill 目录 / 指令面 / Preset| HOST
-    PORT --> PROJECT
-    TARGET --> PORT
+    TARGET --> NEEDS
+    NEEDS -->|宿主原生检查与配置| HOST
+    HOOKS -->|在真实生命周期点调用现有 CLI| VALIDATE
+    HOST --> HOOKS
     HOST -->|唯一执行业务 Goal| TARGET
 
     classDef native fill:#f5f3ff,stroke:#7c3aed,color:#4c1d95;
@@ -367,11 +373,23 @@ flowchart LR
     classDef optimize fill:#ffedd5,stroke:#ea580c,color:#7c2d12;
     classDef truth fill:#dbeafe,stroke:#2563eb,color:#1e3a8a,stroke-width:2px;
     class LOOP,SESSION,TOOLS,AUTH native;
-    class VALIDATE,STATE,SYNC,PROJECT,PORT,STEWARD done;
+    class VALIDATE,STATE,SYNC,PROJECT,NEEDS,STEWARD,HOOKS done;
     class SOURCE,TARGET,MODE truth;
 ```
 
 “更原生”不是让 ASL 拥有自己的 Agent Loop、会话数据库、工具执行器、权限系统或插件 Runtime，而是让 ASL 通过每个 Host 已经认可的 Skill、指令文件、项目目录和 Preset 接口工作。办公和研究场景里最常见的是 Skill、Tools、MCP、搜索和插件；模型、沙箱、凭据与授权继续使用宿主默认能力。ASL 只补宿主没有统一解决的个人能力环境、Mode、来源、本地采用、确定性校验和投影。
+
+这套工作环境不是由一种技术单独完成，而是五个很薄的部分协作：
+
+| 部分 | 在 ASL 中负责什么 | 不负责什么 |
+| --- | --- | --- |
+| Git Environment | 保存 Profile、Skills、Modes、来源和明确反馈，是可复制的个人能力真源 | 不运行 Agent |
+| CLI | 安装、检查、同步、选择 Mode、生成或验证宿主视图 | 不理解业务、不调度工作流 |
+| Host Adapter | 把同一 Mode 翻译成目标 Agent 能原生发现的 Skill、规则和 Preset | 不复制宿主已有 Tool、Agent、权限和模型 |
+| Hook | 在会话开始、受管内容修改后或提交前调用现有 CLI 检查 | 不监控所有行为，不靠模型做 Review |
+| GitHub Actions / CI | clone 或提交后运行同一组校验，保证仓库版本可用 | 不进入本地会话，不替代 Hook 或 Host |
+
+因此，对用户来说的目标入口可以收敛为“把一个 Environment 的一个 Mode 接到当前 Agent 项目”。底层主要由 CLI 完成；原生 Hook 让检查自动发生，CI 只守住 Git 仓库。三者不是替代关系。
 
 当前只增加了一个深接口，没有增加后台服务：
 
@@ -389,7 +407,7 @@ asl-harness environment.sync \
 | 同步单位 | 一次同步一个完整 Skill package；不拆文件、不把 Prompt、脚本或 Runtime 裸同步 |
 | Mode | `--mode` 可选；提供时只修改目标 Environment 的一个明确 Mode，其他 Mode 不变 |
 | 相同内容 | 返回 no-op，不制造提交、投影或新版本号 |
-| 目标不存在 | 完整复制 Skill，并保留 `SOURCE.md`、许可、scripts、references、assets、可选 bindings 与测试 |
+| 目标不存在 | 完整复制 Skill，并保留 `SOURCE.md`、运行依赖说明、scripts、references、assets 与测试 |
 | 目标已修改 | 默认拒绝静默覆盖并展示差异；只有用户显式选择替换时才更新 |
 | 检查模式 | `--check` 只报告将新增、更新、冲突或保持不变的内容，不写文件 |
 | 完成后 | 校验目标 Environment、刷新人机共读视图并输出来源/目标 HEAD、package SHA-256、受影响路径与 Git 状态；不自动 commit、push 或刷新所有宿主投影 |
@@ -397,11 +415,161 @@ asl-harness environment.sync \
 
 同步结束后，两份 Environment 仍是两个独立 Git 真源。再次运行命令可以显式吸收上游更新，但不会形成实时链接、共享 Skill 目录、后台 watcher 或自动升级关系。宿主投影仍由现有 `host.project` / `deepseek.preset.export` 单独负责。
 
-### Host Binding Seam
+### Skill 运行依赖与跨 Agent 接入
 
-兼容接口留在完整 Skill package 内，而不是扩张 `mode.yaml`。需要 MCP、API、Agent、Plugin、模型命令或其他工具的 Skill，可以携带 portable 说明或按 `codex-app`、`claude-code`、`deepseek-harness` 区分的宿主资产。Harness 当前保证三件事：导入不丢文件；投影/导出不丢文件；完整性指纹能发现复制内容或受管说明被改动。宿主配置格式不同，因此真正的安装、登录、权限和激活由对应 Adapter 或宿主原生命令完成，不能用一个虚假的“通用运行时 YAML”冒充兼容。
+兼容信息留在责任 Skill 的正文和已有 package 文件内，不再保留独立连接层或空目录。跨 Agent 复用以三种东西为主：完整 Skill、Skill 自带的脚本、标准 MCP 服务。Skill 在确有需要时记录 MCP 名称、用途、检查方式、环境变量名称、宿主差异和缺失时的处理；Mode 只选择 Skill，由 Harness 派生当前 Mode 的运行需求。
 
-这条 seam 不创造新的业务对象：Mode 仍只选择 Skill，Skill 仍是唯一能力单位。未来某个 Host 的绑定方式被真实 Case 证明稳定时，只增强那个 Adapter；不会把插件、MCP 或 API 复制成全局 Registry。
+Codex、Claude Code、DeepSeek Harness、OpenCode、Trae、ZCode 或其他 Agent 已经提供的模型、Tool、Agent、Plugin、沙箱和权限继续由各自管理。Harness 不复制它们，也不建立通用 Tool Registry。某个宿主能够原生接入 Skill 或 MCP 时，Adapter 只负责把同一份本地真源翻译到它认可的位置；不支持时给出可执行提示，不能伪装已经激活。GitHub Actions 不是交互式 Host，只复用 CLI 做仓库校验。
+
+### 最小 Hook 接线
+
+Hook 是宿主调用 Harness 检查的时机，不是新的工作流。会话开始或恢复时调用紧凑状态与投影检查；受管 Skill、Mode、Profile 或投影被明确写入后调用 `workspace.validate` / `host.verify`；停止前只提醒，不制造死锁。Codex 与 Claude Code 通过同一 Host Plugin 安装；DeepSeek Preset 自动装入官方 `@deepseek-ai/dsh-hooks-codex` Cordis bridge 并指向同一份命令 Hook。没有 Hook 的宿主仍然可以手动运行 CLI。
+
+Hook 只阻断本次修改造成的确定性结构错误。普通业务任务、缺失的可选 MCP、过期视图或无法判断的语义问题只提醒，不得形成死锁。删除、发布、付费、登录、外部写入和权限继续由宿主原生门禁处理。
+
+---
+
+## View 2C · Host-native Hook 接线架构
+
+回答：Hook 具体装在哪里、怎样找到当前 Environment / Mode、调用什么命令，以及结果怎样回到当前 Agent？
+
+```mermaid
+flowchart LR
+    subgraph NATIVE["Host 原生生命周期 · ASL 不复制"]
+        START["SessionStart<br/>启动 / 恢复 / 压缩后"]
+        WRITE["PostToolUse<br/>文件写入工具完成后"]
+        STOP["Stop / turn-stopping<br/>本轮准备结束"]
+        COMMIT["Git pre-commit / CI<br/>准备提交仓库"]
+    end
+
+    subgraph PACKAGE["ASL Host Package · 每个宿主安装一次"]
+        CONFIG["Hook 配置 · 已实现<br/>Codex / Claude Plugin hooks.json<br/>DeepSeek Preset 官方 bridge"]
+        ADAPTER["薄 Hook Adapter · 已实现<br/>解析宿主事件 · 不保存状态"]
+    end
+
+    subgraph PROJECT["当前项目 · host.project 已生成"]
+        MANIFEST[".asl/host-projections/&lt;host-id&gt;/current.json<br/>environment · mode · hostId"]
+        PRESET["DeepSeek Preset marker<br/>.asl-preset-projection.json"]
+    end
+
+    subgraph CLI["既有 Harness CLI · 唯一检查实现"]
+        STATE["state"]
+        VALIDATE["workspace.validate"]
+        VERIFY["host.verify / deepseek.preset.verify"]
+    end
+
+    subgraph RESULT["统一结果语义"]
+        PASS["PASS<br/>静默继续"]
+        WARN["WARN<br/>补充紧凑上下文，不阻断 Goal"]
+        BLOCK["BLOCK<br/>仅拒绝本次受管写入并要求修复"]
+    end
+
+    START --> CONFIG
+    WRITE --> CONFIG
+    STOP --> CONFIG
+    CONFIG --> ADAPTER
+    MANIFEST --> ADAPTER
+    PRESET -.仅 DeepSeek Preset.-> ADAPTER
+    ADAPTER --> STATE
+    ADAPTER --> VALIDATE
+    ADAPTER --> VERIFY
+    COMMIT --> VALIDATE
+    COMMIT --> VERIFY
+    STATE --> WARN
+    VALIDATE --> PASS
+    VALIDATE --> WARN
+    VALIDATE --> BLOCK
+    VERIFY --> PASS
+    VERIFY --> WARN
+    VERIFY --> BLOCK
+
+    classDef native fill:#f5f3ff,stroke:#7c3aed,color:#4c1d95;
+    classDef done fill:#dcfce7,stroke:#16a34a,color:#14532d;
+    classDef optimize fill:#ffedd5,stroke:#ea580c,color:#7c2d12;
+    classDef generated fill:#f3f4f6,stroke:#6b7280,color:#1f2937,stroke-dasharray:4 3;
+    classDef blocked fill:#fee2e2,stroke:#dc2626,color:#7f1d1d;
+    class START,WRITE,STOP,COMMIT native;
+    class STATE,VALIDATE,VERIFY done;
+    class CONFIG,ADAPTER done;
+    class MANIFEST,PRESET generated;
+    class PASS done;
+    class WARN optimize;
+    class BLOCK blocked;
+```
+
+### 安装与激活边界
+
+Hook 不属于业务 Mode，也不复制到每个 Skill。`asl-environment-host` 作为 Harness 的宿主包安装一次：Codex 和 Claude Code 由包内原生 Hook 配置调用同一薄 Adapter。DeepSeek Harness 不再重复实现一份 TypeScript Adapter；`deepseek.preset.export` 把同一命令 Hook 写进 Mode Preset，并用官方 `@deepseek-ai/dsh-hooks-codex` 将它接到 Cordis 生命周期点。Adapter 自身没有数据库、队列、事件日志或 Agent Loop。
+
+进入项目后，Adapter 只做一次确定性定位：从宿主提供的当前工作目录向上寻找与本宿主匹配的 `.asl/host-projections/<host-id>/current.json`；DeepSeek Agent Preset 额外允许读取已有 `.asl-preset-projection.json`。标记不存在时说明当前项目没有进入 ASL Environment，Hook 必须静默返回，不扫描用户电脑，也不猜 Mode。标记存在时直接复用其中的 `environment`、`mode` 和 `hostId` 调用既有 CLI，不新增 Hook 专用配置字段。
+
+### 事件到检查的固定映射
+
+| 原生时机 | Adapter 先判断什么 | 调用的既有命令 | 对当前 Agent 的结果 |
+| --- | --- | --- | --- |
+| `SessionStart`：启动、恢复、压缩后 | 当前目录是否存在本宿主受管投影 | `state`，随后 `host.verify`；DeepSeek Preset 使用 `deepseek.preset.verify` | 只注入 Mode、Skill 数量和漂移提醒；即使检查失败也不阻断用户提出的普通 Goal |
+| `PostToolUse`：`apply_patch`、`Edit`、`Write` 等明确文件写入完成后 | 宿主事件中的目标路径是否落在受管投影，或 Environment 的 `profile/`、`modes/`、`skills/`、培养区 | 修改 Environment 时运行 `workspace.validate`；修改投影时运行对应 `verify` | 本次写入造成确定性非法结构或破坏受管投影时返回 BLOCK，要求当前 Agent 修复；不相关写入静默通过 |
+| `Stop` / `turn-stopping`：本轮准备结束 | 本轮是否运行过无法可靠解析副作用的 Shell，或受管 Git 工作树是否变化 | 最多运行一次 `workspace.validate` + 对应 `verify` | 只提醒未修复问题，不循环阻止 Agent 停止；避免 Stop Hook 死锁 |
+| `pre-commit` / CI | 提交是否包含 Environment 或受管投影变化 | `workspace.validate` + 对应 `verify` | 结构错误拒绝提交；普通业务内容质量、可选 MCP 和用户语义不在检查范围 |
+
+不接 `UserPromptSubmit`、`PreToolUse`、`SubagentStart`、`SubagentStop`：意图识别和任务路由属于当前 Host；删除、Shell、发布与登录的授权属于宿主权限；子 Agent 继承项目表面即可。除非出现已经被真实任务证明无法覆盖的故障，否则不增加更多 Hook 点。
+
+### 单次事件处理时序
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant H as Host 原生 Hook
+    participant A as 薄 Adapter
+    participant M as Projection Manifest
+    participant C as Harness CLI
+    participant G as 当前 Agent
+
+    H->>A: 原生事件 + cwd + tool/path 信息
+    A->>M: 查找本宿主 current.json / Preset marker
+    alt 没有 ASL 标记
+        A-->>H: PASS · 静默退出
+    else 找到 ASL 标记
+        M-->>A: environment + mode + hostId
+        A->>A: 判断是否与本事件相关
+        alt 不涉及受管内容
+            A-->>H: PASS · 不启动 CLI
+        else 需要检查
+            A->>C: 调用 state / validate / verify
+            C-->>A: JSON + exit code
+            alt 正常
+                A-->>H: PASS
+            else 提醒或无法确定
+                A-->>G: WARN · 简短问题与建议命令
+            else 本次受管写入造成确定性错误
+                A-->>G: BLOCK · 精确路径、错误码、修复动作
+            end
+        end
+    end
+```
+
+### 三宿主实现映射
+
+| Host | 原生安装面 | ASL 使用的事件 | 实现约束 |
+| --- | --- | --- | --- |
+| Codex App / CLI | `asl-environment-host` Plugin 的 `hooks/hooks.json` | `SessionStart`、写入工具的 `PostToolUse`、`Stop` | 使用 Codex 原生信任与 matcher；Hook 命令只调用薄 Adapter，不写 `config.toml`，不接管 PermissionRequest |
+| Claude Code | 同一宿主包的 Claude Plugin Hook | `SessionStart`、写入工具的 `PostToolUse`、`Stop` | 使用 Claude 原生项目目录与退出码语义；不安装全局后台进程，不改用户已有 Hook |
+| DeepSeek Harness | Mode Preset 内的 `@deepseek-ai/dsh-hooks-codex` | `agent/session-start`、`tools/post-execute`、`agent/turn-stopping` | `deepseek.preset.export` 写入专用 `asl-hooks.json`，命令显式指定 `deepseek-harness`；每个 Preset 在加载时绑定自己的配置，不依赖尚未实现的跨 Session 自动发现 |
+| 无 Hook 的 Agent | 无 | 无 | 用户或 CI 手动运行同一 CLI；Adapter 不伪装自动保护已经启用 |
+
+Codex 与 Claude Code 的 Hook 包装只负责把原生 stdin / 环境变量转换为 Adapter 参数；DeepSeek 的官方 bridge 把 Cordis typed event 转成同一套 Codex 命令 Hook 载荷。三者共享“定位投影 → 选择既有检查 → 映射 PASS / WARN / BLOCK”这条逻辑，没有新造跨宿主 Hook 语言。
+
+### 门禁与失败语义
+
+| 情况 | 结果 | 理由 |
+| --- | --- | --- |
+| 没有 ASL 标记、CLI 暂时不可用、可选 MCP 未登录 | PASS 或 WARN | 不能因为辅助 Harness 让普通工作无法开始 |
+| Environment 已改变但投影尚未刷新、视图过期 | WARN | 给出 `host.project` 或视图刷新命令，由当前 Agent 或用户决定何时执行 |
+| 本次编辑制造非法 Mode 引用、路径逃逸、Secret、损坏受管投影 | BLOCK 当前写入结果 | 错误确定、与本次操作直接相关，而且继续会扩大破坏 |
+| 内容质量不好、是否创建 Mode、Skill 是否值得采用 | 不判定 | 属于业务与用户判断，不是机械 Hook 能证明的事实 |
+| Hook 自身超时或异常 | WARN 后放行 | Hook 是稳定性增强，不是新的单点故障 |
+
+Hook 不单独保存运行记录。Codex、Claude Code、Cordis 使用自己的 Hook / Session 日志；ASL 仍以现有 CLI JSON、Projection Manifest 和 Git diff 作为可追溯证据。实现依据以宿主原生接口为准：[Codex Hooks](https://developers.openai.com/codex/hooks)、[Claude Code Hooks](https://code.claude.com/docs/en/hooks)、[DeepSeek Harness Hook Bridge](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/hooks/hooks-claude-code/README.md) 与 [Cordis Plugin Primer](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/cordis-primer.md)。
 
 ### 状态与操作记录
 
@@ -568,7 +736,7 @@ flowchart TB
     ONE["单一责任<br/>一个完整本地 Skill"]
     UNIFIED["复杂 Runtime，但对 Agent 是统一责任<br/>一个 Owner Skill<br/>内部保留路由与多个后端"]
     MULTI["多个可独立调用、完成标准不同的责任<br/>拆成多个正式 Skill<br/>共同来源，但不复制方法正文"]
-    ADAPTER["业务语义相同，仅宿主接线不同<br/>一个 Skill + bindings/"]
+    ADAPTER["业务语义相同，仅宿主接线不同<br/>一个 Skill + 运行依赖说明"]
     ABSORB["与现有 Skill 重合<br/>吸收 / 合并 / requires / 明确变体"]
 
     RUNTIME["Runtime Installation<br/>按宿主只安装一份<br/>版本和命令写入来源/使用说明"]
@@ -925,22 +1093,22 @@ Mode 的判断单位是“长期工作状态”，不是主题名、项目名或
 
 ```mermaid
 flowchart LR
-    ENV[("Selected local Environment<br/>Personal 或 Agent Skill Library<br/>Profile + Modes + Formal Skills<br/>可选 Host binding 资产")]
+    ENV[("Selected local Environment<br/>Personal 或 Agent Skill Library<br/>Profile + Modes + Formal Skills<br/>Skill 内按需记录运行依赖")]
     RESOLVE["Harness Core<br/>validate + resolve Mode Skill closure"]
     MANIFEST["Managed Manifest v2<br/>操作类型 + Git HEAD + 内容指纹<br/>受管说明 + 原子回滚"]
 
     subgraph CODEX["Codex App"]
-        CA[".agents/skills/<skill><br/>完整 package + binding 资产"]
+        CA[".agents/skills/<skill><br/>完整 Skill package"]
         CI["AGENTS.md managed block"]
     end
 
     subgraph CLAUDE["Claude Code"]
-        CS[".claude/skills/<skill><br/>完整 package + binding 资产"]
+        CS[".claude/skills/<skill><br/>完整 Skill package"]
         CC["CLAUDE.md managed block"]
     end
 
     subgraph DSH["DeepSeek Harness"]
-        DP["Project projection<br/>完整 package + bindings<br/>.dsh/skills + AGENTS.md"]
+        DP["Project projection<br/>完整 Skill package<br/>.dsh/skills + AGENTS.md"]
         BASE["Known-good Agent Preset<br/>Tools + Plugins"]
         PRESET["Mode Agent Preset<br/>Persona + Mode Skill closure"]
         SHARED["Profile / Bundle<br/>模型、存储、沙箱、凭据等宿主设施"]
@@ -966,77 +1134,38 @@ flowchart LR
 
 Codex 与 Claude 使用项目原生 Skill 目录和规则文件。DeepSeek 额外区分宿主级 Profile / Bundle 与会话级 Agent Preset；ASL Mode 对应 Agent Preset，不对应 Profile。三个 Host 都继续拥有自己的 Agent Loop、会话、工具、模型和授权，ASL 不复制这些 Runtime 能力，只生成它们能够原生发现的环境表面。投影切换会先在同盘临时区完成，再替换旧受管表面；失败时恢复旧投影。复制型投影与 Preset 逐 Skill 校验 SHA-256，链接型投影继续用 Environment 总指纹检查漂移。
 
+MCP 的可移植性高于宿主 Plugin，因此当前架构优先让 Skill 声明 MCP 运行需要，再由 Host 使用自己的 MCP 配置和登录方式满足它。Hook 也采用相同原则：Harness 提供同一组 CLI 校验，Adapter 只负责接到 Codex、Claude 或 Cordis 的真实生命周期事件。未来接入其他 Agent 时复用这份 Adapter 契约，不修改 Environment 数据模型。
+
+| 接入面 | Codex App / CLI | Claude Code | DeepSeek Harness | 其他 Agent / CI |
+| --- | --- | --- | --- | --- |
+| Skill | `.agents/skills/` + `AGENTS.md`，已实现 | `.claude/skills/` + `CLAUDE.md`，已实现 | `.dsh/skills/` 或 Agent Preset，已实现 | 有原生 Skill 目录时增加薄 Adapter |
+| MCP | 使用 Codex 原生 MCP 配置、安装与登录 | 使用 Claude 原生 MCP 配置、安装与登录 | 使用 Cordis Profile / MCP client plugin | 支持 MCP 的 Host 复用同一服务；不支持则明确提示 |
+| Hook | Host Plugin 已携带 `hooks.json` 与无状态 Adapter；本机 Marketplace 已注册，App 内安装后生效 | 同一 Host Plugin 的 `SessionStart` 已在真实 Claude Code 新会话触发 | 四个本机 Mode Preset 已装入官方 `dsh-hooks-codex` bridge 与专用配置；真实长会话仍待用户侧启动 | 没有 Hook 时手动调用 CLI；GitHub Actions 只跑校验 |
+| Tool / Agent / 权限 | 完全归 Codex | 完全归 Claude Code | 完全归 DeepSeek Harness | 完全归目标 Host |
+
 ---
 
-## View 9 · 当前状态与迁移图
+## View 9 · 当前项目状态
 
-回答：现在究竟完成了什么、哪里是用户已确认边界、哪里还要优化、哪里必须删除？
+回答：哪些已经能用，哪些只是设计完成，哪些还需要继续实现？这里不重复总架构。
 
 <!-- ASL:PROJECT STATUS START -->
 
-```mermaid
-flowchart LR
-    subgraph CURRENT["当前真实状态"]
-        HCORE["Harness Core<br/>8 commands · 37 tests"]
-        PENV["Personal Environment<br/>37 Skills · 4 Modes<br/>结构与能力视图当前"]
-        ALIB["Agent Skill Library Environment<br/>37 Public Skills · 4 Modes<br/>结构与能力视图当前"]
-        BUSINESS["4 个业务 Mode records<br/>活动分类已对齐"]
-        SYSTEM["Harness System<br/>Steward / Access / Guards<br/>一个管理入口"]
-        ARCHIVED["旧系统 Mode 与系统 Skill<br/>已退出活动面并归档"]
-        CULT["2 Candidate · 0 Trial<br/>0 Feedback · 3 Archive"]
-        LEGACY["旧业务插件布局<br/>已移出活动根目录<br/>冻结于 Archive"]
-        PROJECTS["三宿主项目投影 v2<br/>原子切换 + 内容指纹已实现<br/>旧快照待重建"]
-        PRESETS["DeepSeek Mode Preset v2<br/>逐 Skill 指纹已实现<br/>旧快照待重建"]
-        NATIVE["Host-native Boundary<br/>Agent Loop / Session / Tools / Sandbox<br/>继续归各宿主"]
-    end
+| 状态 | 模块 | 当前事实 | 下一步 |
+| --- | --- | --- | --- |
+| 🟢 已实现 | Environment Contract | Personal Environment 与 Agent Skill Library 都是 37 个正式 Skill、4 个业务 Mode 的独立 Git 真源 | 按真实需求继续培养内容 |
+| 🟢 已实现 | Harness CLI | 8 个命令；扫描、校验、`state`、视图刷新、单 Skill 同步、三宿主投影、激活说明和 Preset 导出均已实现；当前 41 个测试通过 | 保持轻量，不增加第二 Runtime |
+| 🟢 已实现 | 结构保护 | 来源、依赖闭包、Secret、路径、用户文件碰撞、原子回滚和 SHA-256 漂移检查已有测试；协议 21 份 Markdown 校验通过 | 继续复用同一组检查 |
+| 🟢 已验收 | 三宿主 Skill 投影 | `creator-studio` 已分别投影到 Codex、Claude Code、DeepSeek 临时项目，19 个完整 Skill package 均通过 `host.verify`，无漂移警告 | 用户在真实项目中选择 Mode 后按需重建投影 |
+| 🟢 已实现 | 运行依赖边界 | MCP、命令、环境变量名称和必要插件只在责任 Skill 内按需说明；当前 37 个正式 Skill 中 12 个真实外部运行依赖已补充，Mode 仍只选择 Skill | 后续只随真实依赖变化维护，不批量造空章节 |
+| 🟢 已实现 | Hook 接线代码 | 无状态 Adapter、Codex / Claude Host Plugin hooks、Marketplace 清单、DeepSeek Preset 官方 Cordis bridge 和激活说明均已实现；没有 ASL 投影时静默通过 | 保持三个事件点，不扩张成监控系统 |
+| 🟢 已验收 | Claude Hook 激活 | 真实 Claude Code `SessionStart` 已运行 `asl-harness-hook`，正确注入 `creator-studio` 与 19 个投影 Skill；随后模型请求因本机火山 CodingPlan 到期失败，与 Hook 无关 | 用户修复模型套餐后可继续做完整业务会话 |
+| 🟠 待用户侧验收 | Codex / DeepSeek Hook 激活 | Codex 实际只读会话已读取当前 Mode，Marketplace 已注册；DeepSeek 四个 Mode Preset 已刷新为 v2 并通过逐 Skill 指纹与 Hook Bridge 校验。Codex App 内 Plugin 安装和 DeepSeek 真实长会话仍需在各自 UI 中完成 | 用户亲手运行时观察 SessionStart；失败时回到宿主原生日志，不增加 ASL Runtime |
+| 🟠 待扩展 | 更多 Agent Adapter | Adapter 契约可以覆盖 OpenCode、Trae、ZCode 等支持 Skill/MCP/项目规则的 Host | 有真实使用目标时逐个增加，不预造空适配器 |
+| 🟠 待用户侧验收 | DeepSeek 长会话 | 四个业务 Mode 已从本机 `qihang` 已知可运行基础刷新为 v2 Preset，Skill、Persona、来源指纹和官方 Hook Bridge 均通过校验；本轮官方 npm 启动停在上游依赖解析，未进入 UI | 直接在已安装的 DeepSeek Harness 中选择 `ASL · <mode>` 运行；上游启动问题不下沉成 ASL 兼容层 |
+| ⚪ 可重建 | Host Projection | 项目投影和 Preset 都是生成视图，不是真源 | Environment 变化后按需刷新 |
+| ⚪ 已归档 | 旧结构 | foundation、orchestrator、skill-index、旧 domain/plugin 布局已退出活动面 | 只追溯，不恢复兼容层 |
 
-    subgraph TARGET["用户已确认的目标"]
-        CONTRACT["空白 Harness 与业务发行版<br/>使用同一个 Environment Contract"]
-        FOUR["只保留 4 个业务 Mode<br/>系统能力不伪装成 Mode"]
-        STEWARD["Environment Steward / Access<br/>已进入 Harness 系统层"]
-        INTEGRATE["外部能力集成规则<br/>复杂仓库拆解 / Runtime / 单 Mode 绑定<br/>已进入 Steward"]
-        GUARDS["确定错误硬阻断<br/>语义判断留给 Host"]
-        MODE_NATIVE["Mode-native 业务发行结构<br/>37 Skills · 4 Modes · 已验证"]
-        SYNC_CLI["environment.sync CLI<br/>单 Skill · check · replace<br/>已实现并测试"]
-        STATE_CLI["state CLI<br/>紧凑 Environment 状态<br/>已实现，不建状态库"]
-        BINDING["Host Binding Seam<br/>MCP / API / Agent / Plugin / Tools<br/>完整搬运已实现，激活归 Adapter"]
-        INTEGRITY["原子修改与轻量哈希<br/>同步 / 投影 / Preset<br/>已实现并测试"]
-        MODE_UX["Mode 使用入口<br/>host.project 已实现<br/>mode.use 仅为可选薄别名"]
-        DSH_RUNTIME["DeepSeek 真实长会话<br/>验收后置，不阻塞当前架构"]
-    end
-
-    HCORE --> GUARDS
-    PENV --> CONTRACT
-    ALIB --> CONTRACT
-    ALIB --> MODE_NATIVE
-    BUSINESS --> FOUR
-    SYSTEM --> STEWARD
-    ARCHIVED --> STEWARD
-    CULT --> STEWARD
-    CULT --> INTEGRATE
-    LEGACY -.迁移证据.-> MODE_NATIVE
-    PROJECTS --> PRESETS
-    PRESETS --> DSH_RUNTIME
-    NATIVE --> CONTRACT
-    ALIB --> SYNC_CLI
-    PENV --> SYNC_CLI
-    HCORE --> MODE_UX
-    HCORE --> STATE_CLI
-    HCORE --> INTEGRITY
-    MODE_NATIVE --> BINDING
-    BINDING --> PROJECTS
-
-    classDef locked fill:#dbeafe,stroke:#2563eb,color:#1e3a8a,stroke-width:2px;
-    classDef done fill:#dcfce7,stroke:#16a34a,color:#14532d;
-    classDef optimize fill:#ffedd5,stroke:#ea580c,color:#7c2d12;
-    classDef remove fill:#fee2e2,stroke:#dc2626,color:#7f1d1d,stroke-width:2px;
-    classDef generated fill:#f3f4f6,stroke:#6b7280,color:#1f2937,stroke-dasharray:4 3;
-    class HCORE,PENV,ALIB,BUSINESS,SYSTEM,CULT,STEWARD,GUARDS,INTEGRATE,MODE_NATIVE,SYNC_CLI,STATE_CLI,BINDING,INTEGRITY,MODE_UX done;
-    class DSH_RUNTIME,PROJECTS,PRESETS optimize;
-    class LEGACY,ARCHIVED generated;
-    class CONTRACT,FOUR,NATIVE locked;
-```
-
-Agent Skill Library 的 Mode-native 内容迁移已经完成：37 个可公开正式 Skill 与 4 个业务 Mode 成为仓库活动真源，旧插件布局只在 Archive 追溯。`environment.sync` 已实现为带原子回滚和 SHA-256 记录的显式单 Skill CLI；`state` 提供不展开长描述的当前读视图。正式 Skill 的来源、宿主受管说明、复制型投影和 Preset 内容都进入确定性校验。两份 Environment 当前结构合法。当前橙色项只剩按 v2 manifest 重建现有项目投影与 Preset，以及后置的 DeepSeek 真实长会话验收。
+当前结论：ASL v0.3 已达到可交付的 Developer Preview。Environment、Mode、Skill、CLI、三宿主投影、来源与漂移保护均已完成验收；Claude Hook 已真实触发，Codex 与 DeepSeek 的业务 Mode 已可运行，剩余工作只是用户在各自 UI 中安装或选择可选 Hook / Preset 并完成亲手体验。当前没有值得新增的架构层，后续只在真实 Host 或真实 Case 暴露缺口时增加最小 Adapter 或修订责任 Skill。
 
 <!-- ASL:PROJECT STATUS END -->
