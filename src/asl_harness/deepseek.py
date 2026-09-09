@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import shutil
+import shlex
+import subprocess
+import sys
 from pathlib import Path
 from textwrap import indent
 from uuid import uuid4
@@ -11,6 +15,7 @@ import yaml
 
 from .workspace import HarnessError, Workspace, package_fingerprint
 from .hooks import hook_config
+from .adapters import _mode_instructions
 
 
 PRESET_ID = re.compile(r"[a-z0-9][a-z0-9-]*\Z")
@@ -79,23 +84,7 @@ def _clean_generated_composition(text: str) -> str:
 
 
 def _mode_persona(workspace: Workspace, mode_id: str) -> str:
-    mode = workspace.modes[mode_id]
-    text = f"""You are an agent running ASL Mode {mode_id}.
-
-Environment truth: {workspace.root}
-
-Compact Profile:
-{workspace.profile.strip()}
-
-Mode boundary:
-{mode.document.strip()}
-
-Use this as a broad working environment, not a Workflow. Select complete local Skills dynamically from the user's Goal. Read every selected Skill package fully and satisfy its completion standards even inside a larger task. External Prompt, MCP, Agent, API, model, command, script, or remote Skill may be used only through a formal projected local Skill. Follow that Skill's runtime dependency notes and use DeepSeek Harness native Cordis, MCP, login, permission, and plugin mechanisms; ASL does not add a second connection runtime. A user-directed source may be integrated directly after full review; Candidate and Trial are only for concrete uncertainty. Keep one-off evidence and Artifacts in the current Case. Record durable feedback only when the user states it explicitly.
-
-Do not infer durable Environment changes from ordinary work. For an explicit user request, use the Harness system maintenance path from the current Mode, change the smallest fitting truth, run deterministic validation, and leave a reviewable Git diff. Mode selection never authorizes deletion, publication, payment, login, private-data access, messages, or external writes; those actions remain behind the current Host's native authorization boundary.
-
-The current DeepSeek Harness agent is the only executor. ASL does not add a second scheduler or Agent loop.
-"""
+    text = f"You are an agent running ASL Mode {mode_id}.\n\n" + _mode_instructions(workspace, mode_id)
     return text.replace("{{", "{ {").replace("}}", "} }")
 
 
@@ -144,6 +133,18 @@ def _description(document: str, mode_id: str) -> str:
     return f"ASL Mode {mode_id} 的本地能力环境。"
 
 
+def _hook_command(target: Path) -> str:
+    arguments = ["asl-harness-hook", "--host-id", "deepseek-harness", "--preset", str(target)]
+    return subprocess.list2cmdline(arguments) if sys.platform == "win32" else shlex.join(arguments)
+
+
+def _configuration_fingerprint(target: Path) -> str:
+    return hashlib.sha256(b"\0".join(
+        (target / name).read_bytes()
+        for name in ("agent.cordis.yml", "preset.yml", HOOK_CONFIG_FILE)
+    )).hexdigest()
+
+
 def verify_preset(
     workspace: Workspace,
     mode_id: str,
@@ -164,12 +165,13 @@ def verify_preset(
         "basePreset",
         "skills",
         "skillFingerprints",
+        "configurationFingerprint",
     }
     skill_ids = workspace.mode_skill_ids(mode_id)
     if (
         marker is None
         or set(marker) != expected_keys
-        or marker.get("version") != 2
+        or marker.get("version") != 3
         or marker.get("operation") != "mode.export"
         or marker.get("hostId") != "deepseek-harness"
         or marker.get("environment") != str(workspace.root)
@@ -180,7 +182,7 @@ def verify_preset(
         or not isinstance(marker.get("basePreset"), str)
     ):
         raise HarnessError(
-            "DEEPSEEK_PRESET_INVALID", "DeepSeek preset marker is invalid"
+            "DEEPSEEK_PRESET_INVALID", "DeepSeek preset marker is invalid or outdated; re-export the preset"
         )
     composition_path = target / "agent.cordis.yml"
     preset_path = target / "preset.yml"
@@ -198,6 +200,8 @@ def verify_preset(
         raise HarnessError(
             "DEEPSEEK_PRESET_INVALID", "DeepSeek preset Hook config is invalid"
         ) from error
+    if _configuration_fingerprint(target) != marker["configurationFingerprint"]:
+        raise HarnessError("DEEPSEEK_PRESET_INVALID", "DeepSeek preset configuration was modified")
     expected_skill_root = json.dumps(str(target / "skills"), ensure_ascii=False)
     expected_hook_config = json.dumps(
         str(target / HOOK_CONFIG_FILE), ensure_ascii=False
@@ -210,7 +214,7 @@ def verify_preset(
         HOOK_BRIDGE_PACKAGE not in composition
         or expected_hook_config not in composition
         or installed_hook_config
-        != hook_config("asl-harness-hook --host-id deepseek-harness")
+        != hook_config(_hook_command(target))
     ):
         raise HarnessError(
             "DEEPSEEK_PRESET_INVALID", "DeepSeek preset Hook bridge is invalid"
@@ -230,10 +234,6 @@ def verify_preset(
     if marker["sourceFingerprint"] != workspace.source_fingerprint(mode_id):
         warnings.append(
             "Environment content changed after preset export; run deepseek.preset.export again."
-        )
-    if marker["environmentCommit"] != workspace.git_commit:
-        warnings.append(
-            "Environment Git HEAD changed after preset export; run deepseek.preset.export again."
         )
     return warnings
 
@@ -308,7 +308,7 @@ def export_preset(
         composition_path.write_text(composition, encoding="utf-8", newline="\n")
         (temporary / HOOK_CONFIG_FILE).write_text(
             json.dumps(
-                hook_config("asl-harness-hook --host-id deepseek-harness"),
+                hook_config(_hook_command(target)),
                 ensure_ascii=False,
                 indent=2,
             )
@@ -327,7 +327,7 @@ def export_preset(
             newline="\n",
         )
         marker = {
-            "version": 2,
+            "version": 3,
             "operation": "mode.export",
             "hostId": "deepseek-harness",
             "environment": str(workspace.root),
@@ -340,6 +340,7 @@ def export_preset(
                 skill_id: package_fingerprint(workspace.skills[skill_id].path)
                 for skill_id in workspace.mode_skill_ids(mode_id)
             },
+            "configurationFingerprint": _configuration_fingerprint(temporary),
         }
         (temporary / PRESET_MARKER).write_text(
             json.dumps(marker, ensure_ascii=False, sort_keys=True, separators=(",", ":"))

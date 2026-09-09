@@ -240,17 +240,9 @@ Mode 只保存 Skill 根。Harness 解析依赖闭包，检查不存在的引用
 
 ### 外部能力的本地化入口
 
-Skill 可以来自 GitHub、官方文档、技能市场、公开推荐或另一份 ASL Environment。进入长期环境前，当前 Host 必须完整读取来源并判断它与现有能力的关系：
+Skill 可以来自 GitHub、官方文档、技能市场、公开推荐或另一份 ASL Environment。当前 Host 根据具体 Skill 与任务检查相关来源，判断直接采用、吸收或合并等关系，并保留来源记录；Harness 不统一要求加载全部文件。
 
-- 直接采用为新的完整 Skill；
-- 吸收进已有 Skill；
-- 合并重合能力；
-- 作为显式依赖或变体保留；
-- 为宿主差异建立 Adapter；
-- 仅借鉴需求，基于官方接口独立实现；
-- 拒绝或归档。
-
-用户明确要求引入时，不强制建立表演性的 Candidate、Trial 或效果 Case。只有来源、许可、安全、重合关系、运行方式或采用方向仍不确定时，才使用隔离的培养区。
+用户明确要求引入时可以直接本地化，Candidate / Trial 只处理具体不确定性。完整接入规则与判断路径统一见 [ASL 总架构](docs/asl-architecture-views.md)，本 README 不另设一套采用流程。
 
 先预览一次 Environment 间的同步：
 

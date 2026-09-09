@@ -8,8 +8,8 @@ description: 当用户要初始化、检查、维护或演化 ASL Environment，
 
 ## 读取工作环境
 
-1. 使用用户指定的 Environment；没有明确路径时，只从当前项目及父目录查找同时包含 `WORKSPACE.md`、`PROFILE.md`、`skills/`、`modes/`、`candidates/`、`trials/`、`feedback/` 与 `archive/` 的目录，不做全盘扫描。
-2. 先运行 `asl-harness state --workspace <environment>` 获取紧凑状态；结构维护前再运行 `workspace.validate`。常驻只读取精简 `PROFILE.md`、当前 Mode 边界和能力摘要；完整 Skill、Case、Feedback、Archive 与 Git 历史只在当前目标需要时按需读取。
+1. 使用用户指定的 Environment；否则先读取当前项目已有投影标记中的 Environment 路径，DeepSeek 可从 Preset 标记读取。尚未投影时，只从当前项目及父目录查找包含 `WORKSPACE.md`、`PROFILE.md`、`skills/` 与 `modes/` 的目录，不做全盘扫描。
+2. 维护或选 Mode 时可运行 `asl-harness state --workspace <environment>` 获取概览；`workspace.validate` 是全库体检，不是每个业务任务的开场门槛。已选 Mode 的投影和 Hook 只校验该 Mode 的必要依赖。Skill 的阅读范围、参考材料和具体做法由模型依据该 Skill 与当前任务判断，Harness 不设统一全量读取要求，也不替 A、B 两个业务 Skill 改写冲突规则。
 3. `WORKSPACE.md` 视图过期只是一条维护信号。维护任务可以运行 `workspace.view.sync`；普通业务 Goal 不因此被阻断。
 
 ## 选择与投影 Mode
@@ -23,12 +23,12 @@ description: 当用户要初始化、检查、维护或演化 ASL Environment，
 
 仅在用户明确要求长期改变，或当前 Goal 已证明正式能力缺失、失效或边界错误时进入维护路径。普通结果返工留在 Case，不自动改 Environment。
 
-1. 完整读取责任 Skill 与外部来源的说明、引用、脚本、资产、依赖、许可、测试和历史，不凭目录名判断。
+1. 根据待引入能力及其 Skill 的指引检查来源、依赖、许可和相关实现，不凭目录名判断；阅读深度由当前 Host 针对任务决定，不用 Harness 统一规定所有文件必须加载。
 2. 先比较本地 Owner，再选择吸收、合并、硬依赖、独立 Skill、明确变体、宿主 Adapter、Clean-room 重构或拒绝。优先减少重复 Owner。
 3. 用户明确指定来源且关系清楚时可以直接写入正式本地 Skill；来源、许可、重合、安全、Runtime 或采用方向仍不确定时才使用 Candidate 或 Trial。
 4. 外部 Prompt、MCP、Agent、API、Plugin、模型、命令、脚本或服务正式使用前必须成为或并入完整本地 Skill；不得在业务执行中裸调用。
 5. 每个正式 Skill 都必须保留含非空 `Origin` 的 `SOURCE.md`。复制或改编实现时继续记录许可、版本和本地改动；只借鉴需求或组织思路时不复制实现，按本地契约与许可清楚的公共基础能力独立重构。
-6. 需要外部运行能力时，在责任 Skill 的 `## 运行依赖` 中写清 MCP、命令、环境变量名称、必要插件、检查方式和缺失时的处理；可复用代码放在同一 Skill 的 `scripts/`。没有依赖就不创建空章节或目录。Mode 不增加 MCP、API、Agent、Plugin 或权限字段；真正激活由宿主原生机制完成。
+6. 需要外部运行能力时，沿用责任 Skill 已有依赖说明、环境检查或 `SOURCE.md` 的记录，不强制同一种标题。实际使用时按该 Skill 的说明调用现成检查（例如 Agent Reach 的 `doctor`），不因“有说明”就声称已经可用，也不批量执行所有 Skill 的安装命令。没有依赖就不创建空章节。Mode 不增加连接或权限字段；安装、登录和激活由宿主原生机制负责。
 
 ## 受控修改
 
@@ -44,6 +44,7 @@ description: 当用户要初始化、检查、维护或演化 ASL Environment，
 - 不把系统维护、能力发现或“第二大脑”包装成业务 Mode；它们属于本入口和 Harness 的确定性代码。
 - 不从点击、停留、沉默、耗时或重试推断长期偏好；只有用户明确反馈可以写入 `feedback/`。
 - 不把所有 Skill、Case、反馈和历史一次性塞入上下文；按目标逐层读取。
+- Case 只是本次任务材料与产物的称呼，不要求新建同名目录；交付位置以用户项目和要求为准，工具临时缓存按责任 Skill 处理，不自动写入长期技能库。
 - 不覆盖项目原有 `AGENTS.md`、`CLAUDE.md` 或 Skill；Harness 只能维护自己的标记区域和能够证明属于它的投影。
 - Mode 选择不授权发布、付费、登录、消息、私人数据访问、外部写入或破坏性删除；这些继续使用当前 Host 的原生确认边界。
 - 宿主原生 Hook 只调用 `state`、`workspace.validate` 或 `host.verify` 等确定性命令。它不搜索能力、不评价内容、不记录含义不明确的行为，也不能因为缺少 Hook 或可选 MCP 阻断普通 Goal。

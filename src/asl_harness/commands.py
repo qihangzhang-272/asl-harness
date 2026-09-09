@@ -80,7 +80,7 @@ def _execute(args: argparse.Namespace) -> dict:
                 replace=args.replace,
             ),
         }
-    workspace = Workspace.open(args.workspace)
+    workspace = Workspace.open(args.workspace, mode_id=getattr(args, "mode", None))
     if args.command == "workspace.validate":
         return {"ok": True, **workspace.summary()}
     if args.command == "state":

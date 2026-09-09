@@ -28,7 +28,9 @@ HOST_DISPLAY_NAMES = {
     "claude-code": "Claude Code",
     "deepseek-harness": "DeepSeek Harness",
 }
-RUNTIME_REQUIREMENTS = re.compile(r"(?m)^##[ \t]+运行依赖[ \t]*$")
+RUNTIME_REQUIREMENTS = re.compile(
+    r"(?mi)^(?:##[ \t]+(?:运行依赖|环境检查|Runtime (?:dependencies|requirements))\b|-[ \t]+Runtime dependencies:)"
+)
 
 
 def _layout(host_id: str) -> dict[str, str]:
@@ -104,6 +106,13 @@ def _managed_target_matches(project: Path, item: dict, environment: Path) -> boo
         return True
     source = environment / "skills" / skill_id
     marker = _copy_marker(target) if target.is_dir() else None
+    if (
+        projection == "copy" and marker is not None
+        and marker.get("environment") == str(environment) and marker.get("skill") == skill_id
+        and package_fingerprint(target, ignored_names=frozenset({COPY_MARKER}))
+        != item.get("sourceFingerprint")
+    ):
+        raise HarnessError("HOST_PROJECTION_MODIFIED", f"projected copy was modified; preserve or reconcile it before refreshing: {target}")
     return bool(
         projection == "link" and target.is_symlink() and target.resolve() == source.resolve()
         or projection == "junction"
@@ -196,9 +205,9 @@ Environment truth: `{workspace.root}`
 ### Hard rules
 
 1. This Mode is a broad working environment and Skill subgraph, not a Workflow or fixed sequence.
-2. Choose complete projected Skills dynamically from the user's Goal and current context. Read a Skill's full package before substantive use and satisfy its own completion standards even when it is one part of a larger task.
-3. External Prompt, MCP, Agent, API, model, command, script, or remote Skill may be used only through a projected formal local Skill package. Follow that Skill's runtime dependency notes and use this Host's native MCP, login, permission, and plugin mechanisms; ASL does not add a second connection runtime. A user-directed source may be integrated directly after full review; Candidate and Trial are only for concrete uncertainty.
-4. Keep one-off evidence, screenshots, drafts, and final Artifacts in the current Case or project; do not promote them into the Environment without an explicit maintenance task.
+2. Choose projected Skills dynamically from the user's Goal and current context. Reading scope and methods belong to the selected Skill and the Host's judgment, not a Harness-wide loading rule. Harness does not rewrite conflicting business Skill rules.
+3. External Prompt, MCP, Agent, API, model, command, script, or remote Skill may be used only through a projected formal local Skill package. Follow that Skill's runtime dependency notes and use this Host's native MCP, login, permission, and plugin mechanisms; ASL does not add a second connection runtime. A user-directed source may be integrated directly after checking relevant provenance and requirements; Candidate and Trial are only for concrete uncertainty.
+4. Keep task outputs in the user's chosen project or output location, following the relevant Skill's temporary-storage rules. No directory named Case is required. Do not automatically turn task materials into long-term Skills or Profile content.
 5. Record durable feedback only when the user clearly evaluates, corrects, or states a preference. Do not infer it from silence, timing, clicks, or other ambiguous behavior.
 6. Do not infer durable Environment changes from ordinary work. When the user explicitly asks to add or change a long-term capability, use the Harness system maintenance path from the current Mode, change the smallest fitting truth, run deterministic validation, and leave a reviewable Git diff.
 7. High-impact deletion, publication, payment, login, private-data access, messages, or external writes still require the current Host's native user-authorization boundary. Mode selection never grants that authority.
@@ -467,8 +476,6 @@ def verify_mode_projection(
     warnings = []
     if manifest["sourceFingerprint"] != workspace.source_fingerprint(mode_id):
         warnings.append("Environment content changed after projection; run host.project again.")
-    if manifest["environmentCommit"] != workspace.git_commit:
-        warnings.append("Environment Git HEAD changed after projection; run host.project again.")
     return warnings
 
 
@@ -479,7 +486,8 @@ def activation_report(
     layout = _layout(host_id)
     runtime_skills = []
     for skill_id in workspace.mode_skill_ids(mode_id):
-        text = (workspace.skills[skill_id].path / "SKILL.md").read_text(encoding="utf-8")
+        text = "\n".join((workspace.skills[skill_id].path / name).read_text(encoding="utf-8")
+                         for name in ("SKILL.md", "SOURCE.md"))
         if RUNTIME_REQUIREMENTS.search(text):
             runtime_skills.append(skill_id)
 

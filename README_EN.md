@@ -240,17 +240,9 @@ A Mode stores only Skill roots. Harness resolves the dependency closure, rejects
 
 ### A local entry path for external capabilities
 
-Skills may come from GitHub, official documentation, skill marketplaces, public recommendations, or another ASL Environment. Before a capability becomes durable, the current Host reads the full source and determines its relationship to existing Skills:
+Skills may come from GitHub, official documentation, skill marketplaces, public recommendations, or another ASL Environment. The current Host checks relevant source material according to the specific Skill and task, determines whether to adopt, absorb, or merge it, and preserves provenance. Harness does not require every file to be loaded.
 
-- adopt it as a new complete Skill;
-- absorb it into an existing Skill;
-- merge overlapping capabilities;
-- keep it as an explicit dependency or variant;
-- create an Adapter for a Host-specific boundary;
-- borrow only the requirement and independently implement it against official interfaces;
-- reject or archive it.
-
-When the user explicitly requests adoption, ASL does not force a ceremonial Candidate, Trial, or demo Case. Isolation areas are used only when provenance, licensing, security, overlap, runtime behavior, or the adoption decision remains uncertain.
+Explicit user requests may proceed directly to localization; Candidate and Trial address concrete uncertainty only. The complete intake rules and decision paths live in [ASL Architecture Views](docs/asl-architecture-views.md), rather than a separate adoption process in this README.
 
 Preview a Skill transfer between Environments:
 

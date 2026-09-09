@@ -147,9 +147,9 @@ def package_fingerprint(package: Path, *, ignored_names: frozenset[str] = frozen
     return digest.hexdigest()
 
 
-def _scan_authored_material(root: Path) -> tuple[str, ...]:
+def _scan_authored_material(root: Path, scan_roots: list[Path] | None = None) -> tuple[str, ...]:
     generated: set[str] = set()
-    scan_roots = [root / "skills", root / "modes"] + [
+    scan_roots = scan_roots if scan_roots is not None else [root / "skills", root / "modes"] + [
         root / directory for directory in LIFECYCLE_AREAS
     ]
     for scan_root in scan_roots:
@@ -356,7 +356,7 @@ class Workspace:
         return self.root.name
 
     @classmethod
-    def open(cls, root: str | Path) -> "Workspace":
+    def open(cls, root: str | Path, *, mode_id: str | None = None) -> "Workspace":
         resolved = Path(root).resolve()
         if not resolved.is_dir():
             raise HarnessError("ENVIRONMENT_INVALID", f"Environment is missing: {resolved}")
@@ -383,26 +383,40 @@ class Workspace:
             raise HarnessError(
                 "ENVIRONMENT_INVALID", "Environment requires skills/ and modes/ directories"
             )
-        cultivation = _read_lifecycle_areas(resolved)
-        generated = _scan_authored_material(resolved)
-
         skills: dict[str, Skill] = {}
-        for package in sorted(skills_root.iterdir(), key=lambda item: item.name):
-            if not package.is_dir():
-                continue
-            skill_id = _safe_id(package.name, "Skill directory name")
-            skills[skill_id] = _read_skill(package, skill_id, resolved)
-        if not skills:
-            raise HarnessError("ENVIRONMENT_INVALID", "Environment has no formal Skills")
-
         modes: dict[str, Mode] = {}
-        for package in sorted(modes_root.iterdir(), key=lambda item: item.name):
-            if not package.is_dir():
-                continue
-            mode_id = _safe_id(package.name, "Mode directory name")
-            modes[mode_id] = _read_mode(package, mode_id)
-        if not modes:
-            raise HarnessError("ENVIRONMENT_INVALID", "Environment has no Modes")
+        if mode_id is None:
+            cultivation = _read_lifecycle_areas(resolved)
+            generated = _scan_authored_material(resolved)
+            for package in sorted(skills_root.iterdir(), key=lambda item: item.name):
+                if package.is_dir():
+                    skill_id = _safe_id(package.name, "Skill directory name")
+                    skills[skill_id] = _read_skill(package, skill_id, resolved)
+            for package in sorted(modes_root.iterdir(), key=lambda item: item.name):
+                if package.is_dir():
+                    identifier = _safe_id(package.name, "Mode directory name")
+                    modes[identifier] = _read_mode(package, identifier)
+            if not skills or not modes:
+                raise HarnessError("ENVIRONMENT_INVALID", "Environment requires formal Skills and Modes")
+        else:
+            # Business access validates only the selected subgraph; full audits still use open(root).
+            mode_id = _safe_id(mode_id, "Mode id")
+            if not (modes_root / mode_id).is_dir():
+                raise HarnessError("MODE_NOT_ACTIVE", f"Mode is not active: {mode_id}")
+            modes[mode_id] = _read_mode(modes_root / mode_id, mode_id)
+            pending = list(modes[mode_id].skill_roots)
+            while pending:
+                skill_id = pending.pop(0)
+                if skill_id in skills:
+                    continue
+                if not (skills_root / skill_id).is_dir():
+                    raise HarnessError("SKILL_DEPENDENCY_MISSING", f"Selected Mode requires missing Skill: {skill_id}")
+                skills[skill_id] = _read_skill(skills_root / skill_id, skill_id, resolved)
+                pending.extend(skills[skill_id].requires)
+            cultivation = {name: () for name in LIFECYCLE_AREAS}
+            generated = _scan_authored_material(
+                resolved, [modes[mode_id].path, *(skill.path for skill in skills.values())]
+            )
 
         workspace = cls(
             root=resolved,

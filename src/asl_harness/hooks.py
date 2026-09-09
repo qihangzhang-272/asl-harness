@@ -13,16 +13,6 @@ from .workspace import HarnessError, Workspace
 
 EDIT_EVENTS = {"PostToolUse"}
 EDIT_TOOLS = {"apply_patch", "Edit", "Write", "edit", "write"}
-MANAGED_AREAS = {
-    "PROFILE.md",
-    "WORKSPACE.md",
-    "skills",
-    "modes",
-    "candidates",
-    "trials",
-    "feedback",
-    "archive",
-}
 PATCH_PATH = re.compile(r"(?m)^\*\*\* (?:Add|Update|Delete) File: (.+)$")
 
 
@@ -88,6 +78,9 @@ def _find_projection(cwd: Path, host_id: str) -> tuple[Path, dict] | None:
     start = cwd if cwd.is_dir() else cwd.parent
     for project in (start, *start.parents):
         path = project / ".asl" / "host-projections" / host_id / "current.json"
+        if not path.is_file() and host_id == "deepseek-harness":
+            from .deepseek import PRESET_MARKER
+            path = project / PRESET_MARKER
         if not path.is_file():
             continue
         try:
@@ -124,10 +117,17 @@ def _collect_paths(value: object, cwd: Path, key: str = "") -> list[Path]:
 def _managed_write(
     paths: list[Path], project: Path, environment: Path, manifest: dict
 ) -> bool:
-    environment_targets = [environment / name for name in MANAGED_AREAS]
+    selected = manifest.get("skills", []) if "basePreset" in manifest else [
+        item.get("skill") for item in manifest.get("skillProjections", []) if isinstance(item, dict)
+    ]
+    environment_targets = [environment / "PROFILE.md", environment / "WORKSPACE.md",
+                           environment / "modes" / str(manifest.get("mode", ""))]
+    environment_targets.extend(environment / "skills" / name for name in selected if isinstance(name, str))
     project_targets = [
         project / ".asl" / "host-projections" / str(manifest.get("hostId", ""))
     ]
+    if "basePreset" in manifest:
+        project_targets.append(project)
     for relative in manifest.get("managedSurfaces", []):
         if isinstance(relative, str):
             project_targets.append(project / relative)
@@ -146,8 +146,12 @@ def _check(project: Path, manifest: dict) -> tuple[Workspace, list[str]]:
     host_id = manifest.get("hostId")
     if not all(isinstance(value, str) and value for value in (environment, mode, host_id)):
         raise HarnessError("HOST_PROJECTION_INVALID", "Host projection manifest is invalid")
-    workspace = Workspace.open(environment)
-    warnings = verify_mode_projection(workspace, project, mode, host_id=host_id)
+    workspace = Workspace.open(environment, mode_id=mode)
+    if host_id == "deepseek-harness" and "basePreset" in manifest:
+        from .deepseek import verify_preset
+        warnings = verify_preset(workspace, mode, project)
+    else:
+        warnings = verify_mode_projection(workspace, project, mode, host_id=host_id)
     return workspace, warnings
 
 
@@ -155,12 +159,18 @@ def _format_error(error: HarnessError) -> str:
     return f"ASL {error.code}: {error}"
 
 
-def run_hook(payload: dict, *, host_id: str) -> tuple[int, str]:
+def run_hook(payload: dict, *, host_id: str, preset: Path | None = None) -> tuple[int, str]:
     cwd_value = payload.get("cwd")
     cwd = Path(cwd_value) if isinstance(cwd_value, str) and cwd_value else Path.cwd()
-    located = _find_projection(cwd.resolve(), host_id)
+    if preset is not None:
+        from .deepseek import _read_marker
+        preset = preset.resolve()
+        manifest = _read_marker(preset)
+        located = (preset, manifest) if manifest is not None else None
+    else:
+        located = _find_projection(cwd.resolve(), host_id)
     if located is None:
-        return 0, ""
+        return 0, "ASL preset marker is missing; re-export the preset." if preset is not None else ""
     project, manifest = located
     event = _event_name(payload)
 
@@ -171,7 +181,7 @@ def run_hook(payload: dict, *, host_id: str) -> tuple[int, str]:
             return 0, _format_error(error)
         mode = manifest["mode"]
         count = len(workspace.mode_skill_ids(mode))
-        message = f"ASL Mode {mode} is active with {count} projected Skills."
+        message = f"ASL Mode {mode} is projected with {count} projected Skills."
         if warnings:
             message += " " + " ".join(f"Warning: {item}" for item in warnings)
         return 0, message
@@ -218,6 +228,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--host-id", choices=("codex-app", "claude-code", "deepseek-harness")
     )
+    parser.add_argument("--preset", type=Path, help="DeepSeek preset containing the existing ASL marker")
     args = parser.parse_args(argv)
     try:
         payload = json.load(sys.stdin)
@@ -228,7 +239,9 @@ def main(argv: list[str] | None = None) -> int:
     host_id = args.host_id or _detect_host_id()
     if host_id is None:
         return 0
-    code, message = run_hook(payload, host_id=host_id)
+    if args.preset is not None and host_id != "deepseek-harness":
+        parser.error("--preset requires --host-id deepseek-harness")
+    code, message = run_hook(payload, host_id=host_id, preset=args.preset)
     if message:
         print(message, file=sys.stderr if code == 2 else sys.stdout)
     return code
