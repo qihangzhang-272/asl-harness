@@ -520,6 +520,7 @@ class Workspace:
             "modes": [
                 {
                     "id": mode.id,
+                    "document": mode.document,
                     "skills": list(self.mode_skill_ids(mode.id)),
                 }
                 for mode in self.modes.values()

@@ -172,6 +172,30 @@ Over time, the Environment becomes more like its owner: it retains useful judgme
 
 ## Quick Start
 
+### Desktop preview
+
+The desktop interface uses the same Harness core. Open an environment, browse its Modes and Skills, share a selected Mode as a ZIP, import it into another environment, and apply it to an Agent project. Model accounts, external dependency installation, and automatic session launch are not implemented. See the [architecture status](docs/asl-architecture-views.md#view-9--当前项目状态) for verified scope and remaining work.
+
+To run from source, use Python 3.11+, Node.js 22.12+, and npm:
+
+```bash
+git clone https://github.com/qihangzhang-272/asl-harness.git
+cd asl-harness
+python -m pip install -e .
+npm ci --prefix desktop
+npm start --prefix desktop
+```
+
+Start with the built-in example. Your real environment remains an ordinary folder, not an App-owned database.
+
+Windows developers can build a portable folder with the Python core included. Keep the complete folder together; the exe alone is not portable. This is an unsigned preview, not an installer. Run these commands in PowerShell from the repository root, using a new output directory:
+
+```powershell
+python -m venv desktop/out/build-venv
+desktop/out/build-venv/Scripts/python -m pip install pyinstaller==6.22.2 PyYAML==6.0.3
+desktop/out/build-venv/Scripts/python scripts/build_desktop.py --output desktop/out/windows-preview
+```
+
 ### Start with the blank Environment
 
 ```bash

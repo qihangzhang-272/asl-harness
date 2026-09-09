@@ -172,6 +172,30 @@ Environment 是普通文件夹，也是本地 Git 真源。人可以直接阅读
 
 ## Quick Start
 
+### 桌面预览版
+
+桌面入口已经接入同一个 Harness 核心：打开工作环境，查看 Mode 与技能，把选中的 Mode 分享成 ZIP，或导入到另一个独立环境，再应用到目标 Agent 的项目。模型账号、外部依赖安装与自动启动会话仍需另行配置，当前不是完整的一键安装器。实现与验证范围见[总架构的当前状态](docs/asl-architecture-views.md#view-9--当前项目状态)。
+
+从源码运行，需要 Python 3.11+、Node.js 22.12+ 与 npm：
+
+```bash
+git clone https://github.com/qihangzhang-272/asl-harness.git
+cd asl-harness
+python -m pip install -e .
+npm ci --prefix desktop
+npm start --prefix desktop
+```
+
+打开后可以先点「内置示例」。你的实际环境仍是普通文件夹，不会被导入到 App 私有数据库。
+
+Windows 开发者可以构建自带核心的便携文件夹，接收方无需手动安装 Python。请保留整个输出文件夹，不要单独拷贝 exe；这是未签名预览版，不是安装包。以下命令在仓库根目录的 PowerShell 中执行，输出目录必须不存在：
+
+```powershell
+python -m venv desktop/out/build-venv
+desktop/out/build-venv/Scripts/python -m pip install pyinstaller==6.22.2 PyYAML==6.0.3
+desktop/out/build-venv/Scripts/python scripts/build_desktop.py --output desktop/out/windows-preview
+```
+
 ### 使用空白 Environment
 
 ```bash
