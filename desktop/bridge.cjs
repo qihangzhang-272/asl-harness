@@ -2,6 +2,8 @@ const { execFile } = require("node:child_process");
 const path = require("node:path");
 
 const definitions = {
+  catalog: ["environment.catalog", ["workspace"]],
+  edit: ["environment.edit", ["workspace"]],
   describe: ["workspace.validate", ["workspace"]],
   state: ["state", ["workspace"]],
   export: ["mode.export", ["workspace", "mode", "output"]],
@@ -25,11 +27,13 @@ function commandArgs(action, values = {}) {
     throw new Error("不支持的操作");
   const [command, required] = definition;
   const optional =
-    action === "export"
-      ? ["includeProfile", "apply"]
-      : action === "import"
-        ? ["replace", "apply"]
-        : [];
+    action === "edit"
+      ? ["request", "apply"]
+      : action === "export"
+        ? ["includeProfile", "apply"]
+        : action === "import"
+          ? ["replace", "apply"]
+          : [];
   if (
     Object.keys(values).some((key) => ![...required, ...optional].includes(key))
   )
@@ -42,7 +46,14 @@ function commandArgs(action, values = {}) {
     )
       throw new Error(`缺少有效的 ${key}`);
   }
-  for (const key of optional)
+  if (
+    action === "edit" &&
+    (!values.request ||
+      typeof values.request !== "object" ||
+      Array.isArray(values.request))
+  )
+    throw new Error("修改请求必须是对象");
+  for (const key of optional.filter((key) => key !== "request"))
     if (key in values && typeof values[key] !== "boolean")
       throw new Error("开关必须是布尔值");
   if (values.mode && !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(values.mode))
@@ -57,7 +68,7 @@ function commandArgs(action, values = {}) {
   for (const key of required) args.push(`--${names[key] || key}`, values[key]);
   if (values.includeProfile) args.push("--include-profile");
   if (values.replace) args.push("--replace");
-  if (["export", "import"].includes(action) && !values.apply)
+  if (["export", "import", "edit"].includes(action) && !values.apply)
     args.push("--check");
   return args;
 }
@@ -74,7 +85,7 @@ function runCore(action, values, options = {}) {
     ? args
     : ["-X", "utf8", "-m", "asl_harness.commands", ...args];
   return new Promise((resolve, reject) => {
-    execFile(
+    const child = execFile(
       program,
       parameters,
       {
@@ -111,6 +122,8 @@ function runCore(action, values, options = {}) {
         else resolve(report);
       },
     );
+    child.stdin.on("error", () => {});
+    child.stdin.end(action === "edit" ? JSON.stringify(values.request) : "");
   });
 }
 

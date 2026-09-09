@@ -5,6 +5,31 @@ const path = require("node:path");
 const fs = require("node:fs/promises");
 const os = require("node:os");
 
+test("content edits use stdin, default to preview, and reject arbitrary payloads", () => {
+  assert.deepEqual(
+    commandArgs("edit", {
+      workspace: "/library",
+      request: { operation: "mode.save", id: "test" },
+    }),
+    ["environment.edit", "--workspace", "/library", "--check"],
+  );
+  assert.throws(() =>
+    commandArgs("edit", { workspace: "/library", request: "not an object" }),
+  );
+});
+
+test("catalog exposes titles and complete source membership", async () => {
+  const root = path.resolve(__dirname, "../..");
+  const report = await runCore(
+    "catalog",
+    { workspace: path.join(root, "examples/personal-environment") },
+    { root },
+  );
+  assert.ok(report.modes[0].title);
+  assert.ok(report.modes[0].roots);
+  assert.ok(report.skills[0].fingerprint);
+});
+
 test("exports preserve literal paths and default to preview", () => {
   assert.deepEqual(
     commandArgs("export", {

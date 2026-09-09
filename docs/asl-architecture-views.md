@@ -43,10 +43,27 @@
 
 ## 核心对象边界
 
+### 2026-09-09 产品改版执行约定（用户已确认，未完成项不得计为交付）
+
+首版桌面入口仅有查看、ASL 快照往返和项目投影。本轮补上了 Mode / Skill 的核心编辑接口和可操作界面，但**不等于完整工作环境管理产品已经完成**。复杂依赖安装、用户级作用范围和真实宿主会话状态仍有缺口；当前测试与实机验证范围只在 View 9 汇总。
+
+- **产品结构：**真实技能库 → 工作模式 → 可展开的能力地图 / 技能列表 → 详情侧栏。另设发现与 Agent 配置页面。主界面不展示协议说明和运行日志；使用中文用途、原生状态控件和必要的操作反馈。示例始终显式标记，不冒充用户内容；连接技能库不等于给 Agent 应用配置。
+- **数据边界：**地图是现有 Mode、Skill、明确依赖的视图，不是新 Workflow 或第二路由器。能力分组仅辅助人阅读，不能改变调用权限。App 的最近位置和界面偏好留在本机；业务内容继续留在原文件。
+- **作用范围：**每次应用显示目标 Agent、实际位置、影响范围和变更预览。项目、当前用户的全部项目、DeepSeek Preset 分开表达；宿主不支持的范围不可伪装成可用。ASL 只管理自己的内容，不能宣称屏蔽了宿主原有全局技能。用户级能力和机器所有用户级能力不是同义词。
+- **组合与市场：**区分可迁移 Skill / ASL Mode 包与 DSH 专用 Bundle；市场收录不代表跨宿主兼容。发现、内容采用、原生依赖安装、账号连接、Mode 引用是不同操作。复杂 CLI / Agent Reach 显示真实依赖与配置缺口；不把任意市场命令直接当成可执行 Shell。
+- **交互实现参考：**借鉴 [CC Switch 的技能与 MCP 管理](https://github.com/farion1231/cc-switch/tree/main/src/components)、[React Flow 分组节点](https://github.com/xyflow/xyflow/tree/main/examples/react/src/examples/Subflow)、[DSH Market 的目录与安装分离](https://github.com/dsh-market/dsh-market/tree/main/src)。保留必要许可；借用成熟组件，不复制它们整个后端或用户目录同步策略。
+
+实施顺序与验收：
+
+1. `workspace.py` / 管理接口 / 回归测试：补齐 Mode 与 Skill 的增改、移出和归档预览，检查引用影响、并发修改、失败恢复；所有写入测试使用隔离目录，不改真实技能库。
+2. `desktop/`：改为成熟组件驱动的桌面管理界面，接入真实库、能力图、编辑器和配置范围；用实际 4 个 Mode、37 个去重 Skill 检查，不用示例充当产品验收。
+3. 市场与连接：先贯通可核实的目录发现和本地采用；各宿主原生安装 / 配置按实际支持接线。每项分别记录“已实现 / 待接入”，不以打开官网冒充自动安装。
+4. 可用性验收：键盘、窄窗口、空态、失败重试、编辑后刷新、作用范围预览、冲突保护与导入往返；再同步本架构状态，分步提交。测试通过与宿主运行成功分别报告。
+
 | 对象 | 它是什么 | 它不是什么 | 由谁改变 |
 | --- | --- | --- | --- |
 | Harness System | 确定性核心、维护保护、访问面和宿主适配 | 第二个 Agent、第二调度器、业务 Mode | Harness 代码与确定性规则变更 |
-| ASL App（桌面预览版） | 已可查看 Mode / Skill、导入 / 分享环境包、应用宿主文件；连接与培养界面待补 | 另一个聊天 Agent、私有的第二份内容数据库 | 调用同一 Harness 核心，不另写业务真源 |
+| ASL App（桌面预览版） | 真实 Mode / Skill 管理、能力地图、包导入 / 分享、市场浏览及项目应用；安装与培养待补 | 另一个聊天 Agent、私有的第二份内容数据库 | 调用同一 Harness 核心，不另写业务真源 |
 | 可迁移环境包（首版已实现） | 选定 Mode 与完整 Skill 闭包的目录 / ZIP 快照；运行依赖协调待补 | 整机备份、凭据包、已安装的 Runtime | 导出自动生成；接收方采用后独立维护 |
 | Personal Environment | 用户本地 Git 管理的唯一运行真源 | 上游仓库的镜像、一次 Case、宿主缓存 | 用户授权下由当前 Host 经 Guards 修改 |
 | Skill | 可以独立承担责任的完整本地能力包 | Prompt 碎片、一个 Workflow 节点、裸 MCP/API | 用户明确指定引入时可直接本地化；其余不确定变化可先隔离 Trial |
@@ -76,7 +93,7 @@
 %%{init: {"theme":"base","themeVariables":{"fontFamily":"Microsoft YaHei","fontSize":"16px","clusterBkg":"#f8fafc","clusterBorder":"#cbd5e1"},"flowchart":{"nodeSpacing":35,"rankSpacing":55,"curve":"basis"}}}%%
 flowchart TB
     USER["用户<br/>管理自己的工作环境，继续用熟悉的 Agent"]
-    APP["独立 ASL App · 桌面预览版<br/>Mode 与技能浏览 / 导入与分享 / 应用宿主<br/>模型连接、编辑、更新与培养待补"]
+    APP["独立 ASL App · 桌面预览版<br/>模式 / 能力地图 / 内容编辑 / 发现 / Agent 配置<br/>原生安装、模型连接与培养待补"]
 
     subgraph SUPPLY["外部供给"]
         SOURCES["GitHub / 公开插件目录 / KOL 推荐<br/>Agent Skill Library 装填版 / 他人环境包"]
@@ -86,6 +103,7 @@ flowchart TB
         INTAKE["导入与安装协调 · 部分实现<br/>快照差异与基础依赖预览已有<br/>其他格式采用、原生安装与连接待补"]
         PORTABLE["可迁移包 · 内容往返已实现<br/>Mode + 完整 Skill + 指纹清单<br/>运行依赖安装与连接待补"]
         CORE["已有 CLI 与保护<br/>扫描 / 校验 / 闭包 / 视图 / 单 Skill 同步<br/>路径、秘密、用户修改冲突、文件回滚与指纹"]
+        EDIT["内容管理 · 代码已测<br/>Mode 创建 / 修改 / 复制 / 归档<br/>Skill 编辑 / 本地导入 / 引用与影响预览"]
         STEWARD["已有 Host 管理入口<br/>按授权发现、采用与修订能力<br/>不裁决业务 Skill 的语义冲突"]
         LEARN["培养与推荐 · 待开发<br/>相关经验召回、合并、更正与撤回<br/>没有积分或随机变异调度器"]
     end
@@ -95,7 +113,7 @@ flowchart TB
         MODES["Mode · 已有工作场与 Skill 子图<br/>不保存固定执行顺序<br/>模型偏好与资料关联待扩展"]
         SKILLS["完整 Skill 包 · 已有<br/>方法 / scripts / assets / references<br/>SOURCE / 必要原生依赖说明"]
         CONTEXT["个人边界、资料与明确反馈<br/>PROFILE / Mode 说明 / 培养区<br/>经验关联与管理界面待完善"]
-        MAP["派生能力地图<br/>WORKSPACE 已有<br/>App 关系视图待开发"]
+        MAP["派生能力地图 · 已实现<br/>按用途分组，展开查看完整 Skill<br/>显式依赖可看关系图，不代表执行顺序"]
         ROOT --> MODES
         MODES -->|显式选择能力| SKILLS
         ROOT --> CONTEXT
@@ -131,6 +149,9 @@ flowchart TB
 
     USER --> APP
     APP -->|管理操作| INTAKE
+    APP -->|已授权的内容修改| EDIT
+    EDIT -->|验证 / 回滚 / 同步视图| CORE
+    EDIT -->|只修改所选内容| ROOT
     APP -->|导入与分享| PORTABLE
     APP --> MODEL
     MAP -.只读呈现.-> APP
@@ -160,9 +181,9 @@ flowchart TB
     classDef generated fill:#f3f4f6,stroke:#6b7280,color:#1f2937,stroke-dasharray:4 3;
     classDef external fill:#f5f3ff,stroke:#7c3aed,color:#4c1d95;
     class USER,HOST,ROOT,MODES locked;
-    class SKILLS,CORE,STEWARD,CASE done;
-    class APP,INTAKE,PORTABLE,LEARN,CONTEXT,MAP,MODEL,ADAPTER,DSH,CC,CX,FUTURE,HOOK,DSH_UI pending;
-    class PROJECTION generated;
+    class SKILLS,CORE,EDIT,STEWARD,CASE done;
+    class APP,INTAKE,PORTABLE,LEARN,CONTEXT,MODEL,ADAPTER,DSH,CC,CX,FUTURE,HOOK,DSH_UI pending;
+    class PROJECTION,MAP generated;
     class SOURCES,RUNTIME external;
 
 ```
@@ -541,20 +562,24 @@ Hook 不单独保存运行记录。Codex、Claude Code、Cordis 使用自己的 
 
 **用户不需要理解配置目录。** 打开 App 应先看到自己的工作场，以及每个工作场能做什么、有哪些资料和经验、哪个 Agent 能用、还缺什么连接。可以从空白环境开始，也可以导入已经培养过的 Mode；两者进入同一界面。
 
-**当前桌面版实际可以做：**打开现有 Environment 或内置示例，查看 Mode 的工作范围、完整 Skill 正文、来源和显式依赖；预览并导入 / 导出 ASL 环境包；读出包内已支持的 Node / Python 依赖及 MCP 连接需求；选择项目生成 Codex / Claude 文件投影，或基于已有 DeepSeek Preset 导出新 Preset。它不读取模型密钥、不执行包内安装脚本、不伪造“正在生效”的会话状态。下面的完整产品表仍包含后续设计，当前状态集中在 View 9。
+**当前桌面版实际可以做：**连接现有技能库或内置示例，显示真实 Mode、按用途分组的完整技能与引用关系；创建、编辑、复制、归档 Mode，编辑 Skill、导入本地完整 Skill 并加入 Mode。保存前显示涉及的模式，过期编辑拒绝覆盖，归档保留完整目录。还可预览并导入 / 导出 ASL 环境包；浏览 DeepSeek 社区插件目录和 GitHub 搜索结果；只读显示已识别的本机 MCP 名称及技能包内依赖声明；选择项目生成 Codex / Claude 文件投影，或基于已有 DeepSeek Preset 导出新 Preset。未检测的连接不显示为零，文件配置不等于会话生效。市场目前只能浏览和打开来源，不能一键安装；本地 Skill 导入仍要求现有 ASL 内容结构，任意上游 Skill 的自动补齐尚未实现。
 
 ```mermaid
 flowchart LR
-    UI["本地桌面界面<br/>Mode / 技能 / 导入 / 分享 / 应用"] --> IPC["受限操作桥<br/>原生文件选择 / 写入确认<br/>只允许既定管理操作"]
+    UI["React 桌面界面<br/>模式 / 能力地图 / 编辑 / 发现 / Agent 配置"] --> IPC["受限操作桥<br/>原生文件选择 / 写入确认<br/>只允许既定管理操作"]
     IPC --> CORE["既有 Python 核心<br/>开发版命令 / Windows 内置可执行文件"]
     CORE --> ENV["本地 Environment<br/>唯一内容真源"]
     CORE --> PACK["Mode 目录 / ZIP 快照"]
     CORE --> HOST["Codex / Claude 项目文件<br/>DeepSeek Preset"]
     CORE --> RESULT["真实 JSON 结果与冲突"]
+    IPC --> MARKET["公开市场只读查询<br/>DSH 目录 / GitHub 搜索<br/>不执行来源提供的安装字符串"]
+    IPC --> NATIVE["本机只读检测<br/>配置存在 / MCP 名称 / DSH 预设<br/>不是登录或实际加载的证明"]
+    MARKET --> UI
+    NATIVE --> UI
     RESULT --> UI
     classDef done fill:#dcfce7,stroke:#16a34a,color:#14532d;
     classDef generated fill:#f3f4f6,stroke:#6b7280,color:#1f2937;
-    class UI,IPC,CORE,ENV done;
+    class UI,IPC,CORE,ENV,MARKET,NATIVE done;
     class PACK,HOST,RESULT generated;
 ```
 
@@ -1241,7 +1266,9 @@ MCP 的可移植性高于宿主 Plugin，因此当前架构优先让 Skill 声�
 
 此前同日的规则清理：两份 Environment 中已定位的失效调度器、索引及旧调用引用由 42 条降为 0；各修改 5 个 Skill 的 10 个文件，10 次 Skill 结构检查通过。两份 Environment 全库校验通过；协议 21 份 Markdown 校验通过。这些是此前清理的结果，不证明所有业务冲突已经消失。
 
-当前本机回归：Python 68 项通过、2 项跳过（Windows 无符号链接权限、POSIX 执行位）；桌面操作桥 5 项通过，其中一项真实完成预览、ZIP 分享、独立目录导入与 Codex 项目文件应用。禁用字节码与 pytest 缓存；桌面入口提交的远端 Windows / Linux CI 已通过。另用仓库自带示例完成 host.verify，无漂移警告，不计作真实模型会话验收。桌面原生窗口已核对欢迎页、Mode、技能列表与详情；完整文件选择 / 确认弹窗链尚未人工走完，不与操作桥测试混同。已有缓存、归档与用户文件未清理。
+当前本机回归：Python 78 项通过、3 项跳过（Windows 符号链接权限与 POSIX 执行位）；桌面测试 16 项通过，覆盖操作参数、真实内容读取、ZIP 往返与项目应用、市场数据净化、配置保密、能力分组和格式错误提示。Vite 生产构建通过。以真实 Agent Skill Library 的 4 个 Mode、37 个去重 Skill 核对了原生窗口中的模式切换、能力分组、Skill 详情和 Agent 配置页；另在内置示例验证了无效技能草稿被拒收、错误在编辑弹窗内可见、取消不保存。业务源文件未用于修改测试。完整 GUI 成功写入弹窗链、所有宿主的新会话、跨电脑仍未验收。此前桌面入口提交的远端 Windows / Linux CI 已通过；本次新增回归另行验证，不能沿用旧 CI 结果。已有缓存、归档与用户文件未清理。
+
+本轮使用生图生成产品方向参考，并结合 CC Switch 的分区管理与 React Flow 的关系呈现重做界面。实机发现树图会缩小文字，默认改为可展开的能力分组卡片；关系图仅解释明确依赖。生图里的示意技能、顺序连线与“已应用”状态没有当成真实产品数据。本地 DeepSeek Harness 已收到只读代码审查请求，但配置的模型返回 429 套餐限额，没有取得本轮第三方审查结论。
 
 Windows 便携版在本机成功构建并启动；移除子进程 PATH 与系统 Python 路径后，内置核心仍可返回真实 Mode 与 Skill。展开目录实测约 387 MiB（主要为 Electron），不是“小体积应用”的证据；目前只有未签名预览构建，没有安装器、自动更新、另一台干净电脑验收或正式二进制发行。脚本保留 Electron / Chromium 许可并收集 Python / PyYAML 许可；正式二进制发布前仍须核对所选 Python 发行版的全部附带库许可。
 
@@ -1250,14 +1277,14 @@ Windows 便携版在本机成功构建并启动；移除子进程 PATH 与系统
 | 状态 | 模块 | 当前事实 | 尚缺的增量 |
 | --- | --- | --- | --- |
 | 🟢 已实现 | Environment 与 Mode | Personal / 公开 Skill Library 各 37 Skill、4 Mode；完整包与 SOURCE 留在本地，Mode 显式选择能力 | 结构化 Mode spec 当前只有 skills；上下文关联与模型偏好未加入 |
-| 🟢 代码已测 | Harness CLI | 11 个命令；Mode 包导出 / 预览 / 导入复用闭包、视图与回滚；App 已复用管理操作 | 不重写 Agent Loop；GUI 自动回归范围继续补充 |
+| 🟢 代码已测 | Harness CLI | 13 个命令；新增 catalog / edit，覆盖 Mode 与 Skill 管理；复用闭包、视图与回滚 | 不重写 Agent Loop；GUI 自动回归范围继续补充 |
 | 🟢 代码已测 | 局部保护 | 日常投影 / Hook 只检查当前 Mode 闭包；用户改动冲突不被静默覆盖 | 不相关候选不能阻断日常工作；不承担业务规则语义裁判 |
 | 🟢 代码已测 | DeepSeek Preset 导出 | 完整能力复制、配置指纹、显式 Hook 定位已有实现 | 生成记录带本机绝对路径，是本机投影，不是通用迁移包 |
 | 🟢 已收敛 | Skill 自主性与旧入口 | Harness 不要求统一全包加载；A/B 业务规则保持；已定位旧调度器与 domain 调用要求退出活动面 | 继续保留来源历史，不借产品化再造全局调度规则 |
 | 🟠 部分实现 | 复杂依赖 | 导入预览已读出支持的 Node / Python / MCP 原生声明；本机 Agent Reach 的 pyproject 已做只读解析核对 | 不等于已经安装或能运行；原生安装协调、账号引导、可选依赖解析与明确就绪展示待补 |
 | 🟠 待真实宿主验收 | 三宿主投影与 Hook | 函数有测试；本机 DSH Desktop 为 2.0.4，内置官方包 0.1.2-alpha.1；已核对其 Preset 切换限制 | 新会话、切 Mode、真实连接与 Hook 异常仍待实机验证；不能称三宿主成熟 |
 | 🟠 待刷新 | 本机旧部署 | 四个 ASL Preset 仍属旧投影；本轮未重建 | 检查用户局部修改后，只更新选定生成面 |
-| 🟠 部分实现 | 独立 App | Electron 桌面入口、真实 Mode / Skill 浏览、包预览 / 导入 / 分享、宿主文件应用；Windows 可内置核心 | 完整 GUI 操作链验收、可视编辑 / 单项能力管理、模型 / 安装引导与正式分发待补 |
+| 🟠 部分实现 | 独立 App | Electron + React；真实库、可展开能力地图、Mode / Skill 编辑与归档、本地完整技能导入、市场浏览、独立 Agent 配置页 | 完整 GUI 写入链、任意上游技能补齐、市场原生安装、CLI / MCP / 模型配置、用户级应用与正式分发待补 |
 | 🟠 部分实现 | 可迁移环境协议 | Mode 与完整 Skill 已可往返；新目录导入及重新投影已测 | 未做另一台电脑或新宿主会话验收；原生依赖安装、MCP 配置转换和模型连接未实现 |
 | 🟠 设计已修订 | Model 配置 | View 2F 定义 Mode 偏好、本机路由、实际会话模型的边界 | 尚无统一配置界面；不能切任意宿主现有会话 |
 | 🟠 设计已修订 | 经验培养 | View 7C 记录 EvoMap 证据与轻量采用方案；本地可编辑、明确反馈优先 | 尚无推荐 / 经验合并界面和效果证据；不宣称“已自进化” |
@@ -1279,7 +1306,7 @@ Windows 便携版在本机成功构建并启动；移除子进程 PATH 与系统
 
 这些是实现推进顺序，不是业务工作流。协议、App 与适配器围绕同一个真实操作闭环推进，不先造一个巨大的抽象协议，也不把可分享和模型配置拖成遥远的附加功能。
 
-**当前工程形式：**独立桌面 App 使用 Electron + 原生 HTML / CSS / JavaScript，暂不引入 React、前端构建框架或常驻 API 服务。`desktop/bridge.cjs` 把受限管理操作转成既有 CLI 参数；开发版运行 Python，Windows 便携版调用 `scripts/build_desktop.py` 打包的核心。主进程隔离、路径选择与写入确认在 `desktop/main.cjs`；真实 Mode 说明随既有 `workspace.validate` 返回，不维护第二套目录。DSH 插件仍为后续入口，计划复用同一管理逻辑。
+**当前工程形式：**独立桌面 App 使用 Electron + React + Vite，图标来自 Lucide，关系图使用 React Flow。复用成熟组件以支撑编辑器、弹窗、侧栏及图交互，不新增常驻 API 服务或数据库。`desktop/bridge.cjs` 把受限管理操作转成 CLI 参数，编辑内容通过 stdin 传入；`management.py` 返回真实目录、引用者、变更影响并执行原子写入；`library.cjs` 仅保存本机最近路径与已配置项目的引用。`native.cjs` 只读检测，`market.cjs` 只读发现；没有把“浏览”当作“安装”。开发版运行 Python，Windows 构建脚本收集 Vite 产物、所用前端包许可及内置 Python 核心。DSH 内的原生管理插件仍为后续入口。
 
 这个选择的理由是减少重写：现有核心是 Python，而 DSH / 桌面 UI 生态主要是 JavaScript / TypeScript。仅做 DSH 插件会失去独立跨宿主管理能力；直接 Fork CC Switch 会继承本任务不需要的提供商与代理业务；先引入 Rust 后端也不会消除现有 Python 核心。先用一条产品路径验证，再决定是否有必要更换技术。
 

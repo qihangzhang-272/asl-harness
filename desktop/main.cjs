@@ -1,11 +1,19 @@
-const { app, BrowserWindow, dialog, ipcMain } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, shell, net } = require("electron");
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const { runCore, commandArgs } = require("./bridge.cjs");
+const {
+  readPreferences,
+  rememberLibrary,
+  writePreferences,
+  isLibrary,
+} = require("./library.cjs");
+const { nativeInventory } = require("./native.cjs");
+const { discover, publicUrl } = require("./market.cjs");
 
 const root = path.resolve(__dirname, "..");
-const page = pathToFileURL(path.join(__dirname, "index.html")).href;
+const page = pathToFileURL(path.join(__dirname, "dist/index.html")).href;
 let window;
 const selected = new Set();
 let busy = false;
@@ -37,13 +45,14 @@ function handle(channel, fn) {
 }
 
 app.whenReady().then(() => {
+  const preferenceFile = path.join(app.getPath("userData"), "libraries.json");
   window = new BrowserWindow({
     width: 1320,
     height: 880,
-    minWidth: 960,
+    minWidth: 900,
     minHeight: 680,
     title: "ASL Workspace",
-    backgroundColor: "#f5f4ee",
+    backgroundColor: "#f5f5f7",
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       nodeIntegration: false,
@@ -60,22 +69,64 @@ app.whenReady().then(() => {
     (_contents, _permission, callback) => callback(false),
   );
 
-  handle("asl:initial", () => {
+  handle("asl:initial", async () => {
+    const preferences = await readPreferences(preferenceFile);
     const index = process.argv.indexOf("--workspace");
     const initial =
-      index >= 0 ? path.resolve(process.argv[index + 1] || ".") : null;
+      index >= 0
+        ? path.resolve(process.argv[index + 1] || ".")
+        : preferences.lastLibrary;
     if (initial) selected.add(initial);
     const example = app.isPackaged
       ? path.join(process.resourcesPath, "example-environment")
       : path.join(root, "examples/personal-environment");
     selected.add(example);
-    return { workspace: initial, example, packaged: app.isPackaged };
+    const libraries = [...preferences.libraries];
+    if (!app.isPackaged)
+      for (const relative of [
+        "../../libraries/agent-skill-library",
+        "../../environment/personal-harness",
+      ]) {
+        const candidate = path.resolve(root, relative);
+        if ((await isLibrary(candidate)) && !libraries.includes(candidate))
+          libraries.push(candidate);
+      }
+    for (const location of libraries) selected.add(location);
+    return { workspace: initial, example, libraries, packaged: app.isPackaged };
+  });
+
+  handle("asl:remember", async (workspace) => {
+    if (!selected.has(path.resolve(workspace)))
+      throw new Error("请先选择技能库");
+    return rememberLibrary(preferenceFile, workspace);
+  });
+  handle("asl:native", async () => {
+    const report = await nativeInventory();
+    for (const preset of report.presets) selected.add(preset.path);
+    return {
+      ...report,
+      targets: (await readPreferences(preferenceFile)).targets,
+    };
+  });
+  handle("asl:discover", (provider, query) =>
+    discover(provider, query, (...args) => net.fetch(...args)),
+  );
+  handle("asl:external", async (url) => {
+    const safe = publicUrl(url);
+    if (!safe) throw new Error("不支持的外部链接");
+    await shell.openExternal(safe);
   });
 
   handle("asl:choose", async (kind) => {
     let result;
     if (
-      ["environment", "project", "basePreset", "packageFolder"].includes(kind)
+      [
+        "environment",
+        "project",
+        "basePreset",
+        "packageFolder",
+        "skillFolder",
+      ].includes(kind)
     ) {
       result = await dialog.showOpenDialog(window, {
         title: {
@@ -83,6 +134,7 @@ app.whenReady().then(() => {
           project: "选择要交给 Agent 的项目",
           basePreset: "选择一个已有的 DeepSeek Preset",
           packageFolder: "选择环境包目录",
+          skillFolder: "选择包含 SKILL.md 的完整技能文件夹",
         }[kind],
         properties: ["openDirectory"],
       });
@@ -125,23 +177,50 @@ app.whenReady().then(() => {
       if (values[key] && !selected.has(path.resolve(values[key])))
         throw new Error("请先用文件选择器选择这个位置");
     }
+    if (
+      action === "edit" &&
+      values.request.source &&
+      !selected.has(path.resolve(values.request.source))
+    )
+      throw new Error("请先选择要导入的技能文件夹");
     if (busy) throw new Error("当前操作尚未完成");
     const write =
       ["project", "preset"].includes(action) || values.apply === true;
     busy = true;
     try {
-      if (write) {
+      if (
+        write &&
+        (action !== "edit" ||
+          values.request.operation.endsWith(".archive") ||
+          values.request.operation === "skill.import")
+      ) {
         const answer = await dialog.showMessageBox(window, {
           type: "question",
           buttons: ["取消", "确认应用"],
           defaultId: 0,
           cancelId: 0,
-          message: "应用这次工作环境变更？",
-          detail: `${action === "import" && values.replace ? "将替换预览中冲突的同名内容。\n" : ""}目标：${values.output || values.target || values.project}\n不安装外部依赖，不更改账号，不迁移聊天历史。`,
+          message:
+            action === "edit" ? "确认这次内容变更？" : "应用到所选位置？",
+          detail: `${action === "import" && values.replace ? "将替换预览中冲突的同名内容。\n" : ""}${action === "project" ? "范围：仅所选项目\n" : ""}目标：${values.output || values.target || values.project || values.workspace}\n${action === "edit" ? values.request.id : "不更改其他项目或模型账号。"}`,
         });
         if (answer.response !== 1) return { canceled: true };
       }
-      return await runCore(action, values, options);
+      const result = await runCore(action, values, options);
+      if (action === "project") {
+        const preferences = await readPreferences(preferenceFile);
+        preferences.targets = [
+          {
+            project: values.project,
+            host: values.host,
+            workspace: values.workspace,
+          },
+          ...preferences.targets.filter(
+            (t) => !(t.project === values.project && t.host === values.host),
+          ),
+        ].slice(0, 30);
+        await writePreferences(preferenceFile, preferences);
+      }
+      return result;
     } finally {
       busy = false;
     }
@@ -172,7 +251,7 @@ app.whenReady().then(() => {
     }
     return texts;
   });
-  window.loadFile(path.join(__dirname, "index.html"));
+  window.loadFile(path.join(__dirname, "dist/index.html"));
 });
 
 app.on("window-all-closed", () => app.quit());

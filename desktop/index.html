@@ -5,107 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; base-uri 'none'; form-action 'none'"
+      content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; base-uri 'none'; form-action 'none'"
     />
     <title>ASL Workspace</title>
-    <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <aside class="rail">
-      <div class="brand">
-        <span class="mark">a.</span
-        ><span>ASL<span class="sub-brand">WORKSPACE</span></span>
-      </div>
-      <button id="open" class="outline full">
-        打开工作环境 <span>↗</span>
-      </button>
-      <div class="rail-title">我的工作模式 <span id="mode-count">—</span></div>
-      <nav id="modes" aria-label="工作模式"></nav>
-      <div class="rail-bottom">
-        <span class="dot"></span> 本地文件，由你拥有
-        <p>App 关闭后，Agent 仍可继续工作。</p>
-        <span class="edition">Developer Preview · 0.1</span>
-      </div>
-    </aside>
-    <main>
-      <header>
-        <div class="breadcrumb">
-          工作环境 <span>/</span> <b id="environment-name">尚未打开</b>
-        </div>
-        <button id="refresh" class="quiet" disabled>↻ 刷新</button>
-      </header>
-      <section id="welcome" class="welcome">
-        <span class="eyebrow">A PLACE FOR YOUR CAPABILITIES</span>
-        <h1>把收藏的能力，<br />变成自己的工作环境。</h1>
-        <p>
-          打开已有环境，或导入一个培养过的 Mode。<br />你的技能留在本地，在熟悉的
-          Agent 里工作。
-        </p>
-        <button id="welcome-open" class="primary">选择工作环境 →</button
-        ><button id="welcome-import" class="quiet">导入环境包</button
-        ><button id="welcome-example" class="quiet">先看看内置示例</button>
-        <div class="welcome-foot">
-          Codex App · Claude Code · DeepSeek Harness
-        </div>
-      </section>
-      <section id="workspace" hidden>
-        <div class="hero">
-          <div>
-            <span class="eyebrow">YOUR WORKING MODE</span>
-            <h1 id="mode-title"></h1>
-            <p id="mode-description"></p>
-          </div>
-          <div class="hero-count">
-            <strong id="skill-count">0</strong><span>项可选择的能力</span>
-          </div>
-        </div>
-        <div class="toolbar">
-          <div class="segmented">
-            <button id="tab-capabilities" class="active">能力</button
-            ><button id="tab-boundary">工作范围</button>
-          </div>
-          <div class="actions">
-            <button id="import" class="outline">＋ 导入 Mode</button
-            ><button id="export" class="outline">分享环境 ↗</button
-            ><button id="connect" class="primary">应用到 Agent →</button>
-          </div>
-        </div>
-        <section id="capabilities-panel">
-          <div class="section-heading">
-            <h2>在这个模式里，你可以用什么</h2>
-            <span>按任务选择，不规定执行顺序</span>
-          </div>
-          <div id="skills" class="skills"></div>
-        </section>
-        <section id="boundary-panel" hidden>
-          <h2>这个 Mode 的定义</h2>
-          <pre id="boundary"></pre>
-        </section>
-        <div class="connection-note">
-          <span class="connection-symbol">↔</span>
-          <div>
-            <b>技能已在本地，不等于外部服务已连接。</b>
-            <p>
-              导入会保留脚本和依赖说明。模型账号、MCP 登录与运行依赖仍需在目标
-              Agent 中配置。
-            </p>
-          </div>
-          <span class="status-tag">运行环境未检测</span>
-        </div>
-        <footer>
-          <span id="environment-path"></span><span id="view-status"></span>
-        </footer>
-      </section>
-      <div id="notice" role="status" aria-live="polite" hidden></div>
-    </main>
-    <dialog id="modal">
-      <div class="modal-head">
-        <h2 id="modal-title"></h2>
-        <button id="close-modal" class="quiet" aria-label="关闭">×</button>
-      </div>
-      <div id="modal-body"></div>
-      <div id="modal-actions"></div>
-    </dialog>
-    <script src="renderer.js"></script>
+    <div id="root"></div>
+    <script type="module" src="/renderer.js"></script>
   </body>
 </html>

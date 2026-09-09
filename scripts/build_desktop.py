@@ -25,6 +25,10 @@ def build(output: Path) -> Path:
         raise ValueError("Use a new output directory; existing builds are never deleted")
     if not (runtime / "electron.exe").is_file():
         raise ValueError("Run npm ci in desktop/ first")
+    npm = shutil.which("npm.cmd") or shutil.which("npm")
+    if not npm:
+        raise ValueError("Node.js and npm are required to build the interface")
+    subprocess.run([npm, "run", "build"], cwd=desktop, check=True)
     output.mkdir(parents=True)
     work = output / "build"
     work.mkdir()
@@ -36,13 +40,24 @@ def build(output: Path) -> Path:
     (app / "electron.exe").rename(app / "ASL Workspace.exe")
     assets = app / "resources/app"
     assets.mkdir()
-    for name in ("package.json", "main.cjs", "preload.cjs", "bridge.cjs", "index.html", "renderer.js", "style.css"):
+    for name in ("package.json", "main.cjs", "preload.cjs", "bridge.cjs", "library.cjs", "native.cjs", "market.cjs"):
         shutil.copy2(desktop / name, assets / name)
+    shutil.copytree(desktop / "dist", assets / "dist")
     shutil.copytree(work / "dist/asl-harness", app / "resources/core")
     shutil.copytree(root / "examples/personal-environment", app / "resources/example-environment")
     shutil.copy2(root / "LICENSE", app / "ASL-LICENSE.txt")
     notices = app / "resources/licenses"
     notices.mkdir()
+    packages = subprocess.run([npm, "ls", "--omit=dev", "--all", "--parseable"],
+                              cwd=desktop, capture_output=True, text=True, check=True)
+    for location in packages.stdout.splitlines()[1:]:
+        package = Path(location)
+        metadata = json.loads((package / "package.json").read_text(encoding="utf-8"))
+        destination = notices / "npm" / metadata["name"].replace("/", "--")
+        for source in package.iterdir():
+            if source.is_file() and source.name.lower().startswith(("license", "copying", "notice")):
+                destination.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source, destination / source.name)
     for file in importlib.metadata.files("PyYAML") or []:
         if file.name == "LICENSE":
             shutil.copy2(file.locate(), notices / "PyYAML-LICENSE.txt")
