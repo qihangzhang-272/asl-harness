@@ -15,6 +15,7 @@ from .adapters import (
 )
 from .deepseek import export_preset, verify_preset
 from .sync import sync_environment
+from .portable import export_pack, inspect_pack, import_pack
 from .workspace import HarnessError, Workspace
 
 
@@ -64,10 +65,32 @@ def _parser() -> argparse.ArgumentParser:
     sync.add_argument("--mode")
     sync.add_argument("--check", action="store_true")
     sync.add_argument("--replace", action="store_true")
+
+    pack_export = commands.add_parser("mode.export", help="Share one Mode as an editable Agent Plugins layout or ZIP")
+    pack_export.add_argument("--workspace", required=True)
+    pack_export.add_argument("--mode", required=True)
+    pack_export.add_argument("--output", required=True)
+    pack_export.add_argument("--include-profile", action="store_true")
+    pack_export.add_argument("--check", action="store_true")
+
+    inspect = commands.add_parser("mode.inspect", help="Inspect an ASL snapshot without installing or activating it")
+    inspect.add_argument("--source", required=True)
+    pack_import = commands.add_parser("mode.import", help="Import a complete Mode snapshot into a local Environment")
+    pack_import.add_argument("--source", required=True)
+    pack_import.add_argument("--target", required=True)
+    pack_import.add_argument("--check", action="store_true")
+    pack_import.add_argument("--replace", action="store_true")
     return parser
 
 
 def _execute(args: argparse.Namespace) -> dict:
+    if args.command == "mode.export":
+        return {"ok": True, **export_pack(args.workspace, args.mode, args.output,
+                                          include_profile=args.include_profile, check=args.check)}
+    if args.command == "mode.inspect":
+        return {"ok": True, **inspect_pack(args.source)}
+    if args.command == "mode.import":
+        return {"ok": True, **import_pack(args.source, args.target, check=args.check, replace=args.replace)}
     if args.command == "environment.sync":
         return {
             "ok": True,

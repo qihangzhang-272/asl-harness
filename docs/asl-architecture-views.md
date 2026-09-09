@@ -47,7 +47,7 @@
 | --- | --- | --- | --- |
 | Harness System | 确定性核心、维护保护、访问面和宿主适配 | 第二个 Agent、第二调度器、业务 Mode | Harness 代码与确定性规则变更 |
 | ASL App（待开发） | 选择、管理、配置、分享与培养工作环境的用户入口 | 另一个聊天 Agent、私有的第二份内容数据库 | 调用同一 Harness 核心，不另写业务真源 |
-| 可迁移环境包（待实现） | 选定环境内容与必要依赖配方的可分享快照 | 整机备份、凭据包、已安装的 Runtime | 导出自动生成；接收方采用后独立维护 |
+| 可迁移环境包（首版已实现） | 选定 Mode 与完整 Skill 闭包的目录 / ZIP 快照；运行依赖协调待补 | 整机备份、凭据包、已安装的 Runtime | 导出自动生成；接收方采用后独立维护 |
 | Personal Environment | 用户本地 Git 管理的唯一运行真源 | 上游仓库的镜像、一次 Case、宿主缓存 | 用户授权下由当前 Host 经 Guards 修改 |
 | Skill | 可以独立承担责任的完整本地能力包 | Prompt 碎片、一个 Workflow 节点、裸 MCP/API | 用户明确指定引入时可直接本地化；其余不确定变化可先隔离 Trial |
 | Mode | 一种可反复进入的广域工作状态；选择显式 Skill 根 | Domain、固定顺序、个人能力全集、系统维护功能 | 用代表性 Case 验证最小 Mode diff |
@@ -84,7 +84,7 @@ flowchart TB
 
     subgraph MANAGE["Harness 管理机制 · 不是第二个 Agent"]
         INTAKE["导入与安装协调 · 待开发<br/>识别能力与依赖，预览差异<br/>绑定指定 Mode，调用原生安装器"]
-        PORTABLE["可迁移环境包 · 待开发<br/>相对路径内容 + 依赖配方 + 清单<br/>默认不带秘密、缓存和私人任务"]
+        PORTABLE["可迁移包 · 内容往返已实现<br/>Mode + 完整 Skill + 指纹清单<br/>运行依赖安装与连接待补"]
         CORE["已有 CLI 与保护<br/>扫描 / 校验 / 闭包 / 视图 / 单 Skill 同步<br/>路径、秘密、用户修改冲突、文件回滚与指纹"]
         STEWARD["已有 Host 管理入口<br/>按授权发现、采用与修订能力<br/>不裁决业务 Skill 的语义冲突"]
         LEARN["培养与推荐 · 待开发<br/>相关经验召回、合并、更正与撤回<br/>没有积分或随机变异调度器"]
@@ -575,9 +575,37 @@ flowchart LR
 
 ---
 
-## View 2E · 可迁移环境包与复杂能力安装（设计，待实现）
+## View 2E · 可迁移环境包与复杂能力安装（内容往返已实现，原生安装待实现）
 
 **分享的是“工作环境配方 + 用户选择的内容”，不是已安装电脑的备份。** 配方描述需要哪些能力以及怎样接到宿主；内容保留可编辑文件。接收者用自己的模型账号，在自己的电脑上装好实际依赖。
+
+### 当前可运行的最小包
+
+`mode.export`、`mode.inspect`、`mode.import` 已实现目录 / ZIP 往返。根目录采用 [Agent Plugins 1.0 的 manifest 与布局](https://agent-plugins.org/specification)：`plugin.json`、`skills/<id>/`；ASL 专有内容放入 `io.github.qihangzhang-272.asl/`，不污染通用字段。
+
+```text
+creator-studio.zip
+├── plugin.json                 # 标准元数据；ASL 扩展记录版本、Mode、文件哈希和执行位
+├── skills/<skill-id>/           # 仅当前 Mode 闭包，完整方法、来源、脚本与资产
+└── io.github.qihangzhang-272.asl/
+    ├── modes/creator-studio/    # MODE.md + mode.yaml
+    └── PROFILE.md              # 默认没有；明确 --include-profile 才加入
+```
+
+```sh
+asl-harness mode.export --workspace ./environment --mode creator-studio --output ./creator-studio.zip --check
+asl-harness mode.export --workspace ./environment --mode creator-studio --output ./creator-studio.zip
+asl-harness mode.inspect --source ./creator-studio.zip
+asl-harness mode.import --source ./creator-studio.zip --target ./received --check
+asl-harness mode.import --source ./creator-studio.zip --target ./received
+```
+
+- **内容不丢、默认少带：**依赖清单与脚本作为 Skill 内容保留；不打包 `.git`、`node_modules`、虚拟环境、缓存、其他 Mode、私人任务或 Mode 目录中的额外笔记。PROFILE 需显式选择，导入已有环境也不覆盖接收者自己的 PROFILE。导出预览列出文件、依赖描述和疑似本机路径，不偷偷改写技能。
+- **预览与写入分开：**`--check` 不改目标；同名不同内容列为冲突，只有显式 `--replace` 才替换；报告受影响的其他 Mode。复用既有回滚保护，导入新目录先暂存，成功才落位；相同内容重复导入不制造变更。stdout JSON 是操作回执，不新增日志数据库。
+- **可核对不等于可信：**逐文件 SHA-256 检查缺失、篡改和夹带；拒绝越界路径、符号链接、大小写冲突及明显秘密。ZIP 限 10,000 文件 / 512 MiB 展开内容，避免无界解包。哈希不是签名，文本秘密扫描也不是隐私认证；导出者仍需检查分享内容。
+- **兼容范围不夸大：**这是 ASL 快照读写器，采用通用包装，不是完整 Agent Plugins 客户端认证。不直接把 ZIP 交给 DSH 或 Claude；导入为本地 Environment 后继续走现有宿主适配。当前未实现通用第三方插件采用、MCP 转换或原生运行依赖安装，`runtimeStatus` 明确是 `not-checked`。
+
+参考 [Hermes plugin_packs.py](https://github.com/NousResearch/hermes-agent/blob/main/hermes_cli/plugin_packs.py) 的预览、已有配置优先、秘密与权限不随包迁移；保留 ASL 本地完整内容，不照搬其只凭 Git 安装记录导出的限制。没有复制 Hermes 源码或加入其运行依赖。
 
 ```mermaid
 flowchart LR
@@ -631,7 +659,7 @@ flowchart LR
 - 社区市场将插件目录与 UI 分离，显示安装、兼容与更新状态。可借用其目录维护方式，但“被收录”不代表安全或业务质量认证；其配置备份可能含敏感信息，不能作为我们的默认分享格式。[dsh-market](https://github.com/dsh-market/dsh-market)、[社区插件目录](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin)
 - 本机社区 DSH Desktop 公开了 desktopProfiles 与 desktopPnpm。可以做一个原生 ASL 管理入口，但 Profile 切换会重启，不是静默热切；包操作接口也不自动替我们做回滚和结果验证。这些是该 Desktop 的接口，不是所有 DSH 发行版都有。[公开插件服务](https://github.com/anywhere-labs/deepseek-harness-desktop/blob/master/dsh-plugin-desktop/docs/plugin-services.zh.md)
 
-**现有导出不能冒充迁移完成。** 当前 deepseek.preset.export 已复制完整能力并写指纹，但生成记录仍包含本机 Environment 的绝对路径；它是本机 Preset 投影。可分享包的脱敏、依赖重建、接收方路径重绑定和安装体验都尚未实现。
+**本机投影与分享包已经分开。** `deepseek.preset.export` 继续生成带本机路径的 Preset；`mode.export` 不复制这些投影标记。已验证分享包导入另一个目录后重新投影到 Codex 项目，引用接收目录而非发送目录；这是文件接入验收，仍不等于新会话运行或复杂依赖已就绪。
 
 ---
 
@@ -1193,12 +1221,12 @@ MCP 的可移植性高于宿主 Plugin，因此当前架构优先让 Skill 声�
 
 此前同日的规则清理：两份 Environment 中已定位的失效调度器、索引及旧调用引用由 42 条降为 0；各修改 5 个 Skill 的 10 个文件，10 次 Skill 结构检查通过。两份 Environment 全库校验通过；协议 21 份 Markdown 校验通过。这些是此前清理的结果，不证明所有业务冲突已经消失。
 
-本轮开始时重新运行 Harness 回归：48 项测试通过（禁用字节码与 pytest 缓存）。前一轮 19 张 Mermaid 图已完成渲染检查，本轮图形尚未变更；Markdown diff 检查通过。代码与文档按开发真源机械同步至公开发布检出后提交。已有缓存、归档与用户文件未删除。
+当前本机回归：64 项通过、2 项跳过（Windows 无符号链接权限、POSIX 执行位留给 Linux CI）；禁用字节码与 pytest 缓存。用仓库自带示例完成 ZIP 导出、独立目录导入、Codex 文件投影及 host.verify，无漂移警告，不计作真实模型会话验收。前一轮 19 张图已渲染；本轮修改总图文字后继续检查。已有缓存、归档与用户文件未删除。
 
 | 状态 | 模块 | 当前事实 | 尚缺的增量 |
 | --- | --- | --- | --- |
 | 🟢 已实现 | Environment 与 Mode | Personal / 公开 Skill Library 各 37 Skill、4 Mode；完整包与 SOURCE 留在本地，Mode 显式选择能力 | 结构化 Mode spec 当前只有 skills；上下文关联与模型偏好未加入 |
-| 🟢 代码已测 | Harness CLI | 8 个命令；已有扫描、校验、闭包、视图、单 Skill 同步、投影和指纹保护 | App 应复用这些接口，不重写 Agent Loop |
+| 🟢 代码已测 | Harness CLI | 11 个命令；新增 Mode 包导出 / 预览 / 导入，复用闭包、视图与回滚 | App 应复用这些接口，不重写 Agent Loop |
 | 🟢 代码已测 | 局部保护 | 日常投影 / Hook 只检查当前 Mode 闭包；用户改动冲突不被静默覆盖 | 不相关候选不能阻断日常工作；不承担业务规则语义裁判 |
 | 🟢 代码已测 | DeepSeek Preset 导出 | 完整能力复制、配置指纹、显式 Hook 定位已有实现 | 生成记录带本机绝对路径，是本机投影，不是通用迁移包 |
 | 🟢 已收敛 | Skill 自主性与旧入口 | Harness 不要求统一全包加载；A/B 业务规则保持；已定位旧调度器与 domain 调用要求退出活动面 | 继续保留来源历史，不借产品化再造全局调度规则 |
@@ -1206,13 +1234,15 @@ MCP 的可移植性高于宿主 Plugin，因此当前架构优先让 Skill 声�
 | 🟠 待真实宿主验收 | 三宿主投影与 Hook | 函数有测试；本机 DSH Desktop 为 2.0.4，内置官方包 0.1.2-alpha.1；已核对其 Preset 切换限制 | 新会话、切 Mode、真实连接与 Hook 异常仍待实机验证；不能称三宿主成熟 |
 | 🟠 待刷新 | 本机旧部署 | 四个 ASL Preset 仍属旧投影；本轮未重建 | 检查用户局部修改后，只更新选定生成面 |
 | 🟠 设计已修订 | 独立 App | 已明确为主产品，不再是“以后可包装”的简单管理首页；View 2D 定义使用入口 | 尚无 App 可供安装或截图演示 |
-| 🟠 设计已修订 | 可迁移环境协议 | View 2E 定义内容、依赖、秘密和宿主扩展的分享边界 | 尚无包格式实现、跨机导入与路径重绑定验收 |
+| 🟠 部分实现 | 可迁移环境协议 | Mode 与完整 Skill 已可往返；新目录导入及重新投影已测 | 未做另一台电脑或新宿主会话验收；原生依赖安装、MCP 配置转换和模型连接未实现 |
 | 🟠 设计已修订 | Model 配置 | View 2F 定义 Mode 偏好、本机路由、实际会话模型的边界 | 尚无统一配置界面；不能切任意宿主现有会话 |
 | 🟠 设计已修订 | 经验培养 | View 7C 记录 EvoMap 证据与轻量采用方案；本地可编辑、明确反馈优先 | 尚无推荐 / 经验合并界面和效果证据；不宣称“已自进化” |
 | 🟠 后续适配 | DSH 管理插件、其他 Agent | 官方 Bundle / Preset 与社区 Desktop 接口已调研；架构保留同一适配边界 | 未开发管理插件；Hermes / OpenClaw / WorkBuddy 等未验证兼容 |
 | ⚪ 派生物 | 宿主投影与状态视图 | 从本地真源生成，安装 / 已投影 / 实际可用必须区分 | 不可将生成成功当作会话加载或业务质量成功 |
 
 **当前判断：底座可复用，产品还未完成。** 新方向不是“把现有库放进 DeepSeek 用一下”，而是独立的工作环境管理 App，加上可分享的内容协议和原生宿主适配。DeepSeek 是功能更完整的优先适配对象，不是 ASL 的唯一运行入口。
+
+**本轮 DeepSeek 协作：**在本机原有调研会话发送只读审查请求，未让它改仓库。采纳“标准包装不等于 DSH / Claude 直接加载”、命名空间隔离、沿用闭包 / 回滚 / JSON 回执、保留未知运行状态；没有采用把主产品降成只读静态页面的建议。它未在本次核实的规范判断仍由当前实现逐项核对，不当作独立验收。
 
 ### 接下来怎么执行（按阶段验证，不一次宣称完成）
 
