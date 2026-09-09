@@ -17,6 +17,7 @@ from .deepseek import export_preset, verify_preset
 from .sync import sync_environment
 from .portable import export_pack, inspect_pack, import_pack
 from .workspace import HarnessError, Workspace
+from .management import catalog, edit
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -25,6 +26,12 @@ def _parser() -> argparse.ArgumentParser:
         description="Validate ASL Environments, sync complete Skills, and project one Mode to a native Host.",
     )
     commands = parser.add_subparsers(dest="command", required=True)
+
+    catalog_command = commands.add_parser("environment.catalog")
+    catalog_command.add_argument("--workspace", required=True)
+    edit_command = commands.add_parser("environment.edit")
+    edit_command.add_argument("--workspace", required=True)
+    edit_command.add_argument("--check", action="store_true")
 
     validate = commands.add_parser("workspace.validate")
     validate.add_argument("--workspace", required=True, help="Personal Harness Environment root")
@@ -84,6 +91,13 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def _execute(args: argparse.Namespace) -> dict:
+    if args.command == "environment.catalog":
+        return {"ok": True, **catalog(args.workspace)}
+    if args.command == "environment.edit":
+        raw = sys.stdin.read(2 * 1024 * 1024 + 1)
+        if len(raw) > 2 * 1024 * 1024:
+            raise HarnessError("EDIT_INVALID", "修改请求过大")
+        return {"ok": True, **edit(args.workspace, json.loads(raw), check=args.check)}
     if args.command == "mode.export":
         return {"ok": True, **export_pack(args.workspace, args.mode, args.output,
                                           include_profile=args.include_profile, check=args.check)}
