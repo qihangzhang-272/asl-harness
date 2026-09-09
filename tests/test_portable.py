@@ -41,6 +41,43 @@ def test_pack_contains_complete_selected_mode_not_private_environment(tmp_path: 
     assert "skills/creator/package.json" in shown["dependencyFiles"]
 
 
+def test_native_dependency_preview_explains_requirements_without_execution(tmp_path: Path) -> None:
+    source = _environment(tmp_path)
+    _write(source / "skills/creator/package.json", json.dumps({
+        "engines": {"node": ">=22"}, "dependencies": {"example-client": "^1.0.0"},
+        "scripts": {"postinstall": "echo DO_NOT_EXECUTE", "build": "echo BUILD_ONLY"},
+    }))
+    _write(source / "skills/creator/pyproject.toml", '[project]\nrequires-python=">=3.11"\ndependencies=["httpx>=0.27"]\n')
+    _write(source / "skills/creator/mcp.json", json.dumps({"mcpServers": {
+        "research": {"command": "some-uninstalled-server", "env": {"SERVICE_KEY": "${SERVICE_KEY}"}},
+        "remote": {"url": "https://example.com/private-endpoint", "headers": {"Authorization": "Bearer ${REMOTE_TOKEN}"}},
+    }}))
+    report = export_pack(source, "creator-studio", tmp_path / "shared.zip", check=True)
+    details = {item["file"]: item for item in report["dependencyDetails"]}
+    node = details["skills/creator/package.json"]
+    assert "node >=22" in node["requirements"]
+    assert "example-client ^1.0.0" in node["requirements"]
+    assert node["setupScripts"] == ["build", "postinstall"]
+    assert "httpx>=0.27" in details["skills/creator/pyproject.toml"]["requirements"]
+    mcp = details["skills/creator/mcp.json"]
+    assert mcp["environmentVariables"] == ["REMOTE_TOKEN", "SERVICE_KEY"]
+    assert mcp["requirements"] == ["research (stdio)", "remote (http)"]
+    assert "DO_NOT_EXECUTE" not in json.dumps(details)
+    assert "private-endpoint" not in json.dumps(details)
+    assert report["runtimeStatus"] == "not-checked"
+    assert not (tmp_path / "shared.zip").exists()
+
+
+@pytest.mark.parametrize("filename,content", [("package.json", "{broken"), ("pyproject.toml", "[broken"), ("mcp.json", "[]")])
+def test_unreadable_dependency_declaration_is_visible_not_a_new_import_gate(tmp_path: Path, filename: str, content: str) -> None:
+    source = _environment(tmp_path)
+    _write(source / "skills/creator" / filename, content)
+    report = export_pack(source, "creator-studio", tmp_path / "shared.zip")
+    assert report["dependencyDetails"][0]["parseWarning"]
+    assert (tmp_path / "shared.zip").exists()
+    assert report["runtimeStatus"] == "not-checked"
+
+
 def test_round_trip_to_new_environment_rebinds_paths_and_preserves_bytes(tmp_path: Path) -> None:
     source = _environment(tmp_path)
     _write(source / "skills/creator/assets/demo.svg", '<svg xmlns="http://www.w3.org/2000/svg"/>')

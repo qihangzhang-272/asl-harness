@@ -17,6 +17,7 @@ import zipfile
 from contextlib import contextmanager
 from pathlib import Path, PurePosixPath
 
+from .dependencies import describe_dependencies
 from .sync import _git_status, _replace_package, _rollback_paths
 from .workspace import GENERATED_DIRECTORIES, LIFECYCLE_AREAS, HarnessError, Workspace, package_fingerprint
 
@@ -105,6 +106,7 @@ def _review(files: dict[str, bytes]) -> dict:
         if LOCAL_PATH.search(text):
             local.append(name)
     return {"localReferences": sorted(local), "dependencyFiles": sorted(dependencies),
+            "dependencyDetails": describe_dependencies(files),
             "runtimeStatus": "not-checked", "warnings": [
                 "Import transfers content only; it does not install dependencies, grant permissions, or activate MCP/Plugins.",
                 "Secret checks are heuristic, not a confidentiality certificate. Review selected content before sharing.",

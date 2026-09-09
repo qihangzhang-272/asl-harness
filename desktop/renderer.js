@@ -321,6 +321,45 @@ async function pickImport(kind) {
   ];
   if (report.dependencyFiles.length)
     nodes.push(detail("包内已有的依赖说明", report.dependencyFiles.join("\n")));
+  for (const item of report.dependencyDetails || []) {
+    const section = element("section");
+    section.append(element("h2", item.kind), element("p", item.file, "path"));
+    if (item.requirements.length)
+      section.append(
+        list(
+          item.requirements
+            .slice(0, 40)
+            .map((name) => [name, "包中声明，未检测安装状态"]),
+        ),
+      );
+    if (item.requirements.length > 40)
+      section.append(
+        element(
+          "p",
+          `另外 ${item.requirements.length - 40} 项请在原始依赖文件中查看。`,
+          "explain",
+        ),
+      );
+    if (item.environmentVariables.length)
+      section.append(
+        element(
+          "p",
+          `需要配置的环境变量：${item.environmentVariables.join("、")}。只显示名称，不读取本机值。`,
+          "explain",
+        ),
+      );
+    if (item.setupScripts.length)
+      section.append(
+        element(
+          "p",
+          `包内有准备脚本：${item.setupScripts.join("、")}。本次导入不会执行。`,
+          "warning",
+        ),
+      );
+    if (item.parseWarning)
+      section.append(element("p", item.parseWarning, "warning"));
+    nodes.push(section);
+  }
   if (report.localReferences.length)
     nodes.push(
       element(
