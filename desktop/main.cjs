@@ -11,6 +11,7 @@ const {
 } = require("./library.cjs");
 const { nativeInventory } = require("./native.cjs");
 const { discover, publicUrl } = require("./market.cjs");
+const { assistantInventory, launchAssistant, sessionStatus } = require("./assistant.cjs");
 
 const root = path.resolve(__dirname, "..");
 const page = pathToFileURL(path.join(__dirname, "dist/index.html")).href;
@@ -46,6 +47,7 @@ function handle(channel, fn) {
 
 app.whenReady().then(() => {
   const preferenceFile = path.join(app.getPath("userData"), "libraries.json");
+  const sessionRoot = path.join(app.getPath("userData"), "setup-sessions");
   window = new BrowserWindow({
     width: 1320,
     height: 880,
@@ -103,11 +105,36 @@ app.whenReady().then(() => {
   handle("asl:native", async () => {
     const report = await nativeInventory();
     for (const preset of report.presets) selected.add(preset.path);
+    for (const host of report.hosts)
+      if (typeof host.userMode?.skillsDir === "string" && path.isAbsolute(host.userMode.skillsDir)) selected.add(path.resolve(host.userMode.skillsDir));
     return {
       ...report,
+      assistants: await assistantInventory(),
       targets: (await readPreferences(preferenceFile)).targets,
     };
   });
+
+  handle("asl:setup", async (assistant, values) => {
+    commandArgs("readiness", values);
+    for (const key of ["workspace", "project", "skillsDir"])
+      if (values[key] && !selected.has(path.resolve(values[key]))) throw new Error("请先选择工作位置");
+    const installed = (await assistantInventory()).find(item => item.id === assistant && item.available);
+    if (!installed) throw new Error("请先安装 Claude Code 或 Codex CLI，并完成它的原生登录");
+    if (busy) throw new Error("当前操作尚未完成");
+    busy = true;
+    try {
+      const report = await runCore("readiness", values, options);
+      const answer = await dialog.showMessageBox(window, {
+        type: "question", buttons: ["取消", "打开配置助手"], defaultId: 1, cancelId: 0,
+        message: `用 ${installed.name} 配置这台电脑？`,
+        detail: `目标：${values.host}\n模式：${values.mode}\n范围：${values.scope === "user" ? "当前用户的所有项目" : values.project}\n将使用该 Agent 当前的模型与账号。安装和登录继续由原生窗口确认，ASL 不接管密钥。`,
+      });
+      if (answer.response !== 1) return { canceled: true };
+      return launchAssistant({ id: installed.id, executable: installed.executable, brief: report.brief,
+        workspace: values.workspace, project: values.project, scope: values.scope }, { root: sessionRoot });
+    } finally { busy = false; }
+  });
+  handle("asl:setup-status", (id) => sessionStatus(sessionRoot, id));
   handle("asl:discover", (provider, query) =>
     discover(provider, query, (...args) => net.fetch(...args)),
   );
@@ -126,6 +153,7 @@ app.whenReady().then(() => {
         "basePreset",
         "packageFolder",
         "skillFolder",
+        "userSkills",
       ].includes(kind)
     ) {
       result = await dialog.showOpenDialog(window, {
@@ -135,6 +163,7 @@ app.whenReady().then(() => {
           basePreset: "选择一个已有的 DeepSeek Preset",
           packageFolder: "选择环境包目录",
           skillFolder: "选择包含 SKILL.md 的完整技能文件夹",
+          userSkills: "选择所选 Agent 的用户技能目录（直接存放各技能文件夹的位置）",
         }[kind],
         properties: ["openDirectory"],
       });
@@ -166,6 +195,7 @@ app.whenReady().then(() => {
 
   handle("asl:run", async (action, values) => {
     commandArgs(action, values);
+    if (action === "userSync" && values.apply && !values.expected) throw new Error("请先查看同步预览");
     for (const key of [
       "workspace",
       "source",
@@ -173,6 +203,7 @@ app.whenReady().then(() => {
       "output",
       "project",
       "basePreset",
+      "skillsDir",
     ]) {
       if (values[key] && !selected.has(path.resolve(values[key])))
         throw new Error("请先用文件选择器选择这个位置");
@@ -194,14 +225,16 @@ app.whenReady().then(() => {
           values.request.operation.endsWith(".archive") ||
           values.request.operation === "skill.import")
       ) {
-        const answer = await dialog.showMessageBox(window, {
+          const answer = await dialog.showMessageBox(window, {
           type: "question",
           buttons: ["取消", "确认应用"],
           defaultId: 0,
           cancelId: 0,
           message:
             action === "edit" ? "确认这次内容变更？" : "应用到所选位置？",
-          detail: `${action === "import" && values.replace ? "将替换预览中冲突的同名内容。\n" : ""}${action === "project" ? "范围：仅所选项目\n" : ""}目标：${values.output || values.target || values.project || values.workspace}\n${action === "edit" ? values.request.id : "不更改其他项目或模型账号。"}`,
+          detail: action === "userSync"
+            ? `范围：当前用户的所有项目\nAgent：${values.host}\n模式：${values.mode}\n${values.skillsDir ? "自选技能目录：" + values.skillsDir + "\n" : ""}${values.remove ? "停用 ASL 默认模式并移除其受管副本，保留原技能源。" : "按预览同步所选模式，其他原生技能和模型账号保持不变。"}`
+            : `${action === "import" && values.replace ? "将替换预览中冲突的同名内容。\n" : ""}${action === "project" ? "范围：仅所选项目\n" : ""}目标：${values.output || values.target || values.project || values.workspace}\n${action === "edit" ? values.request.id : "不更改其他项目或模型账号。"}`,
         });
         if (answer.response !== 1) return { canceled: true };
       }

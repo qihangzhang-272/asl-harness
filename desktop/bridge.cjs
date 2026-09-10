@@ -10,6 +10,8 @@ const definitions = {
   inspect: ["mode.inspect", ["source"]],
   import: ["mode.import", ["source", "target"]],
   project: ["host.project", ["workspace", "mode", "project", "host"]],
+  userSync: ["host.user.sync", ["workspace", "mode", "host"]],
+  readiness: ["host.setup.inspect", ["workspace", "mode", "host", "scope"]],
   preset: [
     "deepseek.preset.export",
     ["workspace", "mode", "basePreset", "output"],
@@ -27,7 +29,11 @@ function commandArgs(action, values = {}) {
     throw new Error("不支持的操作");
   const [command, required] = definition;
   const optional =
-    action === "edit"
+    action === "readiness"
+      ? ["project", "probe", "skillsDir"]
+      : action === "userSync"
+      ? ["apply", "expected", "remove", "skillsDir"]
+      : action === "edit"
       ? ["request", "apply"]
       : action === "export"
         ? ["includeProfile", "apply"]
@@ -53,7 +59,7 @@ function commandArgs(action, values = {}) {
       Array.isArray(values.request))
   )
     throw new Error("修改请求必须是对象");
-  for (const key of optional.filter((key) => key !== "request"))
+  for (const key of optional.filter((key) => !["request", "expected", "project", "skillsDir"].includes(key)))
     if (key in values && typeof values[key] !== "boolean")
       throw new Error("开关必须是布尔值");
   if (values.mode && !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(values.mode))
@@ -63,12 +69,27 @@ function commandArgs(action, values = {}) {
     !["codex-app", "claude-code", "deepseek-harness"].includes(values.host)
   )
     throw new Error("不支持的宿主");
+  if (action === "userSync" && !["codex-app", "claude-code"].includes(values.host))
+    throw new Error("此 Agent 不支持用户级同步");
+  if (values.expected !== undefined && !/^[a-f0-9]{64}$/.test(values.expected))
+    throw new Error("无效的同步预览");
+  if (values.skillsDir !== undefined && (typeof values.skillsDir !== "string" || !values.skillsDir.trim() || values.skillsDir.includes("\0"))) throw new Error("无效的用户技能目录");
+  if (action === "readiness") {
+    if (!["project", "user", "preset"].includes(values.scope)) throw new Error("无效的应用范围");
+    if (values.scope !== "user" && !values.project) throw new Error("请先选择工作位置");
+    if (values.project !== undefined && (typeof values.project !== "string" || !values.project.trim() || values.project.includes("\0"))) throw new Error("无效的工作位置");
+  }
   const args = [command];
   const names = { host: "host-id", basePreset: "base-preset" };
   for (const key of required) args.push(`--${names[key] || key}`, values[key]);
+  if (action === "readiness" && values.project) args.push("--project", values.project);
+  if (values.probe) args.push("--probe");
+  if (values.skillsDir) args.push("--skills-dir", values.skillsDir);
   if (values.includeProfile) args.push("--include-profile");
   if (values.replace) args.push("--replace");
-  if (["export", "import", "edit"].includes(action) && !values.apply)
+  if (values.remove) args.push("--remove");
+  if (values.expected) args.push("--expected", values.expected);
+  if (["export", "import", "edit", "userSync"].includes(action) && !values.apply)
     args.push("--check");
   return args;
 }
@@ -96,6 +117,7 @@ function runCore(action, values, options = {}) {
         maxBuffer: 8 * 1024 * 1024,
         env: {
           ...process.env,
+          ...options.env,
           PYTHONPATH: path.join(root, "src"),
           PYTHONDONTWRITEBYTECODE: "1",
           PYTHONIOENCODING: "utf-8",

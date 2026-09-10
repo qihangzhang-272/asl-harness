@@ -3,6 +3,8 @@ contextBridge.exposeInMainWorld("asl", {
   initial: () => ipcRenderer.invoke("asl:initial"),
   remember: (workspace) => ipcRenderer.invoke("asl:remember", workspace),
   native: () => ipcRenderer.invoke("asl:native"),
+  setup: (assistant, values) => ipcRenderer.invoke("asl:setup", assistant, values),
+  setupStatus: (id) => ipcRenderer.invoke("asl:setup-status", id),
   discover: (provider, query) =>
     ipcRenderer.invoke("asl:discover", provider, query),
   external: (url) => ipcRenderer.invoke("asl:external", url),

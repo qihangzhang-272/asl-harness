@@ -40,7 +40,7 @@ def build(output: Path) -> Path:
     (app / "electron.exe").rename(app / "ASL Workspace.exe")
     assets = app / "resources/app"
     assets.mkdir()
-    for name in ("package.json", "main.cjs", "preload.cjs", "bridge.cjs", "library.cjs", "native.cjs", "market.cjs"):
+    for name in ("package.json", "main.cjs", "preload.cjs", "bridge.cjs", "library.cjs", "native.cjs", "market.cjs", "assistant.cjs"):
         shutil.copy2(desktop / name, assets / name)
     shutil.copytree(desktop / "dist", assets / "dist")
     shutil.copytree(work / "dist/asl-harness", app / "resources/core")

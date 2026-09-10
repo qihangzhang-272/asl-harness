@@ -9,21 +9,25 @@ async function exists(p) {
     return false;
   }
 }
-async function nativeInventory(home = os.homedir()) {
+async function nativeInventory(home = os.homedir(), env = process.env) {
+  const codex = path.resolve(env.CODEX_HOME || path.join(home, ".codex"));
+  const claude = path.resolve(env.CLAUDE_CONFIG_DIR || path.join(home, ".claude"));
   const definitions = [
     {
       id: "codex-app",
       name: "Codex",
-      directory: ".codex",
-      file: ".codex/config.toml",
-      scopes: ["project"],
+      directory: codex,
+      file: path.join(codex, "config.toml"),
+      skillRoot: path.join(home, ".agents", "skills"),
+      scopes: ["project", "user"],
     },
     {
       id: "claude-code",
       name: "Claude Code",
-      directory: ".claude",
-      file: ".claude.json",
-      scopes: ["project"],
+      directory: claude,
+      file: env.CLAUDE_CONFIG_DIR ? path.join(claude, ".claude.json") : path.join(home, ".claude.json"),
+      skillRoot: path.join(claude, "skills"),
+      scopes: ["project", "user"],
     },
     {
       id: "deepseek-harness",
@@ -37,12 +41,12 @@ async function nativeInventory(home = os.homedir()) {
   for (const definition of definitions) {
     const record = {
       ...definition,
-      configured: await exists(path.join(home, definition.directory)),
+      configured: await exists(path.resolve(home, definition.directory)),
       connections: null,
     };
     if (definition.file)
       try {
-        const file = path.join(home, definition.file);
+        const file = path.resolve(home, definition.file);
         if ((await fs.stat(file)).size < 2 * 1024 * 1024) {
           const text = await fs.readFile(file, "utf8");
           record.connections =
@@ -53,6 +57,13 @@ async function nativeInventory(home = os.homedir()) {
               : Object.keys(JSON.parse(text).mcpServers || {});
         }
       } catch {}
+    if (record.scopes.includes("user")) {
+      try {
+        const saved = JSON.parse(await fs.readFile(path.join(record.directory, ".asl", "user-mode.json"), "utf8"));
+        if (saved.version === 1 && saved.host === record.id)
+          record.userMode = saved.mode ? { mode: saved.mode, workspace: saved.environment, skills: Object.keys(saved.skills || {}).length, skillsDir: saved.skillRoot } : null;
+      } catch {}
+    }
     hosts.push(record);
   }
   const presets = [];

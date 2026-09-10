@@ -5,6 +5,52 @@ const path = require("node:path");
 const fs = require("node:fs/promises");
 const os = require("node:os");
 
+test("user sync has an explicit scope and defaults to a read-only preview", () => {
+  assert.deepEqual(commandArgs("userSync", { workspace: "/library", mode: "writing", host: "claude-code" }),
+    ["host.user.sync", "--workspace", "/library", "--mode", "writing", "--host-id", "claude-code", "--check"]);
+  assert.throws(() => commandArgs("userSync", { workspace: "/library", mode: "writing", host: "claude-code", home: "/elsewhere" }));
+  assert.throws(() => commandArgs("userSync", { workspace: "/library", mode: "writing", host: "deepseek-harness" }));
+});
+
+test("readiness rejects ambiguous scope and reports original setup material", async () => {
+  const root = path.resolve(__dirname, "../..");
+  const workspace = path.join(root, "examples/personal-environment");
+  assert.throws(() => commandArgs("readiness", { workspace, mode: "creator-studio", host: "codex-app", scope: "project" }));
+  assert.throws(() => commandArgs("readiness", { workspace, mode: "creator-studio", host: "codex-app", scope: "machine" }));
+  const report = await runCore("readiness", { workspace, mode: "creator-studio", host: "codex-app", scope: "user" }, { root });
+  assert.ok(report.brief.includes("MODE.md"));
+  assert.ok(Array.isArray(report.checks));
+});
+
+test("a selected user skill folder stays a literal path and requires native association", async () => {
+  const root = path.resolve(__dirname, "../..");
+  const workspace = path.join(root, "examples/personal-environment");
+  const skillsDir = path.join(root, "custom skills");
+  const values = { workspace, mode: "creator-studio", host: "claude-code", skillsDir };
+  assert.deepEqual(commandArgs("userSync", values).slice(-3), ["--skills-dir", skillsDir, "--check"]);
+  assert.throws(() => commandArgs("userSync", { ...values, skillsDir: false }));
+  const report = await runCore("readiness", { ...values, scope: "user" }, { root });
+  assert.equal(report.chosenSkillsDirectory, skillsDir);
+  assert.equal(report.nativeDiscoveryUnverified, true);
+  assert.ok(report.brief.includes(JSON.stringify(skillsDir)));
+});
+
+test("user-level desktop synchronization and Mode switching work in an isolated home", async (t) => {
+  const root = path.resolve(__dirname, "../..");
+  const home = await fs.mkdtemp(path.join(os.tmpdir(), "asl-home-test-"));
+  t.after(() => fs.rm(home, { recursive: true, force: true }));
+  const options = { root, env: { USERPROFILE: home, HOME: home, CODEX_HOME: path.join(home, ".codex"), CLAUDE_CONFIG_DIR: path.join(home, ".claude") } };
+  const workspace = path.join(root, "examples/personal-environment");
+  const args = { workspace, mode: "creator-studio", host: "claude-code" };
+  const preview = await runCore("userSync", args, options);
+  assert.equal(preview.paths.skills, path.join(home, ".claude", "skills"));
+  await runCore("userSync", { ...args, apply: true, expected: preview.fingerprint }, options);
+  assert.ok((await fs.readFile(path.join(home, ".claude", "CLAUDE.md"), "utf8")).includes("creator-studio"));
+  const removal = await runCore("userSync", { ...args, remove: true }, options);
+  await runCore("userSync", { ...args, remove: true, apply: true, expected: removal.fingerprint }, options);
+  assert.equal((await fs.readdir(path.join(home, ".claude", "skills"))).length, 0);
+});
+
 test("content edits use stdin, default to preview, and reject arbitrary payloads", () => {
   assert.deepEqual(
     commandArgs("edit", {
