@@ -46,6 +46,7 @@ import {
   ChartNoAxesCombined,
 } from "lucide-react";
 import {
+  adoptionRequest,
   capabilityGroups,
   errorText,
   graphForMode,
@@ -333,18 +334,30 @@ function CategoryEditor({ mode, skills, onSave, onClose }) {
   </Dialog>;
 }
 
-function DiscoveredSkills({ report, catalog, onInspect, empty = "尚未发现技能" }) {
+function DiscoveredSkills({ report, catalog, readOnly, onInspect, onAdd, onMode, empty = "尚未发现技能" }) {
   const [query, setQuery] = useState("");
   const found = report?.skills || [];
   const filtered = found.filter(s => `${s.title} ${s.description} ${s.id}`.toLowerCase().includes(query.toLowerCase()));
   return <>
-    <div className="field-heading"><b>{found.length} 个技能</b><span className="muted">仅发现，尚未导入</span></div>
+    <div className="field-heading"><b>{found.length} 个技能</b><button onClick={() => onMode()}><Layers3 size={15} />管理 Mode</button></div>
+    {readOnly && <p className="muted">示例库仅供预览。请先打开或创建自己的技能库，再添加技能。</p>}
     {!!found.length && <div className="search"><Search size={16} /><input aria-label="筛选发现的技能" placeholder="搜索已发现的技能" value={query} onChange={e => setQuery(e.target.value)} /></div>}
     <div className="discovered-list">
-      {filtered.map(s => <article className="discovered-skill" key={s.source}>
-        <div><strong>{s.title}</strong><p>{shortText(s.description, 160)}</p><Tag>{s.inspection?.status === "needs-review" ? "有配套内容 · 需核对" : "可预览添加"}</Tag><details><summary>来源{catalog?.skills.some(k => k.id === s.id) ? " · 库中已有同名技能" : ""}</summary><small className="path-line">{s.origin || s.location || s.source}</small></details></div>
-        <button onClick={() => onInspect(s)}>查看解析<ChevronRight size={15} /></button>
-      </article>)}
+      {filtered.map(s => {
+        const existing = catalog?.skills.some(k => k.id === s.id);
+        const modes = catalog?.modes.filter(m => m.skills.includes(s.id)) || [];
+        return <article className="discovered-skill" key={s.source}>
+          <div><strong>{s.title}</strong><p>{shortText(s.description, 160)}</p>
+            <Tag>{existing ? "库内有同名技能 · 可复用" : s.inspection?.status === "needs-review" ? "含配套内容" : "可添加"}</Tag>
+            {!!modes.length && <div className="discovered-modes"><small>库内版本已在</small>{modes.map(m => <button key={m.id} onClick={() => onMode(m.id)}><Layers3 size={13} />{m.title}</button>)}</div>}
+            <details><summary>来源</summary><small className="path-line">{s.origin || s.location || s.source}</small></details>
+          </div>
+          <div className="discovered-actions">
+            <button className="primary" disabled={!catalog || readOnly} onClick={() => onAdd(s)}><Plus size={15} />添加到 Mode</button>
+            <button onClick={() => onInspect(s)}>查看解析<ChevronRight size={15} /></button>
+          </div>
+        </article>;
+      })}
     </div>
     {!filtered.length && <Empty title={found.length ? "没有匹配的技能" : empty}><p>需要包含有效的 SKILL.md；普通仓库和插件不会被自动当作技能。</p></Empty>}
     {!!report?.issues?.length && <details className="scan-issues"><summary>{report.issues.length} 个目录或文件未纳入</summary>{report.issues.map((issue, i) => <p className="path-line" key={i}>{issue.path}：{issue.message}</p>)}</details>}
@@ -1036,7 +1049,7 @@ export default function App() {
     const data = await api("readSkill", workspace, skill.id);
     if (sequence === detailRequest.current) setTexts(data);
   }
-  async function editContent(request) {
+  async function editContent(request, addedTo) {
     const preview = await api("run", "edit", { workspace, request });
     setModal({
       kind: "review",
@@ -1044,6 +1057,7 @@ export default function App() {
         ? { ...request, expectedSource: preview.sourceFingerprint }
         : request,
       preview,
+      addedTo,
     });
   }
   async function applyEdit() {
@@ -1055,9 +1069,9 @@ export default function App() {
     if (result.canceled) return;
     setModal(null);
     await load(workspace);
-    setMessage({
-      text: result.archivePath ? "已归档，原文件已保留。" : "已保存。",
-    });
+    setMessage({ text: modal.addedTo
+      ? `已添加到 ${modal.addedTo.title}。可从卡片上的模式名称查看；已连接的 Agent 需重新应用模式。`
+      : result.archivePath ? "已归档，原文件已保留。" : "已保存。" });
   }
   async function removeFromMode(id) {
     const current = catalog.modes.find((m) => m.id === id);
@@ -1079,8 +1093,10 @@ export default function App() {
     else { setLocalReport(report); setExtraSkillRoot(source); setProvider("local"); setPage("discover"); }
   }
   function adoptSkill(skill) {
-    setModal({ kind: "local-import", source: skill.source, origin: skill.origin, id: skill.id, mode: mode?.id || "", category: "" });
+    setModal({ kind: "local-import", ...skill, mode: page === "modes" ? mode?.id || "" : "", category: "",
+      useExisting: catalog.skills.some(s => s.id === skill.id) });
   }
+  function showMode(id) { if (id) setModeId(id); setSelected(null); setPage("modes"); }
   async function inspectDiscovered(skill) {
     const document = await api("sourceDocument", skill.source);
     setModal({ kind: "discovered-detail", skill, document });
@@ -1545,7 +1561,7 @@ export default function App() {
                           <button onClick={() => task(async () => { const root = await api("choose", "skillSearchRoot"); if (root) { setExtraSkillRoot(root); setLocalReport(await api("localSkills", root)); } })}><FolderOpen size={16} />选择目录</button>
                           <button onClick={() => task(async () => { setExtraSkillRoot(null); setLocalReport(await api("localSkills")); })}><RotateCw size={16} />扫描本机</button>
                         </div></div>
-                        <DiscoveredSkills report={localReport} catalog={catalog} onInspect={skill => task(() => inspectDiscovered(skill))} />
+                        <DiscoveredSkills report={localReport} catalog={catalog} readOnly={readOnly} onAdd={adoptSkill} onMode={showMode} onInspect={skill => task(() => inspectDiscovered(skill))} />
                       </>}
                       {provider === "github-import" && <>
                         <form className="search large" onSubmit={e => { e.preventDefault(); task(() => inspectGithub()); }}>
@@ -1559,7 +1575,7 @@ export default function App() {
                             {githubReport.repositoryDependencies?.map(d => <p key={d.file}>{d.file} · {d.kind}</p>)}
                             <pre className="repository-tree">{githubReport.repositoryFiles?.slice(0, 120).join("\n")}{githubReport.repositoryFiles?.length > 120 ? "\n… 其余文件请在仓库查看" : ""}</pre>
                           </details>
-                          <DiscoveredSkills report={githubReport} catalog={catalog} onInspect={skill => task(() => inspectDiscovered(skill))} empty="这个仓库没有可直接识别的技能" /></>}
+                          <DiscoveredSkills report={githubReport} catalog={catalog} readOnly={readOnly} onAdd={adoptSkill} onMode={showMode} onInspect={skill => task(() => inspectDiscovered(skill))} empty="这个仓库没有可直接识别的技能" /></>}
                       </>}
                       {["dsh", "github"].includes(provider) && (marketError ? (
                         <Empty icon={AlertCircle} title="暂时无法连接来源">
@@ -1888,7 +1904,7 @@ export default function App() {
           <p className="path-line">{modal.skill.origin || modal.skill.source}</p>
           <div className="dialog-actions"><button onClick={() => setModal(null)}>关闭</button>
             {modal.skill.origin && <button onClick={() => task(() => api("external", modal.skill.origin))}>查看原仓库<ArrowUpRight size={15} /></button>}
-            {modal.skill.inspection?.status === "package-ready" && <button className="primary" disabled={!catalog || readOnly} onClick={() => adoptSkill(modal.skill)}>选择模式并添加</button>}
+            <button className="primary" disabled={!catalog || readOnly} onClick={() => adoptSkill(modal.skill)}>添加到 Mode</button>
           </div>
         </Dialog>}
         {modal?.kind === "setup" && <SetupDialog values={modal.values} resultMessage={modal.resultMessage} title={catalog.modes.find(m => m.id === modal.values.mode)?.title || modal.values.mode} task={task} onClose={() => setModal(null)} />}
@@ -1924,43 +1940,22 @@ export default function App() {
           </Dialog>
         )}
         {modal?.kind === "local-import" && (
-          <Dialog title="导入完整技能" onClose={() => setModal(null)}>
+          <Dialog title="添加到 Mode" onClose={() => setModal(null)}>
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                task(() =>
-                  editContent({
-                    operation: "skill.import",
-                    source: modal.source,
-                    id: modal.id,
-                    ...(modal.origin ? { sourceOrigin: modal.origin } : {}),
-                    ...(modal.category ? { category: modal.category } : {}),
-                    ...(modal.mode ? { mode: modal.mode } : {}),
-                    ...(catalog.skills.some((s) => s.id === modal.id)
-                      ? {
-                          expected: catalog.skills.find(
-                            (s) => s.id === modal.id,
-                          ).fingerprint,
-                        }
-                      : {}),
-                  }),
-                );
+                task(() => editContent(adoptionRequest(modal, catalog), catalog.modes.find(m => m.id === modal.mode)));
               }}
             >
-              <Field label="技能标识">
-                <input
-                  required
-                  readOnly
-                  value={modal.id}
-                  onChange={(e) => setModal({ ...modal, id: e.target.value })}
-                />
-              </Field>
-              <Field label="加入模式">
+              <h3>{modal.title}</h3>
+              <Field label="选择 Mode">
                 <select
+                  aria-label="选择 Mode"
+                  required
                   value={modal.mode}
                   onChange={(e) => setModal({ ...modal, mode: e.target.value, category: "" })}
                 >
-                  <option value="">暂不加入</option>
+                  <option value="">请选择工作模式</option>
                   {catalog.modes.map((m) => (
                     <option key={m.id} value={m.id}>
                       {m.title}
@@ -1968,18 +1963,28 @@ export default function App() {
                   ))}
                 </select>
               </Field>
+              {!catalog.modes.length && <p>还没有 Mode。<button type="button" onClick={() => setModal({ kind: "mode-editor" })}><Plus size={14} />新建工作模式</button></p>}
               {!!catalog.modes.find(m => m.id === modal.mode)?.capabilities?.length && <Field label="能力类别">
-                <select value={modal.category} onChange={e => setModal({ ...modal, category: e.target.value })}>
+                <select aria-label="能力类别" value={modal.category} onChange={e => setModal({ ...modal, category: e.target.value })}>
                   <option value="">未分类</option>{catalog.modes.find(m => m.id === modal.mode).capabilities.map(g => <option key={g.title} value={g.title}>{g.title}</option>)}
                 </select>
               </Field>}
-              {catalog.skills.some(s => s.id === modal.id) && <p role="alert">库中已有同名技能。继续会预览替换，所有引用它的模式都会受影响。</p>}
+              {catalog.skills.some(s => s.id === modal.id) && <Field label="库中已有同名技能">
+                <select aria-label="库中已有同名技能" value={modal.useExisting ? "reuse" : "replace"} onChange={e => setModal({ ...modal, useExisting: e.target.value === "reuse" })}>
+                  <option value="reuse">使用库内版本（保留已有修改）</option>
+                  <option value="replace">用这次发现的版本替换</option>
+                </select>
+                {!modal.useExisting && <small role="alert">将替换库内技能，影响所有引用它的 Mode；保存前会显示范围。</small>}
+              </Field>}
+              {!modal.useExisting && modal.inspection?.status === "needs-review" && <div className="inline-note"><span><b>配套内容会随技能保存，但不会自动安装或执行</b><small>目录外的共享依赖不会自动复制。添加后仍需配置，不能视为已经可运行。</small>
+                <details><summary>查看需核对的内容</summary>{modal.inspection.reasons.map(reason => <small key={reason}>{reason}</small>)}</details>
+              </span></div>}
               <p className="path-line">{modal.origin || modal.source}</p>
               <div className="dialog-actions">
                 <button type="button" onClick={() => setModal(null)}>
                   取消
                 </button>
-                <button className="primary">检查内容</button>
+                <button className="primary" disabled={!modal.mode}>预览添加</button>
               </div>
             </form>
           </Dialog>

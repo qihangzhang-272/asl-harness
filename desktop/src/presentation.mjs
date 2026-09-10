@@ -75,6 +75,21 @@ export function shortText(text, limit = 90) {
   const plain = (text || "").replace(/[#*`]/g, "").replace(/\s+/g, " ").trim();
   return plain.length > limit ? `${plain.slice(0, limit)}…` : plain;
 }
+export function adoptionRequest(form, catalog) {
+  const mode = catalog.modes.find(m => m.id === form.mode);
+  if (!mode) throw new Error("请先选择一个 Mode。");
+  const existing = catalog.skills.find(s => s.id === form.id);
+  if (existing && form.useExisting) {
+    return { operation: "mode.save", id: mode.id, expected: mode.fingerprint,
+      document: mode.document, skills: [...new Set([...mode.roots, form.id])],
+      ...(form.category ? { capabilities: mode.capabilities.map(g => ({ ...g,
+        skills: [...g.skills.filter(id => id !== form.id), ...(g.title === form.category ? [form.id] : [])] })) } : {}) };
+  }
+  return { operation: "skill.import", source: form.source, id: form.id, mode: mode.id,
+    ...(form.origin ? { sourceOrigin: form.origin } : {}),
+    ...(form.category ? { category: form.category } : {}),
+    ...(existing ? { expected: existing.fingerprint } : {}) };
+}
 export function errorText(text) {
   if (text === "DeepSeek preset output directory name must match [a-z0-9][a-z0-9-]*")
     return "DeepSeek 预设的文件夹名需要使用小写英文、数字或短横线，例如 asl-writing；上级路径可以包含中文。";

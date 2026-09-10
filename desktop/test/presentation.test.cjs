@@ -64,3 +64,28 @@ test("manual categories override suggestions and deletion leaves unclassified sk
   assert.ok(graph.nodes.some(n => n.data.title === "我的类别"));
   assert.ok(!graph.nodes.some(n => n.data.title === "写作与表达"));
 });
+
+test("adding a discovered skill to another Mode reuses the local version unless replacement is explicit", async () => {
+  const { adoptionRequest } = await import("../src/presentation.mjs");
+  const catalog = {
+    skills: [{ id: "writer", fingerprint: "local-edits" }],
+    modes: [{ id: "work", fingerprint: "mode-version", document: "# 工作", roots: ["search"],
+      capabilities: [{ title: "写作", skills: [] }] }],
+  };
+  const form = { id: "writer", mode: "work", source: "/download/writer", origin: "https://github.com/example/repo", category: "写作", useExisting: true };
+  assert.deepEqual(adoptionRequest(form, catalog), {
+    operation: "mode.save", id: "work", expected: "mode-version", document: "# 工作",
+    skills: ["search", "writer"], capabilities: [{ title: "写作", skills: ["writer"] }],
+  });
+  assert.throws(() => adoptionRequest({ ...form, mode: "" }, catalog), /选择.*Mode/);
+  assert.deepEqual(adoptionRequest({ ...form, useExisting: false }, catalog), {
+    operation: "skill.import", source: form.source, id: "writer", mode: "work",
+    sourceOrigin: form.origin, category: "写作", expected: "local-edits",
+  });
+  const fresh = adoptionRequest({ ...form, id: "new-skill", useExisting: false,
+    inspection: { status: "needs-review", reasons: ["含配套脚本"] } }, catalog);
+  assert.equal(fresh.operation, "skill.import");
+  assert.equal(fresh.mode, "work");
+  assert.ok(!("expected" in fresh));
+  assert.deepEqual(catalog.modes[0].capabilities[0].skills, []);
+});
