@@ -32,10 +32,11 @@ async function readPreferences(file) {
             (t) =>
               t &&
               typeof t.project === "string" &&
-              ["codex-app", "claude-code"].includes(t.host),
+              ["codex-app", "claude-code", "workbuddy"].includes(t.host),
           )
           .slice(0, 30)
       : [],
+    repositories: Array.isArray(value.repositories) ? value.repositories.filter(url => typeof url === "string" && /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+(?:\/|$)/.test(url)).slice(0, 12) : [],
   };
 }
 async function writePreferences(file, value) {

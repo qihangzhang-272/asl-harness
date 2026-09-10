@@ -1,5 +1,25 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
+const { githubRepository, githubSnapshot } = require("../market.cjs");
+
+test("GitHub import accepts repo and skill links but not arbitrary downloads", () => {
+  assert.equal(githubRepository("https://github.com/user/repo.git").repo, "repo");
+  assert.deepEqual(githubRepository("https://github.com/user/repo/tree/main/skills/a").tail, ["main", "skills", "a"]);
+  for (const value of ["file:///local", "https://github.com@evil.com/u/r", "https://github.com/u/r/issues/1", "https://github.com/u/r?token=secret", "https://github.com/u/r/tree/main/%2e%2e%2fprivate"])
+    assert.throws(() => githubRepository(value));
+});
+
+test("GitHub snapshot pins content and supports branches containing slashes", async () => {
+  const calls = [];
+  const sha = "a".repeat(40);
+  const result = await githubSnapshot("https://github.com/u/r/tree/feature/writing/skills/a", async url => {
+    calls.push(url);
+    return { ok: url.endsWith("/feature%2Fwriting"), status: 404, text: async () => JSON.stringify({ sha }) };
+  });
+  assert.equal(result.subpath, "skills/a");
+  assert.equal(result.archive, `https://codeload.github.com/u/r/zip/${sha}`);
+  assert.equal(calls.length, 3);
+});
 test("market entries keep native compatibility and never return executable install text", () => {
   const { parseDshCatalog } = require("../market.cjs");
   const entries = parseDshCatalog({

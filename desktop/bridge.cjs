@@ -2,6 +2,8 @@ const { execFile } = require("node:child_process");
 const path = require("node:path");
 
 const definitions = {
+  scan: ["skill.scan", ["source"]],
+  unpack: ["skill.unpack", ["source", "output"]],
   catalog: ["environment.catalog", ["workspace"]],
   edit: ["environment.edit", ["workspace"]],
   describe: ["workspace.validate", ["workspace"]],
@@ -45,6 +47,10 @@ function commandArgs(action, values = {}) {
   )
     throw new Error("不支持的参数");
   for (const key of required) {
+    if (action === "scan" && key === "source") {
+      if (!Array.isArray(values.source) || !values.source.length || values.source.some(p => typeof p !== "string" || !p.trim() || p.includes("\0"))) throw new Error("请选择有效的技能目录");
+      continue;
+    }
     if (
       typeof values[key] !== "string" ||
       !values[key].trim() ||
@@ -66,7 +72,7 @@ function commandArgs(action, values = {}) {
     throw new Error("无效的 Mode");
   if (
     values.host &&
-    !["codex-app", "claude-code", "deepseek-harness"].includes(values.host)
+    !["codex-app", "claude-code", "deepseek-harness", "workbuddy"].includes(values.host)
   )
     throw new Error("不支持的宿主");
   if (action === "userSync" && !["codex-app", "claude-code"].includes(values.host))
@@ -81,7 +87,8 @@ function commandArgs(action, values = {}) {
   }
   const args = [command];
   const names = { host: "host-id", basePreset: "base-preset" };
-  for (const key of required) args.push(`--${names[key] || key}`, values[key]);
+  for (const key of required)
+    for (const value of Array.isArray(values[key]) ? values[key] : [values[key]]) args.push(`--${names[key] || key}`, value);
   if (action === "readiness" && values.project) args.push("--project", values.project);
   if (values.probe) args.push("--probe");
   if (values.skillsDir) args.push("--skills-dir", values.skillsDir);

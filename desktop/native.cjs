@@ -45,7 +45,7 @@ async function nativeInventory(home = os.homedir(), env = process.env) {
       scopes: ["preset"],
     },
     { id: "workbuddy", name: "WorkBuddy", directory: buddy, file: path.join(buddy, ".mcp.json"),
-      evidence: [path.join(buddy, "settings.json"), path.join(buddy, "workspace-state.json")], scopes: [] },
+      evidence: [path.join(buddy, "settings.json"), path.join(buddy, "workspace-state.json")], scopes: ["project"] },
   ];
   const hosts = [];
   for (const definition of definitions) {
@@ -99,4 +99,15 @@ async function nativeInventory(home = os.homedir(), env = process.env) {
   if (presets.length) hosts.find(h => h.id === "deepseek-harness").configured = true;
   return { hosts, presets, presetRoot, home };
 }
-module.exports = { nativeInventory, existingDirectory };
+async function localSkillRoots(home = os.homedir(), env = process.env) {
+  const inventory = await nativeInventory(home, env);
+  const roots = [
+    { name: "通用技能", path: path.join(home, ".agents", "skills") },
+    { name: "Codex", path: path.join(env.CODEX_HOME || path.join(home, ".codex"), "skills") },
+    { name: "Claude Code", path: path.join(env.CLAUDE_CONFIG_DIR || path.join(home, ".claude"), "skills") },
+    ...[".workbuddy-ai", ".workbuddy", ".codebuddy"].map(dir => ({ name: "WorkBuddy / CodeBuddy", path: path.join(home, dir, "skills") })),
+    ...inventory.presets.map(p => ({ name: `DeepSeek · ${p.name}`, path: path.join(p.path, "skills") })),
+  ];
+  return roots.filter(r => path.isAbsolute(r.path));
+}
+module.exports = { nativeInventory, existingDirectory, localSkillRoots };

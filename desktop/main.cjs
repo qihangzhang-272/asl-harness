@@ -1,6 +1,7 @@
 const { app, BrowserWindow, dialog, ipcMain, shell, net } = require("electron");
 const fs = require("node:fs/promises");
 const path = require("node:path");
+const { randomUUID } = require("node:crypto");
 const { pathToFileURL } = require("node:url");
 const { runCore, commandArgs } = require("./bridge.cjs");
 const {
@@ -9,8 +10,8 @@ const {
   writePreferences,
   isLibrary,
 } = require("./library.cjs");
-const { nativeInventory, existingDirectory } = require("./native.cjs");
-const { discover, publicUrl } = require("./market.cjs");
+const { nativeInventory, existingDirectory, localSkillRoots } = require("./native.cjs");
+const { discover, publicUrl, githubSnapshot } = require("./market.cjs");
 const { assistantInventory, launchAssistant, sessionStatus } = require("./assistant.cjs");
 
 const root = path.resolve(__dirname, "..");
@@ -94,7 +95,7 @@ app.whenReady().then(() => {
           libraries.push(candidate);
       }
     for (const location of libraries) selected.add(location);
-    return { workspace: initial, example, libraries, packaged: app.isPackaged };
+    return { workspace: initial, example, libraries, repositories: preferences.repositories, packaged: app.isPackaged };
   });
 
   handle("asl:remember", async (workspace) => {
@@ -135,6 +136,70 @@ app.whenReady().then(() => {
     } finally { busy = false; }
   });
   handle("asl:setup-status", (id) => sessionStatus(sessionRoot, id));
+  handle("asl:local-skills", async (extra) => {
+    if (extra && !selected.has(path.resolve(extra))) throw new Error("请先选择要扫描的目录");
+    const roots = extra ? [{ name: "自选目录", path: extra }] : await localSkillRoots();
+    const report = await runCore("scan", { source: roots.map(r => r.path) }, options);
+    for (const skill of report.skills) selected.add(path.resolve(skill.source));
+    return { ...report, roots };
+  });
+  handle("asl:source-document", async (source) => {
+    if (typeof source !== "string" || !selected.has(path.resolve(source))) throw new Error("请先发现或选择这个技能目录");
+    const root = await fs.realpath(source);
+    const file = await fs.realpath(path.join(root, "SKILL.md"));
+    const relative = path.relative(root, file);
+    if (relative.startsWith("..") || path.isAbsolute(relative) || (await fs.stat(file)).size > 1024 * 1024) throw new Error("原文越界或过大，请在原位置查看");
+    return fs.readFile(file, "utf8");
+  });
+  handle("asl:github-skills", async (url) => {
+    const repo = await githubSnapshot(url, (...args) => net.fetch(...args));
+    const response = await net.fetch(repo.archive, { signal: AbortSignal.timeout(90000) });
+    if (!response.ok) throw new Error(`下载失败（${response.status}），请稍后重试`);
+    const chunks = []; let bytes = 0;
+    for await (const chunk of response.body) {
+      bytes += chunk.length;
+      if (bytes > 64 * 1024 * 1024) throw new Error("仓库超过 64 MB，请在本机下载后选择具体技能目录");
+      chunks.push(chunk);
+    }
+    // Keep downloaded repositories out of deeply nested project/profile paths on Windows.
+    const folder = path.join(app.getPath("temp"), "asl-github", randomUUID());
+    await fs.mkdir(folder, { recursive: true });
+    const archive = path.join(folder, "source.zip");
+    await fs.writeFile(archive, Buffer.concat(chunks));
+    const output = path.join(folder, "content");
+    const report = await runCore("unpack", { source: archive, output }, options);
+    const repositoryRoot = output;
+    // ASL repositories explicitly separate active skills from archived packages.
+    const requested = path.resolve(repositoryRoot, repo.subpath || (await isLibrary(repositoryRoot) ? "skills" : ""));
+    report.skills = report.skills.filter(s => {
+      const relative = path.relative(requested, s.source);
+      return relative === "" || !relative.startsWith("..") && !path.isAbsolute(relative);
+    });
+    for (const skill of report.skills) {
+      skill.origin = `${repo.url}/tree/${repo.commit}/${path.relative(repositoryRoot, skill.source).split(path.sep).map(encodeURIComponent).join("/")}`;
+      const ancestors = report.repositoryDependencies.filter(d => {
+        const file = path.join(output, d.file);
+        return file.startsWith(repositoryRoot + path.sep) && path.dirname(file) !== skill.source && skill.source.startsWith(path.dirname(file) + path.sep);
+      });
+      if (ancestors.length) {
+        skill.inspection.status = "needs-review";
+        skill.inspection.reasons.push("仓库上层有共享配置，尚未确认能否单独取出：" + ancestors.map(d => path.relative(repositoryRoot, path.join(output, d.file))).join("、"));
+      }
+      // Preserve repository license notices when a self-contained subfolder is copied.
+      for (const file of report.repositoryFiles.filter(file => path.dirname(path.join(output, file)) === repositoryRoot && /^(license|copying|notice)(\.|$)/i.test(path.basename(file)))) {
+        const dest = path.join(skill.source, path.basename(file));
+        try {
+          await fs.copyFile(path.join(output, file), dest, 1);
+          skill.inspection.files.push(path.basename(file));
+        } catch (error) { if (error.code !== "EEXIST") throw error; }
+      }
+      selected.add(path.resolve(skill.source));
+    }
+    const preferences = await readPreferences(preferenceFile);
+    preferences.repositories = [url, ...preferences.repositories.filter(value => value !== url)].slice(0, 12);
+    await writePreferences(preferenceFile, preferences);
+    return { ...report, repository: repo.url, commit: repo.commit };
+  });
   handle("asl:discover", (provider, query) =>
     discover(provider, query, (...args) => net.fetch(...args)),
   );
@@ -160,6 +225,7 @@ app.whenReady().then(() => {
         "packageFolder",
         "skillFolder",
         "userSkills",
+        "skillSearchRoot",
       ].includes(kind)
     ) {
       result = await dialog.showOpenDialog(window, {
@@ -170,6 +236,7 @@ app.whenReady().then(() => {
           packageFolder: "选择环境包目录",
           skillFolder: "选择包含 SKILL.md 的完整技能文件夹",
           userSkills: "选择所选 Agent 的用户技能目录（直接存放各技能文件夹的位置）",
+          skillSearchRoot: "选择要发现技能的目录",
         }[kind],
         defaultPath: directory,
         properties: ["openDirectory"],
@@ -202,6 +269,7 @@ app.whenReady().then(() => {
   });
 
   handle("asl:run", async (action, values) => {
+    if (["scan", "unpack"].includes(action)) throw new Error("请使用技能发现入口");
     commandArgs(action, values);
     if ((action === "edit" && path.resolve(values.workspace) === example) ||
         (action === "import" && path.resolve(values.target) === example))

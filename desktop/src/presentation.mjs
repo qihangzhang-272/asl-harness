@@ -37,7 +37,16 @@ const GROUPS = [
     /研究|检索|搜索|语料|资料|归档|research|archive|agent-reach|deposition/i,
   ],
 ];
-export function capabilityGroups(skills) {
+export function capabilityGroups(skills, authored = null) {
+  if (Array.isArray(authored)) {
+    const assigned = new Set(authored.flatMap(g => g.skills));
+    const groups = authored.map((g, index) => ({ id: `custom-${index}`, title: g.title,
+      icon: GROUPS.find(row => row[1] === g.title)?.[2] || "Box",
+      skills: g.skills.map(id => skills.find(s => s.id === id)).filter(Boolean) }));
+    const rest = skills.filter(s => !assigned.has(s.id));
+    if (rest.length) groups.push({ id: "unclassified", title: "未分类", icon: "Box", skills: rest });
+    return groups;
+  }
   const groups = new Map();
   for (const skill of skills) {
     const name = `${skill.title} ${skill.id}`;
@@ -69,8 +78,8 @@ export function shortText(text, limit = 90) {
 export function errorText(text) {
   if (text === "DeepSeek preset output directory name must match [a-z0-9][a-z0-9-]*")
     return "DeepSeek 预设的文件夹名需要使用小写英文、数字或短横线，例如 asl-writing；上级路径可以包含中文。";
-  if (/^Skill .+ must declare matching name, description, and 完成标准$/.test(text))
-    return "请保留技能顶部的 name 和 description（name 要与技能标识一致），并补全“## 完成标准”。";
+  if (/^Skill .+ must declare matching name and description$/.test(text))
+    return "请保留技能顶部的 name 和 description（name 要与技能标识一致）。";
   return /^Skill .+ has invalid frontmatter$/.test(text)
     ? "技能开头的名称和说明格式不完整，请保留原文顶部的 --- 信息区。"
     : text;
@@ -83,7 +92,7 @@ export function scopeLabel(scope, target = "") {
       : `仅项目 · ${target}`;
 }
 export function graphForMode(mode, skills, expanded = new Set()) {
-  const groups = capabilityGroups(skills);
+  const groups = capabilityGroups(skills, mode.capabilities);
   const nodes = [];
   const edges = [];
   let y = 0;

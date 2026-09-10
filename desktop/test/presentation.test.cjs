@@ -50,5 +50,17 @@ test("skill format errors explain what to fix without hiding other errors", asyn
     "技能开头的名称和说明格式不完整，请保留原文顶部的 --- 信息区。",
   );
   assert.equal(errorText("文件已被修改，请刷新"), "文件已被修改，请刷新");
-  assert.match(errorText("Skill qa-skill must declare matching name, description, and 完成标准"), /请保留技能顶部的 name/);
+  assert.match(errorText("Skill qa-skill must declare matching name and description"), /请保留技能顶部的 name/);
+});
+
+test("manual categories override suggestions and deletion leaves unclassified skills", async () => {
+  const { capabilityGroups, graphForMode } = await import("../src/presentation.mjs");
+  const skills = [{ id: "writer", title: "写作", requires: [] }, { id: "search", title: "研究", requires: [] }];
+  const categories = [{ title: "我的类别", skills: ["writer"] }, { title: "空类别", skills: [] }];
+  const groups = capabilityGroups(skills, categories);
+  assert.deepEqual(groups.map(g => g.title), ["我的类别", "空类别", "未分类"]);
+  assert.deepEqual(capabilityGroups(skills, []).map(g => g.title), ["未分类"]);
+  const graph = graphForMode({ id: "m", title: "模式", capabilities: categories }, skills);
+  assert.ok(graph.nodes.some(n => n.data.title === "我的类别"));
+  assert.ok(!graph.nodes.some(n => n.data.title === "写作与表达"));
 });

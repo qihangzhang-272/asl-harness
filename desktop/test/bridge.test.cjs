@@ -4,6 +4,12 @@ const { commandArgs, runCore } = require("../bridge.cjs");
 const path = require("node:path");
 const fs = require("node:fs/promises");
 const os = require("node:os");
+test("WorkBuddy project apply and local scans are explicit actions", () => {
+  assert.ok(commandArgs("project", { workspace: "库", mode: "creator", project: "项目", host: "workbuddy" }).includes("workbuddy"));
+  assert.throws(() => commandArgs("userSync", { workspace: "库", mode: "creator", host: "workbuddy" }));
+  assert.deepEqual(commandArgs("scan", { source: ["C:/skills", "C:/其他"] }), ["skill.scan", "--source", "C:/skills", "--source", "C:/其他"]);
+  assert.throws(() => commandArgs("scan", { source: [] }));
+});
 
 test("user sync has an explicit scope and defaults to a read-only preview", () => {
   assert.deepEqual(commandArgs("userSync", { workspace: "/library", mode: "writing", host: "claude-code" }),
