@@ -20,8 +20,8 @@ def test_user_sync_preserves_other_skills_and_instructions(tmp_path, host):
     result = user_projection.sync_user(workspace, "creator-studio", host, home=home, env={}, expected=before["fingerprint"])
     assert result["status"] == "synced"
     assert (paths["skills"] / "creator" / "SOURCE.md").is_file()
-    assert (paths["skills"] / "unrelated" / "SKILL.md").read_text() == "untouched"
-    assert paths["instructions"].read_text().startswith("# My instructions\nKeep this.")
+    assert (paths["skills"] / "unrelated" / "SKILL.md").read_text(encoding="utf-8") == "untouched"
+    assert paths["instructions"].read_text(encoding="utf-8").startswith("# My instructions\nKeep this.")
     assert not user_projection.inspect_user(workspace, "creator-studio", host, home=home, env={})["needsSync"]
 
 
@@ -39,7 +39,7 @@ def test_user_sync_switches_only_managed_content_and_detects_modified_copy(tmp_p
     assert preview["conflicts"]
     with pytest.raises(HarnessError):
         user_projection.sync_user(workspace, "research", "claude-code", home=home, env={})
-    assert (paths["skills"] / "foundation" / "SKILL.md").read_text() == "user modified"
+    assert (paths["skills"] / "foundation" / "SKILL.md").read_text(encoding="utf-8") == "user modified"
 
 
 def test_user_sync_refuses_unmanaged_collision_and_stale_preview(tmp_path):
@@ -51,7 +51,7 @@ def test_user_sync_refuses_unmanaged_collision_and_stale_preview(tmp_path):
     _write(paths["skills"] / "creator" / "SKILL.md", "existing native skill")
     with pytest.raises(HarnessError):
         user_projection.sync_user(workspace, "creator-studio", "codex-app", home=home, env={}, expected=before["fingerprint"])
-    assert (paths["skills"] / "creator" / "SKILL.md").read_text() == "existing native skill"
+    assert (paths["skills"] / "creator" / "SKILL.md").read_text(encoding="utf-8") == "existing native skill"
 
 
 def test_native_user_paths_respect_host_configuration_without_moving_shared_skills(tmp_path):
@@ -79,7 +79,7 @@ def test_user_sync_rolls_back_if_instruction_write_fails(tmp_path, monkeypatch):
     with pytest.raises(OSError):
         user_projection.sync_user(workspace, "creator-studio", "claude-code", home=home, env={})
     assert not (paths["skills"] / "creator").exists()
-    assert paths["instructions"].read_text() == "keep"
+    assert paths["instructions"].read_text(encoding="utf-8") == "keep"
 
 
 def test_disable_user_mode_preserves_unmanaged_content(tmp_path):
@@ -91,7 +91,7 @@ def test_disable_user_mode_preserves_unmanaged_content(tmp_path):
     report = user_projection.sync_user(workspace, "creator-studio", "codex-app", home=home, env={}, remove=True)
     assert report["status"] == "removed"
     assert not (paths["skills"] / "creator").exists()
-    assert paths["instructions"].read_text().strip() == "# Keep my defaults"
+    assert paths["instructions"].read_text(encoding="utf-8").strip() == "# Keep my defaults"
 
 
 def test_user_can_choose_skill_directory_without_claiming_native_discovery(tmp_path):
@@ -117,4 +117,4 @@ def test_stop_clears_mode_instructions_even_when_copies_are_already_missing(tmp_
     shutil.rmtree(paths["skills"])
     result = user_projection.sync_user(workspace, "creator-studio", "claude-code", home=home, env={}, remove=True)
     assert result["status"] == "removed"
-    assert "ASL default Mode" not in paths["instructions"].read_text()
+    assert "ASL default Mode" not in paths["instructions"].read_text(encoding="utf-8")
