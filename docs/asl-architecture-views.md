@@ -113,7 +113,7 @@ flowchart TB
     end
 
     subgraph MANAGE["Harness 管理机制 · 不是第二个 Agent"]
-        INTAKE["导入与安装协调 · 部分实现<br/>快照差异与基础依赖预览已有<br/>其他格式采用、原生安装与连接待补"]
+        INTAKE["导入与安装协调 · 部分实现<br/>本机发现 / GitHub 文件与依赖解析<br/>普通 Skill 预览添加；复杂仓库先核对"]
         PORTABLE["可迁移包 · 内容往返已实现<br/>Mode + 完整 Skill + 指纹清单<br/>运行依赖安装与连接待补"]
         CORE["已有 CLI 与保护<br/>扫描 / 校验 / 闭包 / 视图 / 单 Skill 同步<br/>路径、秘密、用户修改冲突、文件回滚与指纹"]
         EDIT["内容管理 · 代码已测<br/>Mode 创建 / 修改 / 复制 / 归档<br/>Skill 编辑 / 本地导入 / 引用与影响预览"]
@@ -127,7 +127,7 @@ flowchart TB
         MODES["Mode · 已有工作场与 Skill 子图<br/>不保存固定执行顺序<br/>模型偏好与资料关联待扩展"]
         SKILLS["完整 Skill 包 · 已有<br/>方法 / scripts / assets / references<br/>SOURCE / 必要原生依赖说明"]
         CONTEXT["个人边界、资料与明确反馈<br/>PROFILE / Mode 说明 / 培养区<br/>经验关联与管理界面待完善"]
-        MAP["派生能力地图 · 已实现<br/>按用途分组，展开查看完整 Skill<br/>显式依赖可看关系图，不代表执行顺序"]
+        MAP["能力地图 · 已实现<br/>建议分组或用户自定类别<br/>类别随 Mode 保存；依赖线不是执行顺序"]
         ROOT --> MODES
         MODES -->|显式选择能力| SKILLS
         ROOT --> CONTEXT
@@ -145,15 +145,18 @@ flowchart TB
         DSH["DeepSeek Harness<br/>Mode → Preset<br/>依赖 → Profile / Bundle"]
         CC["Claude Code<br/>项目 / 当前用户的 Skills 与指令<br/>原生 Plugin / MCP / 模型配置"]
         CX["Codex App<br/>项目 / 当前用户的 Skills 与指令<br/>原生 Plugin / MCP / 模型配置"]
+        WB["WorkBuddy<br/>项目 .codebuddy/skills + CODEBUDDY.md<br/>文件投影已测；原生会话待验收"]
         FUTURE["Hermes / OpenClaw 等<br/>适配边界已预留<br/>尚未实现兼容"]
         PROJECTION["投影、Preset 与配置回执<br/>派生物，不是内容真源"]
         ADAPTER --> DSH
         ADAPTER --> CC
         ADAPTER --> CX
+        ADAPTER --> WB
         ADAPTER -.后续.-> FUTURE
         DSH --> PROJECTION
         CC --> PROJECTION
         CX --> PROJECTION
+        WB --> PROJECTION
     end
 
     HOST["当前 Host · 唯一业务执行者<br/>原生模型、工具、会话、权限和 Agent Loop"]
@@ -199,7 +202,7 @@ flowchart TB
     classDef external fill:#f5f3ff,stroke:#7c3aed,color:#4c1d95;
     class USER,HOST,ROOT,MODES locked;
     class SKILLS,CORE,EDIT,STEWARD,CASE,SETUP done;
-    class APP,INTAKE,PORTABLE,LEARN,CONTEXT,MODEL,ADAPTER,DSH,CC,CX,FUTURE,HOOK,DSH_UI pending;
+    class APP,INTAKE,PORTABLE,LEARN,CONTEXT,MODEL,ADAPTER,DSH,CC,CX,WB,FUTURE,HOOK,DSH_UI pending;
     class PROJECTION,MAP generated;
     class SOURCES,RUNTIME external;
 
@@ -579,7 +582,7 @@ Hook 不单独保存运行记录。Codex、Claude Code、Cordis 使用自己的 
 
 **用户不需要理解配置目录。** 打开 App 应先看到自己的工作场，以及每个工作场能做什么、有哪些资料和经验、哪个 Agent 能用、还缺什么连接。可以从空白环境开始，也可以导入已经培养过的 Mode；两者进入同一界面。
 
-**当前桌面版实际可以做：**连接现有技能库或内置示例，显示真实 Mode、按用途分组的完整技能与引用关系；创建、编辑、复制、归档 Mode，编辑 Skill、导入本地完整 Skill 并加入 Mode。保存前显示涉及的模式，过期编辑拒绝覆盖，归档保留完整目录。还可预览并导入 / 导出 ASL 环境包；浏览 DeepSeek 社区插件目录和 GitHub 搜索结果；只读显示已识别的本机 MCP 名称及技能包内依赖声明；选择项目生成 Codex / Claude 文件投影，或基于已有 DeepSeek Preset 导出新 Preset。未检测的连接不显示为零，文件配置不等于会话生效。市场目前只能浏览和打开来源，不能一键安装；本地 Skill 导入仍要求现有 ASL 内容结构，任意上游 Skill 的自动补齐尚未实现。
+**当前桌面版实际可以做：**连接现有技能库或内置示例，显示真实 Mode、完整技能与引用关系；创建、编辑、复制、归档 Mode，编辑 Skill、添加完整 Skill 并加入 Mode。能力类别可新增、改名、删除、重新归类，删除类别不删除技能。保存前显示涉及的模式，过期编辑拒绝覆盖，归档保留完整目录。还可预览并导入 / 导出 ASL 环境包；浏览 DeepSeek 社区插件目录、GitHub 搜索结果；扫描本机技能目录；粘贴 GitHub 链接后读取文件、原文与依赖声明，再选择普通技能添加。选择项目可生成 Codex / Claude / WorkBuddy 文件投影，或基于已有 DeepSeek Preset 导出新 Preset。未检测的连接不显示为零，文件配置不等于会话生效。标准 Skill 不必具有 ASL 专用的“完成标准”标题；仅在导入副本补充来源，不改上游方法正文。复杂仓库的自主拆分、安装和对话式融合尚未实现。
 
 **归类不是自动匹配。** 产品展示与验收使用真实 Agent Skill Library，不把人工准备的演示分类当成 App 的理解能力。以下机制必须分开：
 
@@ -587,7 +590,7 @@ Hook 不单独保存运行记录。Codex、Claude Code、Cordis 使用自己的 
 | --- | --- | --- |
 | 一个 Mode 包含哪些技能 | 读取 `modes/<id>/mode.yaml` 的 `spec.skills`，再解析 Skill 的 `metadata.asl.requires`；核心检查技能存在、依赖完整与路径边界 | 不是 App 根据任务自动选好了技能；成员最初由人或被授权的 Agent 明确维护 |
 | 技能列表、直接加入 / 依赖带入 | 原样呈现核心返回的成员与依赖关系；图上的依赖线只取声明关系 | 不推测执行顺序，不用关键词改变成员 |
-| 能力地图中的研究、写作、视觉等分组 | `presentation.mjs` 按名称 / 标识优先、说明其次匹配关键词，未匹配进其他；界面明确标为“关键词辅助分组” | 是人工编写的展示规则，不是 AI 语义匹配，也没有业务正确性保证；可切换不分组的技能列表 |
+| 能力地图中的研究、写作、视觉等分组 | 默认 `presentation.mjs` 按名称 / 标识优先、说明其次建议分组；用户可通过“管理类别”保存 `mode.yaml spec.capabilities`，之后以手动类别为准，未分配的技能进入“未分类” | 建议分类不是 AI 语义匹配，不改变 Mode 成员或调用顺序；手动类别随 Mode 导出 / 导入，没有额外清单文件 |
 | 本机能否使用 | 检查原始依赖声明、工具路径、配置文件和受支持的体检结果 | 不把文件存在、目录存在或导出成功等同于实际任务成功 |
 
 例如真实 `creator-studio` 显式列出 19 个技能，包括 Agent Reach、宝玉配图及公众号排版；`product-lab` 列出 6 个技能，其中也有 Agent Reach。共享来自两份 Mode 的明确选择，不是 App 临时跨模式召回。当前没有“理解需求 → 自动归类 → 自动加入 Mode”的产品功能。内置小示例仅用于初次查看且只读；编辑前须导入为独立技能库，不在安装目录改示例。
@@ -598,6 +601,10 @@ Hook 不单独保存运行记录。Codex、Claude Code、Cordis 使用自己的 
 
 安装交互参考 [Vercel Skills](https://github.com/vercel-labs/skills)：先选 Agent，再选项目 / 用户范围；`npx skills add` 的项目范围默认是执行命令的当前目录，App 则用文件选择器明确选择，不要求用户掌握终端。目录识别参考 [CC Switch 的技能同步实现](https://github.com/farion1231/cc-switch/blob/main/src-tauri/src/services/skill.rs)，但不引入另一套技能登记库。原生目录依据 [Codex host roots](https://github.com/openai/codex/blob/main/codex-rs/ext/skills/src/host_roots.rs) 与 [Claude 配置目录](https://code.claude.com/docs/en/claude-directory)；不将“只选 Codex”承诺成共享目录的跨 Agent 强隔离。
 
+**WorkBuddy 项目入口：**选择项目后，完整 Skill 写入该项目的 `.codebuddy/skills/`，Mode 指令写入 `.codebuddy/CODEBUDDY.md`，沿用已有投影校验和受管文件保护。原生目录与 [WorkBuddy 项目文档](https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Function-Description/Project) 及本机 5.1.0 CLI 的 SkillsProvider 已核对；不显示用户级安装选项，不接管 `.workbuddy-ai` 的账号或模型。项目记录可以保留，但不能据此声称 WorkBuddy 已执行过任务。
+
+**发现与添加的边界：**本机只扫描已知 Agent 技能目录或用户选择的目录，按真实路径去重；不扫描整块磁盘，不把同名当成同版本。GitHub 读取仓库 / 目录链接，先固定 commit，再只读解包；识别 ASL 仓库时默认只展示正式 `skills/`，不混入归档。普通 Skill 展示原文、配套文件、来源和影响模式后添加完整副本。遇到脚本、终端命令、安装声明、目录外引用、其他 Skill 依赖或上层共享配置，标为“需核对”，显示依据，不自动拆分或执行。解析是静态线索，不是完整语义理解、独立性证明或运行验收；当前不做对话导入 Agent。下载暂存不成为技能真源，不进入分享包；来源保留具体 commit 与许可记录。
+
 **配置这台电脑：**同步后检查 Mode 对应的原始依赖声明、工具路径与 MCP 名称，支持 Agent Reach 的渠道 doctor；不会把“存在”当作“可用”。点击“让 AI 配置”后，用当前电脑已安装的 Claude Code / Codex CLI 打开独立原生会话，完整任务材料留在 App 本机配置会话目录，继承原来的模型、账号与原生权限。助手阅读原始 Mode / Skill，按本机情况安装或复用依赖、处理连接并实际验证；App 可重新检查。配置助手当前只实现 Windows 入口，不迁移秘密、不自动升级宿主、不接管登录、不直接请求另一个模型 API。原生会话可能因版本、账号或网络失败；失败与“已打开 / 已结束”分开，不记录成“就绪”。
 
 ```mermaid
@@ -606,9 +613,12 @@ flowchart LR
     IPC --> CORE["既有 Python 核心<br/>开发版命令 / Windows 内置可执行文件"]
     CORE --> ENV["本地 Environment<br/>唯一内容真源"]
     CORE --> PACK["Mode 目录 / ZIP 快照"]
-    CORE --> HOST["Codex / Claude 项目及用户级文件<br/>DeepSeek Preset"]
+    CORE --> HOST["Codex / Claude 项目及用户级文件<br/>WorkBuddy 项目文件 / DeepSeek Preset"]
     CORE --> RESULT["真实 JSON 结果与冲突"]
     IPC --> MARKET["公开市场只读查询<br/>DSH 目录 / GitHub 搜索<br/>不执行来源提供的安装字符串"]
+    IPC --> SCAN["本机目录 / GitHub 固定快照<br/>Skill 原文、文件、依赖声明解析"]
+    SCAN --> CHOICE["用户选 Skill、Mode 与类别<br/>普通包预览后添加<br/>复杂内容仅提示核对"]
+    CHOICE --> CORE
     IPC --> NATIVE["本机只读检测<br/>配置存在 / MCP 名称 / DSH 预设<br/>不是登录或实际加载的证明"]
     CORE --> CHECK["Mode 原文 / 完整 Skill 路径<br/>本机运行时 / MCP / 可选渠道体检"]
     IPC --> ASSIST["用户点击配置<br/>打开原生 Claude / Codex CLI<br/>沿用原生模型、权限与登录"]
@@ -620,7 +630,7 @@ flowchart LR
     RESULT --> UI
     classDef done fill:#dcfce7,stroke:#16a34a,color:#14532d;
     classDef generated fill:#f3f4f6,stroke:#6b7280,color:#1f2937;
-    class UI,IPC,CORE,ENV,MARKET,NATIVE,CHECK,ASSIST done;
+    class UI,IPC,CORE,ENV,MARKET,SCAN,CHOICE,NATIVE,CHECK,ASSIST done;
     class PACK,HOST,RESULT generated;
 ```
 
@@ -1309,7 +1319,7 @@ MCP 的可移植性高于宿主 Plugin，因此当前架构优先让 Skill 声�
 
 **前次验收遗漏与本轮修复：**此前隔离用户级测试使用临时 HOME，测试窗口未关闭，导致用户进入了临时用户环境：原生文件选择器指向不存在的 Desktop，也无法识别真实宿主配置。前次“原生文件选择入口已检查”不足以证明真实用户环境正常。现已关闭这两个测试实例；GUI 验收沿用真实 HOME，只隔离 App 偏好与写入目标，文件选择器使用真实且存在的 Documents / Home。另修复冻结后的 Python 核心按错误编码读取中文、空宿主目录被误报为配置、漏检 `.workbuddy-ai`、示例安装目录可被改写、忙碌时点击被静默丢弃，以及 DeepSeek 预设导出提示消失的问题。
 
-当前本机回归：Python **92 项通过、3 项跳过**（Windows 符号链接权限与 POSIX 执行位）；桌面 **30 项通过**；Vite 生产构建通过。新增真实 IPC 取消 / 只读 / 路径回退检查，并将中文加 emoji 的读写加入冻结 EXE 的构建门禁，不只测试开发机 Python。本轮代码 `1051c33` 的 [Windows / Linux CI](https://github.com/qihangzhang-272/asl-harness/actions/runs/34438364187) 均通过。Windows 修正版以真实用户目录启动，交付包 `ASL-Workspace-Windows-2026-09-10.zip` 共 185 个文件、171,925,069 字节；CRC 与逐文件内容核对通过，不包含真实技能库、测试库或账号。包仍是未签名的预览版，不是多宿主完整验收后的正式发行。
+上一版本回归：Python **92 项通过、3 项跳过**（Windows 符号链接权限与 POSIX 执行位）；桌面 **30 项通过**；Vite 生产构建通过。新增真实 IPC 取消 / 只读 / 路径回退检查，并将中文加 emoji 的读写加入冻结 EXE 的构建门禁，不只测试开发机 Python。此前代码 `1051c33` 的 [Windows / Linux CI](https://github.com/qihangzhang-272/asl-harness/actions/runs/34438364187) 均通过。此前交付包 `ASL-Workspace-Windows-2026-09-10.zip` 共 185 个文件、171,925,069 字节；CRC 与逐文件内容核对通过，不包含真实技能库、测试库或账号。以下旧验收证据不冒充本轮全部重跑。
 
 | 本轮桌面验收 | 已观察结果 | 验收边界 |
 | --- | --- | --- |
@@ -1321,18 +1331,33 @@ MCP 的可移植性高于宿主 Plugin，因此当前架构优先让 Skill 声�
 
 用户级同步另有隔离 home 的回归覆盖：两宿主切换 / 停用、非受管同名冲突、受管副本改动、过期预览、自定义目录与失败回滚。已有缓存、归档及来源不明文件未清理；不会把隔离测试窗口留给用户当作正式 App。
 
+**2026-09-10 本轮新增验收：**Python **101 项通过、3 项跳过**，桌面 **34 项通过**，Vite 与 Windows 冻结核心构建通过。开发源和公开发布检出保持单向同步。新功能使用真实 Agent Skill Library 的独立副本验证，原库与个人工作区不改写。
+
+| 新增能力 | 本轮观察与验证 | 明确保留的边界 |
+| --- | --- | --- |
+| GitHub 粘贴解析 | 真实仓库 `10c31f30` 返回正式区 37 个 Skill；技能目录链接只返回目标 1 个；原文、配套文件、来源 commit 可查看 | 不把归档技能混入正式区；复杂仓库不自动拆分、安装；无账户登录或私有仓库读取功能 |
+| 普通技能添加 | 通过 GUI 选择 AI 产品分析器 → Creator Studio → 用户类别；影响预览显示 Creator Studio 与 Product Lab；保存后回读完整 Skill 和来源 commit | 同名内容不是静默新增；写入只在测试副本，未执行 Skill 本身 |
+| 复杂技能解析 | Agent Reach 展示终端命令与目录引用线索，普通添加按钮不出现；Node / Python / MCP 声明仅解析、不执行 | 自由文本中的关系可能遗漏或误报，尤其示例路径；结果不构成安全、独立性或效果认证 |
+| 本机发现 | 真实 Agent 技能目录扫描到 147 个包位置；按真实路径去重，显示原位置；支持搜索及另选目录 | 不是全盘扫描，也不把不同位置的同名技能认定为同一版本 |
+| 用户类别 | 新建、改名、重新分配、删除类别、重名 / 空名禁用保存、重开恢复；删除分类后 Skill 仍在；导出再导入保留类别的测试通过 | 只改变展示归类，不增删 Mode 成员、不改变业务调用 |
+| WorkBuddy 项目应用 | 原生配置被发现；GUI 选择项目后写入 `.codebuddy/skills` 和 `.codebuddy/CODEBUDDY.md`；测试 Mode 添加一个 Skill 后共 20 个包，回读一致；重开 App 保留正确的 WorkBuddy 项目标记 | 没有 WorkBuddy 用户级同步；没有宣称 WorkBuddy 模型实际执行或 MCP 已连通 |
+
+实机测试另外发现并修复：深层 App 配置路径导致 GitHub 解包超过 Windows 路径长度；现在下载使用系统临时目录并移除 ZIP 的仓库提交号包装层，来源 commit 另保留。修复 WorkBuddy 弹窗遗留的“未接入”分支与项目历史误标 Claude Code。解析结果仍是静态检查，不新增导入 Agent 或复杂仓库拆分服务。
+
+本轮便携包为 `ASL-Workspace-Windows-2026-09-10-capabilities.zip`，185 个文件、167,063,228 字节；CRC 与展开包逐文件哈希核对通过，包含内置示例但不包含真实技能库、测试副本、下载暂存或账号。GitHub 错误地址、空目录和重试已检查；重试会清除旧错误提示。900×680 小窗口的地图与管理入口无横向溢出。仍是未签名预览版；复杂仓库融合和多宿主实际业务会话没有被本轮测试替代。
+
 **原生 AI 配置尚未通过端到端验收。** 已用同一 `setup_brief` 给本机两种 CLI 下发独立项目配置夹具，未冒用业务结果：Codex CLI 0.124.0 返回当前 `gpt-6-astra` 需要更新 CLI；Claude Code 2.1.227 原生账号状态为已登录，但模型调用返回 ConnectionRefused。未自动升级用户 CLI、切换账号或修改系统代理。Windows 交接器本身已通过真实 PowerShell 启动和失败回执测试；这仅验证参数传递及状态，不证明 AI 已完成安装。不同电脑迁移、Agent Reach 渠道登录、全部 MCP 实际任务仍待成功验收。本机 Agent Reach doctor 可读出 15 个渠道的自报状态，其中 LinkedIn 未连接、雪球有警告；自报通过也不代替业务实测。
 
 本轮使用生图生成产品方向参考，并结合 CC Switch 的分区管理与 React Flow 的关系呈现重做界面。实机发现树图会缩小文字，默认改为可展开的能力分组卡片；关系图仅解释明确依赖。生图里的示意技能、顺序连线与“已应用”状态没有当成真实产品数据。本地 DeepSeek Harness 已收到只读代码审查请求，但配置的模型返回 429 套餐限额，没有取得本轮第三方审查结论。
 
 Windows 便携版在本机成功构建并启动；移除子进程 PATH 与系统 Python 路径后，内置核心仍可返回真实 Mode 与 Skill。展开目录实测约 387 MiB（主要为 Electron），不是“小体积应用”的证据；目前只有未签名预览构建，没有安装器、自动更新、另一台干净电脑验收或正式二进制发行。脚本保留 Electron / Chromium 许可并收集 Python / PyYAML 许可；正式二进制发布前仍须核对所选 Python 发行版的全部附带库许可。
 
-总架构文档的 20 张 Mermaid 图在 2026-09-09 已渲染通过，本轮仅更新事实说明和验收表，未改图语法；绿色只表示所标注的代码能力，不表示所有 GUI 路径或宿主会话都已验收。
+总架构文档保留原有专项图，本轮仅在 Master 和 View 2D 补入 WorkBuddy 项目适配、静态技能解析和手动类别，其他架构不重画；20 张 Mermaid 图已重新渲染通过。绿色只表示所标注的代码能力，不表示所有 GUI 路径或宿主会话都已验收。
 
 | 状态 | 模块 | 当前事实 | 尚缺的增量 |
 | --- | --- | --- | --- |
-| 🟢 已实现 | Environment 与 Mode | Personal / 公开 Skill Library 各 37 Skill、4 Mode；完整包与 SOURCE 留在本地，Mode 显式选择能力 | 结构化 Mode spec 当前只有 skills；上下文关联与模型偏好未加入 |
-| 🟢 代码已测 | Harness CLI | 15 个命令；新增 `host.user.sync`、`host.setup.inspect`，复用闭包、视图与回滚 | 不重写 Agent Loop；GUI 自动回归范围继续补充 |
+| 🟢 已实现 | Environment 与 Mode | Personal / 公开 Skill Library 各 37 Skill、4 Mode；完整包与 SOURCE 留在本地，Mode 显式选择能力；可选 `spec.capabilities` 保存用户类别 | 未定义类别时按名称建议展示；上下文关联与模型偏好未加入 |
+| 🟢 代码已测 | Harness CLI | 17 个命令；新增 `skill.scan`、`skill.unpack`，继续复用闭包、视图与回滚 | 不重写 Agent Loop；GUI 自动回归范围继续补充 |
 | 🟢 本机已测 | 用户级同步 | Codex / Claude 原生用户目录、预览、切换 / 停用、冲突保护与原子回滚；Codex GUI 写入链在隔离 home 已完成 | 全局原生其他技能仍可用，不是强沙箱；来源改变后需主动刷新；不自动接管已有同名技能 |
 | 🟢 代码已测 | 局部保护 | 日常投影 / Hook 只检查当前 Mode 闭包；用户改动冲突不被静默覆盖 | 不相关候选不能阻断日常工作；不承担业务规则语义裁判 |
 | 🟢 代码已测 | DeepSeek Preset 导出 | 完整能力复制、配置指纹、显式 Hook 定位已有实现 | 生成记录带本机绝对路径，是本机投影，不是通用迁移包 |
@@ -1340,11 +1365,11 @@ Windows 便携版在本机成功构建并启动；移除子进程 PATH 与系统
 | 🟠 部分实现 | 复杂依赖 | Mode 对应工具路径、原生依赖声明、MCP 名称、Agent Reach doctor、本机配置材料与原生 AI 交接入口已有 | 原生 AI 在本机版本 / 网络问题下未完成配置夹具；任意脚本、版本约束与可选渠道仍由助手读原文判断；不把存在标为就绪 |
 | 🟠 待真实宿主验收 | 三宿主投影与 Hook | 函数有测试；本机 DSH Desktop 为 2.0.4，内置官方包 0.1.2-alpha.1；已核对其 Preset 切换限制 | 新会话、切 Mode、真实连接与 Hook 异常仍待实机验证；不能称三宿主成熟 |
 | 🟠 待刷新 | 本机旧部署 | 四个 ASL Preset 仍属旧投影；本轮未重建 | 检查用户局部修改后，只更新选定生成面 |
-| 🟠 部分实现 | 独立 App | Electron + React；真实库、能力地图、Mode / Skill 管理、包往返、项目 / 用户同步、本机检查、原生配置助手 | 任意上游技能补齐、市场采用与原生 AI 配置成功实测、跨电脑、签名发行仍未完成 |
+| 🟠 部分实现 | 独立 App | Electron + React；真实库、手动能力类别、Mode / Skill 管理、本机发现、GitHub 解析与普通包添加、包往返、项目 / 用户同步、本机检查、原生配置助手 | 复杂仓库自主融合、原生 AI 配置成功实测、跨电脑、签名发行仍未完成 |
 | 🟠 部分实现 | 可迁移环境协议 | Mode 与完整 Skill 已可往返；新目录导入及重新投影已测；接收端可检查本机并交给原生助手 | 未做另一台电脑或新宿主会话成功验收；不承诺 MCP 任意格式自动转换或迁移登录 |
 | 🟠 设计已修订 | Model 配置 | View 2F 定义 Mode 偏好、本机路由、实际会话模型的边界 | 尚无统一配置界面；不能切任意宿主现有会话 |
 | 🟠 设计已修订 | 经验培养 | View 7C 记录 EvoMap 证据与轻量采用方案；本地可编辑、明确反馈优先 | 尚无推荐 / 经验合并界面和效果证据；不宣称“已自进化” |
-| 🟠 后续适配 | DSH 管理插件、其他 Agent | 官方 Bundle / Preset 与社区 Desktop 接口已调研；WorkBuddy AI 5.1.0 的 `.workbuddy-ai` 已识别并显示真实路径 | WorkBuddy 尚无 Mode 应用适配；不是“找到配置就已接通”。未开发 DSH 管理插件，Hermes / OpenClaw 未验证兼容 |
+| 🟠 部分适配 | WorkBuddy、DSH 管理插件及其他 Agent | WorkBuddy AI 5.1.0 配置识别与项目级文件投影已实现和回读；官方 Bundle / Preset 与社区 Desktop 接口已调研 | WorkBuddy 原生会话、DSH 管理插件、Hermes / OpenClaw 仍未验收；不把找到配置视为已接通 |
 | ⚪ 派生物 | 宿主投影与状态视图 | 从本地真源生成，安装 / 已投影 / 实际可用必须区分 | 不可将生成成功当作会话加载或业务质量成功 |
 
 **当前判断：底座可复用，产品还未完成。** 新方向不是“把现有库放进 DeepSeek 用一下”，而是独立的工作环境管理 App，加上可分享的内容协议和原生宿主适配。DeepSeek 是功能更完整的优先适配对象，不是 ASL 的唯一运行入口。
