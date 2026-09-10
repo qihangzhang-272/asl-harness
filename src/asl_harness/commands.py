@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from pathlib import Path
 from collections.abc import Sequence
 
 import yaml
@@ -18,6 +19,8 @@ from .sync import sync_environment
 from .portable import export_pack, inspect_pack, import_pack
 from .workspace import HarnessError, Workspace
 from .management import catalog, edit
+from .user_projection import sync_user
+from .readiness import inspect_mode, setup_brief
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -53,6 +56,24 @@ def _parser() -> argparse.ArgumentParser:
     verify.add_argument("--project", required=True)
     verify.add_argument("--mode", required=True)
     verify.add_argument("--host-id", choices=sorted(HOST_LAYOUTS), required=True)
+
+    user_sync = commands.add_parser("host.user.sync", help="Sync one Mode to native current-user locations")
+    user_sync.add_argument("--workspace", required=True)
+    user_sync.add_argument("--mode", required=True)
+    user_sync.add_argument("--host-id", choices=["codex-app", "claude-code"], required=True)
+    user_sync.add_argument("--check", action="store_true")
+    user_sync.add_argument("--expected")
+    user_sync.add_argument("--remove", action="store_true")
+    user_sync.add_argument("--skills-dir", type=Path)
+
+    setup = commands.add_parser("host.setup.inspect", help="Inspect this computer without installing dependencies")
+    setup.add_argument("--workspace", required=True)
+    setup.add_argument("--mode", required=True)
+    setup.add_argument("--host-id", choices=["codex-app", "claude-code", "deepseek-harness"], required=True)
+    setup.add_argument("--scope", choices=["project", "user", "preset"], required=True)
+    setup.add_argument("--project")
+    setup.add_argument("--probe", action="store_true")
+    setup.add_argument("--skills-dir", type=Path)
 
     preset = commands.add_parser("deepseek.preset.export")
     preset.add_argument("--workspace", required=True)
@@ -140,6 +161,22 @@ def _execute(args: argparse.Namespace) -> dict:
                 workspace, args.project, args.mode, host_id=args.host_id
             ),
         }
+    if args.command == "host.user.sync":
+        return {"ok": True, **sync_user(workspace, args.mode, args.host_id,
+                                       check=args.check, expected=args.expected, remove=args.remove, skills_dir=args.skills_dir)}
+    if args.command == "host.setup.inspect":
+        if args.scope in {"project", "preset"} and not args.project:
+            raise HarnessError("SETUP_SCOPE", "请先选择项目或预设位置")
+        project = Path(args.project).resolve() if args.project else None
+        if project and not project.is_dir():
+            raise HarnessError("SETUP_SCOPE", "所选工作位置不存在")
+        report = inspect_mode(workspace, args.mode, args.host_id, project=project, probe=args.probe)
+        if args.skills_dir:
+            if args.scope != "user":
+                raise HarnessError("SETUP_SCOPE", "自选用户技能目录只适用于用户级范围")
+            report["chosenSkillsDirectory"] = str(args.skills_dir.resolve())
+            report["nativeDiscoveryUnverified"] = report["chosenSkillsDirectory"] != report["userPaths"].get("skills")
+        return {"ok": True, **report, "brief": setup_brief(workspace, args.mode, report, scope=args.scope, project=project)}
     if args.command == "host.verify":
         warnings = verify_mode_projection(
             workspace, args.project, args.mode, host_id=args.host_id
