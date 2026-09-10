@@ -37,7 +37,7 @@ test("a selected user skill folder stays a literal path and requires native asso
 
 test("user-level desktop synchronization and Mode switching work in an isolated home", async (t) => {
   const root = path.resolve(__dirname, "../..");
-  const home = await fs.mkdtemp(path.join(os.tmpdir(), "asl-home-test-"));
+  const home = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "asl-home-test-")));
   t.after(() => fs.rm(home, { recursive: true, force: true }));
   const options = { root, env: { USERPROFILE: home, HOME: home, CODEX_HOME: path.join(home, ".codex"), CLAUDE_CONFIG_DIR: path.join(home, ".claude") } };
   const workspace = path.join(root, "examples/personal-environment");
