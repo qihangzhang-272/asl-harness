@@ -194,8 +194,9 @@ def _execute(args: argparse.Namespace) -> dict:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8")
+    for stream in (sys.stdin, sys.stdout):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="strict")
     try:
         result = _execute(_parser().parse_args(argv))
         output = json.dumps(result, ensure_ascii=False, separators=(",", ":"))

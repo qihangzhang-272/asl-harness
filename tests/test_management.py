@@ -1,10 +1,29 @@
 from pathlib import Path
+import json
+import os
+import subprocess
+import sys
 
 import pytest
 
 from asl_harness import management
 from asl_harness.workspace import HarnessError, Workspace
 from test_mode_only import _environment, _mode
+
+
+def test_cli_saves_utf8_input_even_when_host_stdio_is_ascii(tmp_path):
+    root = _environment(tmp_path)
+    document = "# 中文模式验收\n\n包含配图、研究与表达 🎨。\n"
+    result = subprocess.run(
+        [sys.executable, "-m", "asl_harness.commands", "environment.edit", "--workspace", str(root)],
+        input=json.dumps({"operation": "mode.save", "id": "unicode-mode", "document": document,
+                          "skills": ["foundation"]}, ensure_ascii=False).encode("utf-8"),
+        capture_output=True,
+        env={**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1] / "src"),
+             "PYTHONIOENCODING": "ascii:surrogateescape", "PYTHONUTF8": "0"},
+    )
+    assert result.returncode == 0, result.stdout.decode("utf-8")
+    assert (root / "modes/unicode-mode/MODE.md").read_text(encoding="utf-8") == document
 
 
 def test_catalog_uses_real_modes_and_reports_membership(tmp_path):

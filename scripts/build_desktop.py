@@ -45,6 +45,18 @@ def build(output: Path) -> Path:
     shutil.copytree(desktop / "dist", assets / "dist")
     shutil.copytree(work / "dist/asl-harness", app / "resources/core")
     shutil.copytree(root / "examples/personal-environment", app / "resources/example-environment")
+    # Test the frozen executable, not the developer's Python / locale.
+    smoke = work / "smoke-environment"
+    shutil.copytree(root / "examples/personal-environment", smoke)
+    document = "# 中文模式验收\n\n研究与表达 🎨。\n"
+    check = subprocess.run([
+        str(app / "resources/core/asl-harness.exe"), "environment.edit", "--workspace", str(smoke),
+    ], input=json.dumps({"operation": "mode.save", "id": "unicode-smoke", "document": document,
+                        "skills": ["source-research"]}, ensure_ascii=False).encode("utf-8"), capture_output=True)
+    if check.returncode or not json.loads(check.stdout.decode("utf-8")).get("ok"):
+        raise ValueError(f"Packaged Chinese input failed: {check.stdout.decode('utf-8', errors='replace')}")
+    if (smoke / "modes/unicode-smoke/MODE.md").read_text(encoding="utf-8") != document:
+        raise ValueError("Packaged Chinese content changed while saving")
     shutil.copy2(root / "LICENSE", app / "ASL-LICENSE.txt")
     notices = app / "resources/licenses"
     notices.mkdir()
