@@ -19,6 +19,7 @@ from .sync import sync_environment
 from .portable import export_pack, inspect_pack, import_pack
 from .workspace import HarnessError, Workspace
 from .management import catalog, edit
+from .discovery import scan_skills, unpack_skills
 from .user_projection import sync_user
 from .readiness import inspect_mode, setup_brief
 
@@ -29,6 +30,11 @@ def _parser() -> argparse.ArgumentParser:
         description="Validate ASL Environments, sync complete Skills, and project one Mode to a native Host.",
     )
     commands = parser.add_subparsers(dest="command", required=True)
+    scan = commands.add_parser("skill.scan")
+    scan.add_argument("--source", action="append", required=True)
+    unpack = commands.add_parser("skill.unpack")
+    unpack.add_argument("--source", required=True)
+    unpack.add_argument("--output", required=True)
 
     catalog_command = commands.add_parser("environment.catalog")
     catalog_command.add_argument("--workspace", required=True)
@@ -69,7 +75,7 @@ def _parser() -> argparse.ArgumentParser:
     setup = commands.add_parser("host.setup.inspect", help="Inspect this computer without installing dependencies")
     setup.add_argument("--workspace", required=True)
     setup.add_argument("--mode", required=True)
-    setup.add_argument("--host-id", choices=["codex-app", "claude-code", "deepseek-harness"], required=True)
+    setup.add_argument("--host-id", choices=sorted(HOST_LAYOUTS), required=True)
     setup.add_argument("--scope", choices=["project", "user", "preset"], required=True)
     setup.add_argument("--project")
     setup.add_argument("--probe", action="store_true")
@@ -112,6 +118,10 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def _execute(args: argparse.Namespace) -> dict:
+    if args.command == "skill.scan":
+        return {"ok": True, **scan_skills(args.source)}
+    if args.command == "skill.unpack":
+        return {"ok": True, **unpack_skills(args.source, args.output)}
     if args.command == "environment.catalog":
         return {"ok": True, **catalog(args.workspace)}
     if args.command == "environment.edit":

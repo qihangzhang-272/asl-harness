@@ -194,12 +194,13 @@ class Mode:
     path: Path
     document: str
     skill_roots: tuple[str, ...]
+    capabilities: tuple[dict, ...] | None = None
 
 
-def _read_skill(package: Path, skill_id: str, environment: Path) -> Skill:
+def _read_skill(package: Path, skill_id: str, environment: Path, *, source_text: str | None = None) -> Skill:
     text = _read_nonempty(package / "SKILL.md", f"Skill {skill_id}/SKILL.md")
     try:
-        source = _read_nonempty(package / "SOURCE.md", f"Skill {skill_id}/SOURCE.md")
+        source = source_text if source_text is not None else _read_nonempty(package / "SOURCE.md", f"Skill {skill_id}/SOURCE.md")
     except HarnessError as error:
         raise HarnessError(
             "SKILL_SOURCE_INVALID", f"Skill {skill_id} requires a nonempty SOURCE.md"
@@ -218,20 +219,15 @@ def _read_skill(package: Path, skill_id: str, environment: Path) -> Skill:
         metadata = yaml.load(match.group("header"), Loader=_UniqueKeyLoader)
     except (_DuplicateKeyError, yaml.YAMLError) as error:
         raise HarnessError("SKILL_INVALID", f"Skill {skill_id} has invalid frontmatter") from error
-    completion = re.search(
-        r"(?ms)^##[ \t]+完成标准[ \t]*$\s*(?P<body>.*?)(?=^##[ \t]+|\Z)", text
-    )
     if (
         not isinstance(metadata, dict)
         or metadata.get("name") != skill_id
         or not isinstance(metadata.get("description"), str)
         or not metadata["description"].strip()
-        or completion is None
-        or not completion.group("body").strip()
     ):
         raise HarnessError(
             "SKILL_INVALID",
-            f"Skill {skill_id} must declare matching name, description, and 完成标准",
+            f"Skill {skill_id} must declare matching name and description",
         )
     package_metadata = metadata.get("metadata")
     asl_metadata = (
@@ -259,6 +255,27 @@ def _read_skill(package: Path, skill_id: str, environment: Path) -> Skill:
     )
 
 
+def validate_capabilities(value: object, allowed: set[str] | None = None) -> tuple[dict, ...] | None:
+    if value is None:
+        return None
+    titles, assigned = set(), set()
+    if not isinstance(value, list):
+        raise HarnessError("MODE_INVALID", "能力类别必须是列表")
+    for group in value:
+        if (not isinstance(group, dict) or set(group) != {"title", "skills"}
+                or not isinstance(group["title"], str) or not group["title"].strip()
+                or len(group["title"]) > 80 or group["title"].strip() in titles
+                or not isinstance(group["skills"], list)):
+            raise HarnessError("MODE_INVALID", "类别名称不能为空、重复或超过 80 字")
+        titles.add(group["title"].strip())
+        for skill in group["skills"]:
+            if (not isinstance(skill, str) or not SAFE_ID.fullmatch(skill)
+                    or skill in assigned or allowed is not None and skill not in allowed):
+                raise HarnessError("MODE_INVALID", "分类只能包含当前模式的技能，且不能重复归类")
+            assigned.add(skill)
+    return tuple({"title": g["title"].strip(), "skills": list(g["skills"])} for g in value)
+
+
 def _read_mode(package: Path, mode_id: str) -> Mode:
     document = _read_nonempty(package / "MODE.md", f"Mode {mode_id}/MODE.md")
     authored = load_yaml(package / "mode.yaml")
@@ -273,7 +290,7 @@ def _read_mode(package: Path, mode_id: str) -> Mode:
         or set(metadata) != {"id"}
         or metadata.get("id") != mode_id
         or not isinstance(spec, dict)
-        or set(spec) != {"skills"}
+        or not {"skills"} <= set(spec) <= {"skills", "capabilities"}
         or not isinstance(skills, list)
         or not skills
         or any(not isinstance(item, str) or not SAFE_ID.fullmatch(item) for item in skills)
@@ -285,6 +302,7 @@ def _read_mode(package: Path, mode_id: str) -> Mode:
         path=package,
         document=document,
         skill_roots=tuple(skills),
+        capabilities=validate_capabilities(spec.get("capabilities")),
     )
 
 
@@ -470,6 +488,9 @@ class Workspace:
 
         for skill_id in self.skills:
             visit(skill_id)
+        for mode in self.modes.values():
+            if mode.capabilities is not None:
+                validate_capabilities(list(mode.capabilities), set(self.mode_skill_ids(mode.id)))
 
     def mode_skill_ids(self, mode_id: str) -> tuple[str, ...]:
         mode = self.modes.get(mode_id)

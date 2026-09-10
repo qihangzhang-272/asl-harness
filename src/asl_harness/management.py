@@ -25,6 +25,8 @@ from .workspace import (
     _read_skill,
     _safe_id,
     package_fingerprint,
+    validate_capabilities,
+    load_yaml,
 )
 
 
@@ -43,6 +45,7 @@ def catalog(root: str | Path) -> dict:
             roots=list(mode.skill_roots),
             fingerprint=package_fingerprint(mode.path),
             path=str(mode.path),
+            capabilities=list(mode.capabilities) if mode.capabilities is not None else None,
         )
     for item in report["skills"]:
         skill = workspace.skills[item["id"]]
@@ -101,7 +104,7 @@ def edit(root: str | Path, request: dict, *, check: bool = False) -> dict:
         raise HarnessError("EDIT_INVALID", "修改请求必须是对象")
     operation = request.get("operation")
     fields = {
-        "mode.save": {"operation", "id", "expected", "document", "skills"},
+        "mode.save": {"operation", "id", "expected", "document", "skills", "capabilities"},
         "mode.archive": {"operation", "id", "expected"},
         "skill.save": {"operation", "id", "expected", "document", "sourceDocument"},
         "skill.archive": {"operation", "id", "expected"},
@@ -112,6 +115,8 @@ def edit(root: str | Path, request: dict, *, check: bool = False) -> dict:
             "source",
             "mode",
             "expectedSource",
+            "sourceOrigin",
+            "category",
         },
     }
     if operation not in fields or set(request) - fields[operation]:
@@ -185,6 +190,13 @@ def edit(root: str | Path, request: dict, *, check: bool = False) -> dict:
             "metadata": {"id": identifier},
             "spec": {"skills": roots},
         }
+        allowed = set(replace(workspace, modes={**workspace.modes, identifier: mode}).mode_skill_ids(identifier))
+        categories = request.get("capabilities", list(existing.capabilities) if existing and existing.capabilities is not None else None)
+        if "capabilities" not in request and categories is not None:
+            categories = [{**g, "skills": [s for s in g["skills"] if s in allowed]} for g in categories]
+        categories = validate_capabilities(categories, allowed)
+        if categories is not None:
+            mode_data["spec"]["capabilities"] = list(categories)
     elif operation == "skill.save":
         document = _text(request, "document")
         source_document = (
@@ -219,7 +231,15 @@ def edit(root: str | Path, request: dict, *, check: bool = False) -> dict:
                     raise HarnessError(
                         "EDIT_LINKED", "请先将技能包中的链接展开为本地文件后再导入"
                     )
-        skill = _read_skill(source, identifier, source)
+        origin = request.get("sourceOrigin") or source.as_uri()
+        if not isinstance(origin, str) or "\n" in origin or "\r" in origin:
+            raise HarnessError("EDIT_INVALID", "来源必须是单行地址")
+        original_source = (source / "SOURCE.md").read_text(encoding="utf-8") if (source / "SOURCE.md").exists() else ""
+        if not re.search(r"(?m)^#[ \t]+Source[ \t]*$", original_source) or not re.search(r"(?m)^-[ \t]+Origin:[ \t]*\S+", original_source):
+            source_document = original_source.rstrip() + ("\n\n" if original_source else "") + f"# Source\n\n- Origin: {origin}\n- Imported: {datetime.now(timezone.utc):%Y-%m-%d}\n"
+        elif request.get("sourceOrigin"):
+            source_document = original_source.rstrip() + f"\n- Imported from: {origin}\n"
+        skill = _read_skill(source, identifier, source, source_text=source_document)
         replace(
             workspace, skills={**workspace.skills, identifier: skill}
         )._validate_graph()
@@ -238,6 +258,8 @@ def edit(root: str | Path, request: dict, *, check: bool = False) -> dict:
                 affected = sorted(set(affected + [binding.id]))
                 report["affectedModes"] = affected
             changed_paths.append(f"modes/{binding.id}/mode.yaml")
+            if request.get("category") and not any(g["title"] == request["category"] for g in binding.capabilities or ()):
+                raise HarnessError("EDIT_INVALID", "目标类别已不存在，请刷新后选择")
     else:
         if not existing:
             raise HarnessError("EDIT_INVALID", "对象不存在")
@@ -276,13 +298,17 @@ def edit(root: str | Path, request: dict, *, check: bool = False) -> dict:
                 # Backup is owned by this transaction; preserve the complete previous package on failure.
                 shutil.rmtree(target)
             shutil.copytree(source, target, symlinks=False, ignore=_ignore_generated)
-            if binding and identifier not in binding.skill_roots:
-                binding_data = {
-                    "apiVersion": MODE_API_VERSION,
-                    "kind": "ModeProjection",
-                    "metadata": {"id": binding.id},
-                    "spec": {"skills": [*binding.skill_roots, identifier]},
-                }
+            if source_document:
+                (target / "SOURCE.md").write_text(source_document, encoding="utf-8")
+            if binding:
+                binding_data = load_yaml(binding.path / "mode.yaml")
+                if identifier not in binding.skill_roots:
+                    binding_data["spec"]["skills"].append(identifier)
+                if request.get("category"):
+                    for group in binding_data["spec"]["capabilities"]:
+                        group["skills"] = [s for s in group["skills"] if s != identifier]
+                        if group["title"] == request["category"]:
+                            group["skills"].append(identifier)
                 (binding.path / "mode.yaml").write_text(
                     yaml.safe_dump(binding_data, allow_unicode=True, sort_keys=False),
                     encoding="utf-8",

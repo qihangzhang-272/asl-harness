@@ -22,11 +22,13 @@ HOST_LAYOUTS = {
     "codex-app": {"skillRoot": ".agents/skills", "instructionFile": "AGENTS.md"},
     "claude-code": {"skillRoot": ".claude/skills", "instructionFile": "CLAUDE.md"},
     "deepseek-harness": {"skillRoot": ".dsh/skills", "instructionFile": "AGENTS.md"},
+    "workbuddy": {"skillRoot": ".codebuddy/skills", "instructionFile": ".codebuddy/CODEBUDDY.md"},
 }
 HOST_DISPLAY_NAMES = {
     "codex-app": "Codex App",
     "claude-code": "Claude Code",
     "deepseek-harness": "DeepSeek Harness",
+    "workbuddy": "WorkBuddy",
 }
 RUNTIME_REQUIREMENTS = re.compile(
     r"(?mi)^(?:##[ \t]+(?:运行依赖|环境检查|Runtime (?:dependencies|requirements))\b|-[ \t]+Runtime dependencies:)"

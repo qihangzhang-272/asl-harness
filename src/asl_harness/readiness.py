@@ -64,7 +64,7 @@ def inspect_mode(workspace: Workspace, mode_id: str, host: str, *, project: Path
         if key not in checks:
             found = shutil.which(name) if kind == "binary" else None
             status = ("found" if found else "missing") if kind == "binary" else (
-                ("unknown" if host == "deepseek-harness" else "configured" if name in connections else "missing") if kind == "mcp" else
+                ("unknown" if host not in {"codex-app", "claude-code"} else "configured" if name in connections else "missing") if kind == "mcp" else
                 ("configured" if env.get(name) else "unknown"))
             checks[key] = {"kind": kind, "name": name, "status": status,
                            "verified": False, "skills": [], "path": found}
@@ -129,7 +129,7 @@ def inspect_mode(workspace: Workspace, mode_id: str, host: str, *, project: Path
                     doctor_error = "体检未返回可识别的渠道状态"
             except (OSError, ValueError, subprocess.TimeoutExpired):
                 doctor_error = "渠道体检未完成，可让配置助手检查或稍后重试"
-    return {"host": host, "mode": mode_id, "userPaths": {k: str(v) for k, v in locations(host, home=home, env=env).items()} if host != "deepseek-harness" else {},
+    return {"host": host, "mode": mode_id, "userPaths": {k: str(v) for k, v in locations(host, home=home, env=env).items()} if host in {"codex-app", "claude-code"} else {},
             "machine": {"system": platform.system(), "architecture": platform.machine()},
             "checks": list(checks.values()), "setupNotes": notes,
             "needsConfiguration": any(c["status"] in {"missing", "unknown"} for c in checks.values()) or bool(notes),

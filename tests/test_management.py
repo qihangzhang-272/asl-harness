@@ -167,6 +167,70 @@ def test_local_skill_import_preserves_source_and_assets(tmp_path):
     assert (root / "skills/foundation/manual.txt").read_text() == "complete package"
 
 
+def test_standard_skill_import_does_not_rewrite_upstream_instructions(tmp_path):
+    root = _environment(tmp_path)
+    source = tmp_path / "ordinary"
+    source.mkdir()
+    text = "---\nname: ordinary\ndescription: >-\n  A standard skill.\n---\n# 普通技能\n\nRead references first.\n"
+    (source / "SKILL.md").write_text(text, encoding="utf-8")
+    (source / "script.js").write_text("console.log('原脚本')", encoding="utf-8")
+    request = {"operation": "skill.import", "id": "ordinary", "source": str(source), "mode": "creator-studio"}
+    management.edit(root, request, check=True)
+    assert not (root / "skills/ordinary").exists()
+    management.edit(root, request)
+    assert (root / "skills/ordinary/SKILL.md").read_text(encoding="utf-8") == text
+    assert (root / "skills/ordinary/script.js").read_bytes() == (source / "script.js").read_bytes()
+    assert not (source / "SOURCE.md").exists()
+    assert source.as_uri() in (root / "skills/ordinary/SOURCE.md").read_text(encoding="utf-8")
+
+
+def test_mode_categories_persist_and_do_not_change_membership(tmp_path):
+    root = _environment(tmp_path)
+    mode = management.catalog(root)["modes"][0]
+    groups = [{"title": "我的研究", "skills": ["foundation"]}, {"title": "待培养", "skills": []}]
+    request = {"operation": "mode.save", "id": mode["id"], "expected": mode["fingerprint"],
+               "document": mode["document"], "skills": mode["roots"], "capabilities": groups}
+    management.edit(root, request)
+    mode = management.catalog(root)["modes"][0]
+    assert mode["capabilities"] == groups
+    assert mode["roots"] == ["creator"]
+    # A normal Mode edit must not discard the user's map.
+    request.pop("capabilities")
+    request["expected"] = mode["fingerprint"]
+    management.edit(root, request)
+    assert management.catalog(root)["modes"][0]["capabilities"] == groups
+    request["expected"] = management.catalog(root)["modes"][0]["fingerprint"]
+    request["capabilities"] = [{"title": "重复", "skills": ["creator"]}, {"title": "重复", "skills": []}]
+    with pytest.raises(HarnessError):
+        management.edit(root, request)
+
+
+def test_categories_travel_with_exported_mode_and_skill_import(tmp_path):
+    from asl_harness.portable import export_pack, import_pack
+
+    root = _environment(tmp_path)
+    mode = management.catalog(root)["modes"][0]
+    groups = [{"title": "我的分类", "skills": ["creator"]}, {"title": "待整理", "skills": []}]
+    management.edit(root, {"operation": "mode.save", "id": mode["id"], "expected": mode["fingerprint"],
+                           "document": mode["document"], "skills": mode["roots"], "capabilities": groups})
+    source = tmp_path / "external"
+    source.mkdir()
+    (source / "SKILL.md").write_text("---\nname: external\ndescription: External skill\n---\n# External\n", encoding="utf-8")
+    (source / "SOURCE.md").write_text("# Original source\n\n- Author: preserved\n", encoding="utf-8")
+    origin = "https://github.com/example/skills/tree/" + "a" * 40 + "/external"
+    management.edit(root, {"operation": "skill.import", "id": "external", "source": str(source),
+                           "sourceOrigin": origin, "mode": mode["id"], "category": "待整理"})
+    groups[1]["skills"] = ["external"]
+    assert management.catalog(root)["modes"][0]["capabilities"] == groups
+    assert "Author: preserved" in (root / "skills/external/SOURCE.md").read_text(encoding="utf-8")
+    assert origin in (root / "skills/external/SOURCE.md").read_text(encoding="utf-8")
+    package = tmp_path / "mode.zip"
+    export_pack(root, mode["id"], package)
+    target = tmp_path / "received"
+    import_pack(package, target)
+    assert management.catalog(target)["modes"][0]["capabilities"] == groups
+
+
 def test_unknown_operation_and_path_escape_are_rejected(tmp_path):
     root = _environment(tmp_path)
     for request in [
