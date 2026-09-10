@@ -9,7 +9,7 @@ const {
   writePreferences,
   isLibrary,
 } = require("./library.cjs");
-const { nativeInventory } = require("./native.cjs");
+const { nativeInventory, existingDirectory } = require("./native.cjs");
 const { discover, publicUrl } = require("./market.cjs");
 const { assistantInventory, launchAssistant, sessionStatus } = require("./assistant.cjs");
 
@@ -28,6 +28,9 @@ const options = app.isPackaged
       ),
     }
   : { root };
+const example = app.isPackaged
+  ? path.join(process.resourcesPath, "example-environment")
+  : path.join(root, "examples/personal-environment");
 
 function trusted(event) {
   if (event.sender !== window.webContents || event.senderFrame?.url !== page)
@@ -79,9 +82,6 @@ app.whenReady().then(() => {
         ? path.resolve(process.argv[index + 1] || ".")
         : preferences.lastLibrary;
     if (initial) selected.add(initial);
-    const example = app.isPackaged
-      ? path.join(process.resourcesPath, "example-environment")
-      : path.join(root, "examples/personal-environment");
     selected.add(example);
     const libraries = [...preferences.libraries];
     if (!app.isPackaged)
@@ -146,6 +146,12 @@ app.whenReady().then(() => {
 
   handle("asl:choose", async (kind) => {
     let result;
+    const home = app.getPath("home");
+    const presetRoot = path.join(home, ".dsh", ".agent-presets");
+    const directory = await existingDirectory([
+      ["basePreset", "newPreset"].includes(kind) ? presetRoot : null,
+      app.getPath("documents"), home,
+    ]);
     if (
       [
         "environment",
@@ -165,12 +171,14 @@ app.whenReady().then(() => {
           skillFolder: "选择包含 SKILL.md 的完整技能文件夹",
           userSkills: "选择所选 Agent 的用户技能目录（直接存放各技能文件夹的位置）",
         }[kind],
+        defaultPath: directory,
         properties: ["openDirectory"],
       });
       result = result.canceled ? null : result.filePaths[0];
     } else if (kind === "package") {
       const answer = await dialog.showOpenDialog(window, {
         title: "选择 Mode 环境包",
+        defaultPath: directory,
         filters: [{ name: "Mode 包", extensions: ["zip"] }],
         properties: ["openFile"],
       });
@@ -182,7 +190,7 @@ app.whenReady().then(() => {
           newEnvironment: "选择新环境的位置和名称",
           newPreset: "选择新 Preset 的位置和名称",
         }[kind],
-        defaultPath: kind === "export" ? "my-mode.zip" : "my-environment",
+        defaultPath: path.join(directory || home, kind === "export" ? "my-mode.zip" : kind === "newPreset" ? "asl-mode" : "my-environment"),
         ...(kind === "export"
           ? { filters: [{ name: "Mode 包", extensions: ["zip"] }] }
           : {}),
@@ -195,6 +203,9 @@ app.whenReady().then(() => {
 
   handle("asl:run", async (action, values) => {
     commandArgs(action, values);
+    if ((action === "edit" && path.resolve(values.workspace) === example) ||
+        (action === "import" && path.resolve(values.target) === example))
+      throw new Error("内置示例只供查看。请先分享模式，再导入为独立技能库后编辑。");
     if (action === "userSync" && values.apply && !values.expected) throw new Error("请先查看同步预览");
     for (const key of [
       "workspace",
@@ -239,6 +250,10 @@ app.whenReady().then(() => {
         if (answer.response !== 1) return { canceled: true };
       }
       const result = await runCore(action, values, options);
+      if (action === "preset") {
+        const inventory = await nativeInventory();
+        result.presetRegistered = inventory.presets.some(p => path.resolve(p.path) === path.resolve(values.output));
+      }
       if (action === "project") {
         const preferences = await readPreferences(preferenceFile);
         preferences.targets = [

@@ -1449,3 +1449,5 @@ summary {
     transition: none !important;
   }
 }
+.native-location { display: block; color: var(--muted, #6b7280); overflow-wrap: anywhere; margin: 12px 0; line-height: 1.5; }
+.agent-picker strong small { display: block; font-weight: 400; font-size: 11px; margin-top: 3px; }

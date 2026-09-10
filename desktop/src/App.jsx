@@ -88,9 +88,10 @@ function Dialog({ title, children, onClose, wide = false }) {
     <dialog
       ref={ref}
       className={wide ? "wide" : ""}
+      inert={notice?.busy}
       onCancel={(e) => {
         e.preventDefault();
-        onClose();
+        if (!notice?.busy) onClose();
       }}
     >
       <div className="dialog-head">
@@ -278,7 +279,7 @@ function CapabilityMap({ mode, skills, onSkill }) {
         })}
       </div>
       <div className="capability-foot">
-        <span>按用途分组 · 不代表执行顺序</span>
+        <span title="按技能名称、标识和说明中的关键词归组；不是 AI 语义匹配，也不会修改模式成员。">关键词辅助分组 · 不改变模式成员</span>
         {skills.some((s) => s.requires.length) && (
           <button
             className="text-button"
@@ -488,6 +489,7 @@ function SkillDetails({
   skill,
   texts,
   modes,
+  readOnly,
   onClose,
   onEdit,
   onArchive,
@@ -512,17 +514,17 @@ function SkillDetails({
         <h2>{skill.title}</h2>
         <p className="description">{shortText(skill.description, 150)}</p>
         <div className="inspector-actions">
-          <button onClick={onAdd}>
+          <button onClick={onAdd} disabled={readOnly}>
             <Plus size={15} />
             加入模式
           </button>
           <IconButton
             icon={Pencil}
             label="编辑技能"
-            disabled={!texts}
+            disabled={!texts || readOnly}
             onClick={onEdit}
           />
-          <IconButton icon={Archive} label="归档技能" onClick={onArchive} />
+          <IconButton icon={Archive} label="归档技能" onClick={onArchive} disabled={readOnly} />
         </div>
         <div className="tabs small">
           {[
@@ -548,10 +550,12 @@ function SkillDetails({
                   <div className="detail-line" key={id}>
                     <Layers3 size={15} />
                     <span>{modes.find((m) => m.id === id)?.title || id}</span>
+                    <Tag>{modes.find((m) => m.id === id)?.roots.includes(skill.id) ? "直接加入" : "依赖带入"}</Tag>
                     {onRemove && (
                       <IconButton
                         icon={X}
                         label={`从 ${id} 移出`}
+                        disabled={readOnly}
                         onClick={() => onRemove(id)}
                       />
                     )}
@@ -637,7 +641,7 @@ function SkillDetails({
   );
 }
 
-function SetupDialog({ values, title, onClose, task }) {
+function SetupDialog({ values, title, onClose, task, resultMessage }) {
   const [report, setReport] = useState(null);
   const [assistants, setAssistants] = useState([]);
   const [assistant, setAssistant] = useState("");
@@ -660,6 +664,7 @@ function SetupDialog({ values, title, onClose, task }) {
   }, []);
   const labels = { found: "已找到", configured: "有配置 · 待实测", missing: "待安装 / 连接", unknown: "需检查", ok: "渠道体检通过", warn: "需处理", off: "未连接", error: "检查异常" };
   return <Dialog title="配置这台电脑" onClose={onClose}>
+    {resultMessage && <p role="status" className="inline-note">{resultMessage}</p>}
     <div className="apply-summary"><SlidersHorizontal size={19} /><span>{title}<small>{values.host === "codex-app" ? "Codex" : values.host === "claude-code" ? "Claude Code" : "DeepSeek Harness"} · {values.scope === "user" ? "当前用户" : values.scope === "preset" ? "独立预设" : "所选项目"}</small></span></div>
     {report ? <>
       {report.nativeDiscoveryUnverified && <div className="inline-note"><FolderOpen size={18} /><span>所选目录还需与 Agent 关联<small>{report.chosenSkillsDirectory}</small></span></div>}
@@ -726,6 +731,8 @@ function ConnectDialog({
         {native?.hosts.map((h) => (
           <button
             key={h.id}
+            disabled={!h.scopes.length}
+            title={!h.scopes.length ? "已识别本机目录，尚未支持应用模式" : h.directory}
             onClick={() => {
               setHost(h.id);
               setProject("");
@@ -734,7 +741,7 @@ function ConnectDialog({
             className={host === h.id ? "selected" : ""}
           >
             <span className={`host-symbol ${h.id}`}>{h.name[0]}</span>
-            <strong>{h.name}</strong>
+            <strong>{h.name}{!h.scopes.length && <small>暂未接入</small>}</strong>
             {host === h.id && <Check size={16} />}
           </button>
         ))}
@@ -870,7 +877,10 @@ function ConnectDialog({
                     });
                   if (!result.canceled) {
                     onClose();
-                    onApplied(result.discovery === "requires-connection" ? "已放入所选目录，还需关联 Agent。" : `${selected.name} 的模式已同步。`, { workspace, mode: mode.id, host, scope: host === "deepseek-harness" ? "preset" : scope, ...(target && { project: target }), ...(scope === "user" && skillsDir && { skillsDir }) });
+                    const status = host === "deepseek-harness"
+                      ? result.presetRegistered ? "已加入 DeepSeek 预设，请在新会话中选择。" : "已导出预设，但未放入 DeepSeek 预设目录，尚未启用。"
+                      : result.discovery === "requires-connection" ? "已放入所选目录，还需关联 Agent。" : `${selected.name} 的模式已同步。`;
+                    onApplied(status, { workspace, mode: mode.id, host, scope: host === "deepseek-harness" ? "preset" : scope, ...(target && { project: target }), ...(scope === "user" && skillsDir && { skillsDir }) });
                   }
                 })
               }
@@ -949,6 +959,7 @@ export default function App() {
     if (page === "agents") task(async () => setNative(await api("native")));
   }, [page]);
   const mode = catalog?.modes.find((m) => m.id === modeId);
+  const readOnly = workspace === initial?.example;
   const modeSkills = useMemo(
     () =>
       mode
@@ -956,7 +967,6 @@ export default function App() {
         : [],
     [mode, catalog],
   );
-  const groups = useMemo(() => capabilityGroups(modeSkills), [modeSkills]);
   async function chooseLibrary() {
     const root = await api("choose", "environment");
     if (root) await load(root);
@@ -1046,8 +1056,8 @@ export default function App() {
   );
 
   return (
-    <NoticeContext.Provider value={message}>
-      <div className="app">
+    <NoticeContext.Provider value={{ ...message, busy }}>
+      <div className="app" inert={busy} aria-busy={busy}>
         <aside className="sidebar">
           <div className="brand">
             <span className="brand-symbol">
@@ -1106,7 +1116,7 @@ export default function App() {
             <IconButton
               icon={Plus}
               label="新建模式"
-              disabled={!catalog}
+              disabled={!catalog || readOnly}
               onClick={() => setModal({ kind: "mode-editor" })}
             />
           </div>
@@ -1160,7 +1170,7 @@ export default function App() {
             </span>
             <div>
               {workspace === initial?.example && (
-                <Tag tone="amber">内置示例</Tag>
+                <Tag tone="amber">内置示例 · 只读</Tag>
               )}
               {busy ? (
                 <LoaderCircle size={17} className="spin" />
@@ -1241,6 +1251,7 @@ export default function App() {
                           <IconButton
                             icon={Copy}
                             label="复制模式"
+                            disabled={readOnly}
                             onClick={() =>
                               setModal({
                                 kind: "mode-editor",
@@ -1255,6 +1266,7 @@ export default function App() {
                           <IconButton
                             icon={Pencil}
                             label="编辑模式"
+                            disabled={readOnly}
                             onClick={() =>
                               setModal({ kind: "mode-editor", item: mode })
                             }
@@ -1262,6 +1274,7 @@ export default function App() {
                           <IconButton
                             icon={Archive}
                             label="归档模式"
+                            disabled={readOnly}
                             onClick={() =>
                               task(() =>
                                 editContent({
@@ -1303,6 +1316,7 @@ export default function App() {
                         </div>
                         <button
                           className="text-button"
+                          disabled={readOnly}
                           onClick={() =>
                             setModal({ kind: "mode-editor", item: mode })
                           }
@@ -1321,14 +1335,9 @@ export default function App() {
                         </>
                       ) : (
                         <div className="mode-skill-list">
-                          {groups.map((group) => (
-                            <section key={group.id}>
-                              <div className="field-heading">
-                                <h3>{group.title}</h3>
-                                <Tag>{group.skills.length}</Tag>
-                              </div>
-                              <div className="list-surface">
-                                {group.skills.map((skill) => (
+                          <p className="muted">来自 mode.yaml 的技能清单与技能声明的依赖，不做关键词分组。</p>
+                          <div className="list-surface">
+                                {modeSkills.map((skill) => (
                                   <SkillRow
                                     key={skill.id}
                                     skill={skill}
@@ -1338,9 +1347,7 @@ export default function App() {
                                     }
                                   />
                                 ))}
-                              </div>
-                            </section>
-                          ))}
+                          </div>
                         </div>
                       )}
                     </div>
@@ -1353,13 +1360,14 @@ export default function App() {
                           <p>{catalog.skills.length} 个本地技能</p>
                         </div>
                         <div className="heading-actions">
-                          <button onClick={() => task(importSkill)}>
+                          <button disabled={readOnly} onClick={() => task(importSkill)}>
                             <Download size={16} />
                             导入
                           </button>
                           <button
                             className="primary"
                             onClick={() => setModal({ kind: "skill-editor" })}
+                            disabled={readOnly}
                           >
                             <Plus size={16} />
                             创建技能
@@ -1528,6 +1536,7 @@ export default function App() {
                           <h1>Agent 配置</h1>
                           <p>选择模式，明确应用的位置。</p>
                         </div>
+                        <button disabled={busy} onClick={() => task(async () => setNative(await api("native")))}><RotateCw size={16} />重新检测</button>
                       </div>
                       <div className="agent-grid">
                         {native?.hosts.map((host) => (
@@ -1538,9 +1547,10 @@ export default function App() {
                               </span>
                               <h2>{host.name}</h2>
                               <Tag tone={host.configured ? "green" : ""}>
-                                {host.configured ? "已找到配置" : "未找到配置"}
+                                {host.configured ? "已找到配置" : host.directoryFound ? "只有目录" : "未找到配置"}
                               </Tag>
                             </div>
+                            <small className="native-location" title={host.directory}>{host.directory}</small>
                             <div className="agent-meta">
                               <span>可用范围</span>
                               <b>
@@ -1568,12 +1578,12 @@ export default function App() {
                               </div>
                             )}
                             <button
-                              disabled={!catalog || !host.scopes.length}
+                              disabled={!catalog?.modes.length || !host.scopes.length}
                               onClick={() =>
                                 setModal({ kind: "connect", host: host.id })
                               }
                             >
-                              配置工作模式
+                              {host.scopes.length ? "配置工作模式" : "暂不支持应用模式"}
                               <ChevronRight size={15} />
                             </button>
                             {host.userMode?.workspace === workspace && catalog.modes.some(m => m.id === host.userMode.mode) && <div className="agent-tools"><button onClick={() => setModal({ kind: "connect", host: host.id, scope: "user", modeId: host.userMode.mode })}>同步 / 停用</button><button onClick={() => setModal({ kind: "setup", values: { workspace, mode: host.userMode.mode, host: host.id, scope: "user", ...(host.userMode.skillsDir !== host.skillRoot && { skillsDir: host.userMode.skillsDir }) } })}>检查配置</button></div>}
@@ -1613,6 +1623,7 @@ export default function App() {
             {selected && catalog && (
               <SkillDetails
                 skill={selected}
+                readOnly={readOnly}
                 texts={texts}
                 modes={catalog.modes}
                 onClose={() => {
@@ -1771,10 +1782,10 @@ export default function App() {
             initialProject={modal.project}
             task={task}
             onClose={() => setModal(null)}
-            onApplied={(text, values) => { setMessage({ text }); api("native").then(setNative).catch(() => {}); if (values) setModal({ kind: "setup", values }); }}
+            onApplied={(text, values) => { setMessage({ text }); api("native").then(setNative).catch(() => {}); if (values) setModal({ kind: "setup", values, resultMessage: text }); }}
           />
         )}
-        {modal?.kind === "setup" && <SetupDialog values={modal.values} title={catalog.modes.find(m => m.id === modal.values.mode)?.title || modal.values.mode} task={task} onClose={() => setModal(null)} />}
+        {modal?.kind === "setup" && <SetupDialog values={modal.values} resultMessage={modal.resultMessage} title={catalog.modes.find(m => m.id === modal.values.mode)?.title || modal.values.mode} task={task} onClose={() => setModal(null)} />}
         {modal?.kind === "add-to-mode" && (
           <Dialog title="加入工作模式" onClose={() => setModal(null)}>
             <div className="library-list">
@@ -1906,7 +1917,7 @@ export default function App() {
             <h3>{modal.report.mode}</h3>
             <p>{modal.report.skills.length} 个完整技能</p>
             <div className="dialog-actions">
-              {workspace && (
+              {workspace && !readOnly && (
                 <button onClick={() => task(() => previewImport(workspace))}>
                   加入当前技能库
                 </button>

@@ -50,4 +50,5 @@ test("skill format errors explain what to fix without hiding other errors", asyn
     "技能开头的名称和说明格式不完整，请保留原文顶部的 --- 信息区。",
   );
   assert.equal(errorText("文件已被修改，请刷新"), "文件已被修改，请刷新");
+  assert.match(errorText("Skill qa-skill must declare matching name, description, and 完成标准"), /请保留技能顶部的 name/);
 });

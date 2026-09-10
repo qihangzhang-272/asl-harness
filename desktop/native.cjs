@@ -9,9 +9,17 @@ async function exists(p) {
     return false;
   }
 }
+async function existingDirectory(paths) {
+  for (const location of paths) {
+    if (!location) continue;
+    try { if ((await fs.stat(location)).isDirectory()) return path.resolve(location); } catch {}
+  }
+}
 async function nativeInventory(home = os.homedir(), env = process.env) {
   const codex = path.resolve(env.CODEX_HOME || path.join(home, ".codex"));
   const claude = path.resolve(env.CLAUDE_CONFIG_DIR || path.join(home, ".claude"));
+  const dsh = path.join(home, ".dsh");
+  const buddy = await existingDirectory([path.join(home, ".workbuddy-ai"), path.join(home, ".workbuddy")]) || path.join(home, ".workbuddy-ai");
   const definitions = [
     {
       id: "codex-app",
@@ -32,18 +40,27 @@ async function nativeInventory(home = os.homedir(), env = process.env) {
     {
       id: "deepseek-harness",
       name: "DeepSeek Harness",
-      directory: ".dsh",
+      directory: dsh,
+      evidence: [path.join(dsh, "settings.yaml")],
       scopes: ["preset"],
     },
-    { id: "workbuddy", name: "WorkBuddy", directory: ".workbuddy", scopes: [] },
+    { id: "workbuddy", name: "WorkBuddy", directory: buddy, file: path.join(buddy, ".mcp.json"),
+      evidence: [path.join(buddy, "settings.json"), path.join(buddy, "workspace-state.json")], scopes: [] },
   ];
   const hosts = [];
   for (const definition of definitions) {
     const record = {
       ...definition,
-      configured: await exists(path.resolve(home, definition.directory)),
+      directoryFound: !!(await existingDirectory([definition.directory])),
+      configured: false,
       connections: null,
     };
+    const evidence = [definition.file, ...(definition.evidence || [])];
+    if (definition.id === "claude-code") evidence.push(path.join(claude, "settings.json"));
+    for (const file of evidence.filter(Boolean)) {
+      try { if ((await fs.stat(file)).isFile()) { record.configured = true; break; } } catch {}
+    }
+    delete record.evidence;
     if (definition.file)
       try {
         const file = path.resolve(home, definition.file);
@@ -67,7 +84,7 @@ async function nativeInventory(home = os.homedir(), env = process.env) {
     hosts.push(record);
   }
   const presets = [];
-  const presetRoot = path.join(home, ".dsh", ".agent-presets");
+  const presetRoot = path.join(dsh, ".agent-presets");
   try {
     for (const entry of await fs.readdir(presetRoot, { withFileTypes: true }))
       if (
@@ -79,6 +96,7 @@ async function nativeInventory(home = os.homedir(), env = process.env) {
           path: path.join(presetRoot, entry.name),
         });
   } catch {}
-  return { hosts, presets, home };
+  if (presets.length) hosts.find(h => h.id === "deepseek-harness").configured = true;
+  return { hosts, presets, presetRoot, home };
 }
-module.exports = { nativeInventory };
+module.exports = { nativeInventory, existingDirectory };

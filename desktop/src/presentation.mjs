@@ -67,6 +67,10 @@ export function shortText(text, limit = 90) {
   return plain.length > limit ? `${plain.slice(0, limit)}…` : plain;
 }
 export function errorText(text) {
+  if (text === "DeepSeek preset output directory name must match [a-z0-9][a-z0-9-]*")
+    return "DeepSeek 预设的文件夹名需要使用小写英文、数字或短横线，例如 asl-writing；上级路径可以包含中文。";
+  if (/^Skill .+ must declare matching name, description, and 完成标准$/.test(text))
+    return "请保留技能顶部的 name 和 description（name 要与技能标识一致），并补全“## 完成标准”。";
   return /^Skill .+ has invalid frontmatter$/.test(text)
     ? "技能开头的名称和说明格式不完整，请保留原文顶部的 --- 信息区。"
     : text;
