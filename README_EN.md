@@ -174,7 +174,13 @@ Over time, the Environment becomes more like its owner: it retains useful judgme
 
 ### Desktop preview
 
-Paste the GitHub URL of an ASL-compatible repository, select a Mode, and keep its complete working environment locally. Modes are read from the repository, not hardcoded in the App. Start with [Agent Skill Library](https://github.com/qihangzhang-272/agent-skill-library) or another compatible repository.
+[Download for Windows](https://github.com/qihangzhang-272/asl-harness/releases/download/app-v0.2.1/ASL-Workspace-v0.2.1-Windows-Portable.zip) · [Release notes and checksums](https://github.com/qihangzhang-272/asl-harness/releases/tag/app-v0.2.1)
+
+No Python or Node.js installation is needed. Right-click the downloaded ZIP → **Extract All** → open the `ASL Workspace` folder → double-click **`ASL Workspace.exe`**. Keep the complete folder together. GitHub's automatically generated `Source code` archives are not the desktop App.
+
+This is an unsigned Windows x64 preview, not an installer. Windows may show an unknown-publisher warning. Administrator access and disabling system protection are not required. Download only from this repository's Releases and check the accompanying SHA-256.
+
+Start from this computer by copying an organizing prompt to the AI you already use. It edits local Mode files around your work purposes; the App does not launch an AI in the background. Alternatively, import shared Modes from [Agent Skill Library](https://github.com/qihangzhang-272/agent-skill-library) or another ASL-compatible repository. A Mode is a work context, not a fixed persona; one person can use several.
 
 Sources & Updates checks upstream when the App opens and every 15 minutes while running. Review Mode differences before updating; local changes are not silently overwritten. Codex and Claude Code use standard user-level directories by default; only project-level application needs a project folder. DeepSeek receives an independent preset; WorkBuddy currently supports project scope only. Native Agents still handle authentication and complex dependencies: importing content does not prove it is ready to run. See the [architecture status](docs/asl-architecture-views.md#view-9--当前项目状态) for verified scope and remaining work.
 
@@ -188,7 +194,7 @@ npm ci --prefix desktop
 npm start --prefix desktop
 ```
 
-Start with the GitHub import button. The first Mode creates a local environment automatically, without handwritten YAML or a repository-folder picker. Existing local environments, ZIP packages, and a read-only example remain available. Content stays in ordinary files, not an App-private database.
+The first shared Mode import can create a local environment automatically. For local organization, your existing AI edits files using the supplied prompt, and the App reads them back. Existing local environments, ZIP packages, and a read-only example remain available. Content stays in ordinary files, not an App-private database.
 
 Windows developers can build a portable folder with the Python core included. Keep the complete folder together; the exe alone is not portable. This is an unsigned preview, not an installer. Run these commands in PowerShell from the repository root, using a new output directory:
 

@@ -174,7 +174,13 @@ Environment 是普通文件夹，也是本地 Git 真源。人可以直接阅读
 
 ### 桌面预览版
 
-粘贴符合 ASL 协议的 GitHub 仓库地址，选择其中的 Mode，即可把完整工作模式保存到本地管理。App 不预设你必须使用哪些模式；你可以从 [Agent Skill Library](https://github.com/qihangzhang-272/agent-skill-library) 开始，也可以使用其他符合协议的仓库。
+[下载 Windows App](https://github.com/qihangzhang-272/asl-harness/releases/download/app-v0.2.1/ASL-Workspace-v0.2.1-Windows-Portable.zip) · [版本说明与校验值](https://github.com/qihangzhang-272/asl-harness/releases/tag/app-v0.2.1)
+
+无需安装 Python 或 Node.js。下载后右键 ZIP → **全部解压** → 打开 `ASL Workspace` 文件夹 → 双击 **`ASL Workspace.exe`**。保留整个文件夹，不要只拿走 EXE；GitHub 自动生成的 `Source code` 压缩包是源码，不是 App。
+
+这是 Windows x64 未签名预览版，不是安装程序；可能触发系统的未知发行者提醒。不需要管理员权限，不要求关闭系统防护。请只使用本仓库 Releases 中的文件，并核对同页 SHA-256。
+
+打开后，可以点击「从这台电脑开始」，复制整理提示词给你正在使用的 AI，按工作目的建立或整理 Mode；App 不在后台启动 AI。也可以「导入别人分享的工作模式」，从 [Agent Skill Library](https://github.com/qihangzhang-272/agent-skill-library) 或其他符合 ASL 协议的仓库选取。模式不是预设身份：同一个人可以维护多个工作场景。
 
 「来源与更新」会在打开 App 时及运行期间每 15 分钟检查上游；发现新提交后可查看 Mode 差异，确认后更新，不会自动覆盖本地调教。Codex / Claude Code 的用户级应用自动使用标准目录，项目级才需要选择项目；DeepSeek 生成独立预设，WorkBuddy 当前只支持项目级。模型登录和复杂依赖仍由原生 Agent 配置，不能把内容导入当成全部功能已就绪。完整边界与验收见[总架构的当前状态](docs/asl-architecture-views.md#view-9--当前项目状态)。
 
@@ -188,7 +194,7 @@ npm ci --prefix desktop
 npm start --prefix desktop
 ```
 
-打开后点击「从 GitHub 导入工作模式」。首次导入自动建立本地工作环境，不需要手写 YAML 或选择仓库文件夹；本地库、ZIP 和只读示例保留为其他入口。内容仍是普通文件，不是 App 私有数据库。
+首次导入可自动建立本地工作环境；从本机整理时，由你正在使用的 AI 按提示词编辑本地文件，App 回读显示。本地库、ZIP 和只读示例保留为其他入口。内容仍是普通文件，不是 App 私有数据库。
 
 Windows 开发者可以构建自带核心的便携文件夹，接收方无需手动安装 Python。请保留整个输出文件夹，不要单独拷贝 exe；这是未签名预览版，不是安装包。以下命令在仓库根目录的 PowerShell 中执行，输出目录必须不存在：
 

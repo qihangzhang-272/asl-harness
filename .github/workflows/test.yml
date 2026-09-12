@@ -4,6 +4,9 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   pytest:
     strategy:
@@ -25,6 +28,8 @@ jobs:
       - run: npm ci --ignore-scripts --no-audit --no-fund
         working-directory: desktop
       - run: npm test
+        working-directory: desktop
+      - run: npm audit --audit-level=high
         working-directory: desktop
       - run: npm run build
         working-directory: desktop
