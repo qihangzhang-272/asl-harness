@@ -13,6 +13,50 @@ from asl_harness.workspace import HarnessError, Workspace
 from test_mode_only import _environment, _mode, _skill, _write
 
 
+def test_cloud_origin_survives_export_import_without_importing_personal_content(tmp_path):
+    from asl_harness.management import catalog
+    source = _environment(tmp_path)
+    origin = ('# Source\n\n<!-- asl:upstream -->\n'
+              '- Repository: https://github.com/example/skills\n'
+              '- URL: https://github.com/example/skills/tree/main/studio\n'
+              '- Commit: ' + 'a' * 40 + '\n<!-- /asl:upstream -->\n')
+    _write(source / 'modes/creator-studio/SOURCE.md', origin)
+    package = tmp_path / 'cloud.zip'
+    export_pack(source, 'creator-studio', package)
+    target = tmp_path / 'imported'
+    import_pack(package, target)
+    assert (target / 'modes/creator-studio/SOURCE.md').read_text() == origin
+    assert catalog(target)['modes'][0]['upstream'] == {
+        'repository': 'https://github.com/example/skills',
+        'url': 'https://github.com/example/skills/tree/main/studio', 'commit': 'a' * 40,
+    }
+    assert not inspect_pack(package)['includedProfile']
+
+
+def test_import_rejects_changes_since_preview(tmp_path):
+    source = _environment(tmp_path)
+    package = tmp_path / 'incoming.zip'
+    export_pack(source, 'creator-studio', package)
+    target = tmp_path / 'imported'
+    import_pack(package, target)
+    preview = import_pack(package, target, check=True)
+    _write(target / 'skills/creator/local-note.md', 'Locally maintained after preview')
+    with pytest.raises(HarnessError, match='重新查看导入预览'):
+        import_pack(package, target, replace=True, expected=preview['fingerprint'])
+    assert (target / 'skills/creator/local-note.md').exists()
+
+
+def test_mock_key_in_test_asset_is_preserved_but_actual_literals_still_blocked(tmp_path):
+    source = _environment(tmp_path)
+    file = source / 'skills/creator/scripts/main.test.ts'
+    _write(file, 'const config = { OPENAI_API_KEY: "openai-key" };')
+    exported = export_pack(source, 'creator-studio', tmp_path / 'safe.zip')
+    assert 'skills/creator/scripts/main.test.ts' in exported['files']
+    _write(file, 'const config = { OPENAI_API_KEY: "sk-' + 'a' * 40 + '" };')
+    with pytest.raises(HarnessError, match='possible secret literal'):
+        export_pack(source, 'creator-studio', tmp_path / 'unsafe.zip')
+
+
 def test_pack_contains_complete_selected_mode_not_private_environment(tmp_path: Path) -> None:
     source = _environment(tmp_path)
     _skill(source, "other")

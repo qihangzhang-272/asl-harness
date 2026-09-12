@@ -114,6 +114,7 @@ def _parser() -> argparse.ArgumentParser:
     pack_import.add_argument("--target", required=True)
     pack_import.add_argument("--check", action="store_true")
     pack_import.add_argument("--replace", action="store_true")
+    pack_import.add_argument("--expected", help="Fingerprint of the reviewed import plan")
     return parser
 
 
@@ -135,7 +136,7 @@ def _execute(args: argparse.Namespace) -> dict:
     if args.command == "mode.inspect":
         return {"ok": True, **inspect_pack(args.source)}
     if args.command == "mode.import":
-        return {"ok": True, **import_pack(args.source, args.target, check=args.check, replace=args.replace)}
+        return {"ok": True, **import_pack(args.source, args.target, check=args.check, replace=args.replace, expected=args.expected)}
     if args.command == "environment.sync":
         return {
             "ok": True,

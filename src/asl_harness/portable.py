@@ -101,7 +101,11 @@ def _review(files: dict[str, bytes]) -> dict:
             _fail(f"private key cannot be shared: {name}")
         for match in SECRET_LITERAL.finditer(text):
             value = match.group(1).strip()
-            if value and not (value.startswith(("${", "<")) or value.lower() in {"example", "placeholder", "your-api-key", "your_api_key"}):
+            # Test fixtures often use literal provider-key / test-key placeholders.
+            # Keep test files intact; this is not a blanket exemption for test secrets.
+            test_placeholder = bool(re.search(r"(?:\.test\.[cm]?[jt]s|^test_.*\.py)$", path.name)
+                                    and re.fullmatch(r"(?:[a-z]{1,20}-key|test|fake|dummy|mock)", value))
+            if value and not (test_placeholder or value.startswith(("${", "<")) or value.lower() in {"example", "placeholder", "your-api-key", "your_api_key"}):
                 _fail(f"possible secret literal; replace with a documented placeholder before sharing: {name}")
         if LOCAL_PATH.search(text):
             local.append(name)
@@ -195,8 +199,10 @@ def export_pack(source: str | Path, mode_id: str, output: str | Path, *, include
                 files[relative] = path.read_bytes()
                 if path.stat().st_mode & 0o111:
                     executable.append(relative)
-    for name in ("MODE.md", "mode.yaml"):
+    for name in ("MODE.md", "mode.yaml", "SOURCE.md"):
         path = workspace.modes[mode_id].path / name
+        if name == "SOURCE.md" and not path.exists():
+            continue
         if not path.resolve().is_relative_to(workspace.root):
             _fail(f"Mode file escapes Environment: {name}")
         files[f"{NAMESPACE}/modes/{mode_id}/{name}"] = path.read_bytes()
@@ -266,7 +272,7 @@ def _opened_pack(source: str | Path):
         for name, data in payload.items():
             if name.startswith("skills/"):
                 restored[name] = data
-            elif name in {f"{NAMESPACE}/modes/{mode_id}/MODE.md", f"{NAMESPACE}/modes/{mode_id}/mode.yaml", f"{NAMESPACE}/PROFILE.md"}:
+            elif name in {f"{NAMESPACE}/modes/{mode_id}/MODE.md", f"{NAMESPACE}/modes/{mode_id}/mode.yaml", f"{NAMESPACE}/modes/{mode_id}/SOURCE.md", f"{NAMESPACE}/PROFILE.md"}:
                 restored[name.removeprefix(f"{NAMESPACE}/")] = data
             else:
                 _fail(f"unsupported ASL snapshot content: {name}")
@@ -291,7 +297,7 @@ def inspect_pack(source: str | Path) -> dict:
         return report
 
 
-def import_pack(source: str | Path, target: str | Path, *, check: bool = False, replace: bool = False) -> dict:
+def import_pack(source: str | Path, target: str | Path, *, check: bool = False, replace: bool = False, expected: str | None = None) -> dict:
     destination = Path(target).resolve()
     with _opened_pack(source) as (incoming, report):
         mode_id = report["mode"]
@@ -310,7 +316,15 @@ def import_pack(source: str | Path, target: str | Path, *, check: bool = False, 
         changes = [path for path, action in actions.items() if action in {"add", "replace"}]
         changed_skills = {path.split("/")[1] for path, action in actions.items() if path.startswith("skills/") and action != "unchanged"}
         affected = sorted(name for name in existing.modes if changed_skills.intersection(existing.mode_skill_ids(name))) if existing else []
+        fingerprint = _digest(json.dumps({
+            "content": report["contentDigest"], "target": str(destination),
+            "local": {name: package_fingerprint(destination / name) if (destination / name).exists() else None for name in packages},
+            "modes": {name: package_fingerprint(mode.path) for name, mode in existing.modes.items()} if existing else {},
+        }, sort_keys=True).encode())
+        if expected is not None and expected != fingerprint:
+            raise HarnessError("PACK_PREVIEW_STALE", "本地内容或导入包已改变，请重新查看导入预览")
         result = {**report, "operation": "mode.import", "target": str(destination), "check": check,
+                  "fingerprint": fingerprint,
                   "actions": actions, "conflicts": conflicts, "affectedModes": affected,
                   "changed": bool(changes), "profileAction": "preserved" if existing else "imported" if report["includedProfile"] else "local-default"}
         if check:
