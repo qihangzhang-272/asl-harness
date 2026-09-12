@@ -1471,3 +1471,19 @@ summary {
 .dependency-preview small { display: block; color: #69778b; }
 .recent-repositories { display: grid; gap: 8px; margin: 20px 0; }
 .recent-repositories button { justify-content: space-between; text-align: left; overflow-wrap: anywhere; }
+.mode-origin { display: flex; align-items: center; gap: 12px; padding: 14px 16px; margin: 8px 0 24px; border: 1px solid #e2e7ef; border-radius: 12px; background: #fafbfe; }
+.mode-origin span { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 13px; }
+.mode-origin small { display: block; color: #778395; margin-top: 4px; }
+.user-location { padding: 14px; border: 1px solid #e2e7ef; border-radius: 12px; margin: 14px 0; }
+.user-location > div { display: flex; align-items: center; gap: 8px; }
+.user-location small { color: #778395; }
+.user-location details { margin-top: 12px; }
+.repository-modes { margin: 26px 0; }
+.repository-modes details { font-size: 13px; margin: 12px 0; }
+.repository-modes ul { padding-left: 18px; max-height: 230px; overflow: auto; overflow-wrap: anywhere; }
+.capability-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.update-list { display: grid; gap: 14px; margin: 22px 0; }
+.update-card { background: white; border: 1px solid #e2e7ef; border-radius: 14px; padding: 20px; overflow-wrap: anywhere; }
+.update-card .row-main { gap: 10px; }
+.updates-page .page-heading { flex-wrap: wrap; gap: 14px; }
+.import-changes { max-height: 300px; overflow-y: auto; }

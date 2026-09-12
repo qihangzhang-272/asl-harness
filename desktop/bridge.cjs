@@ -40,7 +40,7 @@ function commandArgs(action, values = {}) {
       : action === "export"
         ? ["includeProfile", "apply"]
         : action === "import"
-          ? ["replace", "apply"]
+          ? ["replace", "apply", "expected"]
           : [];
   if (
     Object.keys(values).some((key) => ![...required, ...optional].includes(key))

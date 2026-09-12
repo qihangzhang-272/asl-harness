@@ -174,7 +174,9 @@ Environment 是普通文件夹，也是本地 Git 真源。人可以直接阅读
 
 ### 桌面预览版
 
-桌面入口已经接入同一个 Harness 核心：打开工作环境，查看 Mode 与技能，把选中的 Mode 分享成 ZIP，或导入到另一个独立环境，再应用到目标 Agent 的项目。模型账号、外部依赖安装与自动启动会话仍需另行配置，当前不是完整的一键安装器。实现与验证范围见[总架构的当前状态](docs/asl-architecture-views.md#view-9--当前项目状态)。
+粘贴符合 ASL 协议的 GitHub 仓库地址，选择其中的 Mode，即可把完整工作模式保存到本地管理。App 不预设你必须使用哪些模式；你可以从 [Agent Skill Library](https://github.com/qihangzhang-272/agent-skill-library) 开始，也可以使用其他符合协议的仓库。
+
+「来源与更新」会在打开 App 时及运行期间每 15 分钟检查上游；发现新提交后可查看 Mode 差异，确认后更新，不会自动覆盖本地调教。Codex / Claude Code 的用户级应用自动使用标准目录，项目级才需要选择项目；DeepSeek 生成独立预设，WorkBuddy 当前只支持项目级。模型登录和复杂依赖仍由原生 Agent 配置，不能把内容导入当成全部功能已就绪。完整边界与验收见[总架构的当前状态](docs/asl-architecture-views.md#view-9--当前项目状态)。
 
 从源码运行，需要 Python 3.11+、Node.js 22.12+ 与 npm：
 
@@ -186,7 +188,7 @@ npm ci --prefix desktop
 npm start --prefix desktop
 ```
 
-打开后可以先点「内置示例」。你的实际环境仍是普通文件夹，不会被导入到 App 私有数据库。
+打开后点击「从 GitHub 导入工作模式」。首次导入自动建立本地工作环境，不需要手写 YAML 或选择仓库文件夹；本地库、ZIP 和只读示例保留为其他入口。内容仍是普通文件，不是 App 私有数据库。
 
 Windows 开发者可以构建自带核心的便携文件夹，接收方无需手动安装 Python。请保留整个输出文件夹，不要单独拷贝 exe；这是未签名预览版，不是安装包。以下命令在仓库根目录的 PowerShell 中执行，输出目录必须不存在：
 

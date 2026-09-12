@@ -13,11 +13,13 @@ const {
 const { nativeInventory, existingDirectory, localSkillRoots } = require("./native.cjs");
 const { discover, publicUrl, githubSnapshot } = require("./market.cjs");
 const { assistantInventory, launchAssistant, sessionStatus } = require("./assistant.cjs");
+const { upstreamDocument, presetDestination, checkUpstreams } = require("./repository.cjs");
 
 const root = path.resolve(__dirname, "..");
 const page = pathToFileURL(path.join(__dirname, "dist/index.html")).href;
 let window;
 const selected = new Set();
+const repositories = new Map();
 let busy = false;
 const options = app.isPackaged
   ? {
@@ -52,6 +54,8 @@ function handle(channel, fn) {
 app.whenReady().then(() => {
   const preferenceFile = path.join(app.getPath("userData"), "libraries.json");
   const sessionRoot = path.join(app.getPath("userData"), "setup-sessions");
+  const managedLibrary = path.join(app.getPath("userData"), "workspace");
+  selected.add(managedLibrary);
   window = new BrowserWindow({
     width: 1320,
     height: 880,
@@ -81,21 +85,12 @@ app.whenReady().then(() => {
     const initial =
       index >= 0
         ? path.resolve(process.argv[index + 1] || ".")
-        : preferences.lastLibrary;
+        : preferences.lastLibrary || (await isLibrary(managedLibrary) ? managedLibrary : null);
     if (initial) selected.add(initial);
     selected.add(example);
     const libraries = [...preferences.libraries];
-    if (!app.isPackaged)
-      for (const relative of [
-        "../../libraries/agent-skill-library",
-        "../../environment/personal-harness",
-      ]) {
-        const candidate = path.resolve(root, relative);
-        if ((await isLibrary(candidate)) && !libraries.includes(candidate))
-          libraries.push(candidate);
-      }
     for (const location of libraries) selected.add(location);
-    return { workspace: initial, example, libraries, repositories: preferences.repositories, packaged: app.isPackaged };
+    return { workspace: initial, example, managedLibrary, libraries, repositories: preferences.repositories, packaged: app.isPackaged };
   });
 
   handle("asl:remember", async (workspace) => {
@@ -170,7 +165,9 @@ app.whenReady().then(() => {
     const report = await runCore("unpack", { source: archive, output }, options);
     const repositoryRoot = output;
     // ASL repositories explicitly separate active skills from archived packages.
-    const requested = path.resolve(repositoryRoot, repo.subpath || (await isLibrary(repositoryRoot) ? "skills" : ""));
+    const requestedPath = path.resolve(repositoryRoot, repo.subpath || "");
+    const environment = await isLibrary(requestedPath) ? requestedPath : await isLibrary(repositoryRoot) ? repositoryRoot : null;
+    const requested = environment === requestedPath ? path.join(environment, "skills") : requestedPath;
     report.skills = report.skills.filter(s => {
       const relative = path.relative(requested, s.source);
       return relative === "" || !relative.startsWith("..") && !path.isAbsolute(relative);
@@ -195,10 +192,42 @@ app.whenReady().then(() => {
       }
       selected.add(path.resolve(skill.source));
     }
+    let modes = [], modeError = null;
+    if (environment) {
+      try {
+        const catalog = await runCore("catalog", { workspace: environment }, options);
+        modes = catalog.modes;
+        if (environment !== requestedPath && repo.subpath.startsWith("modes/"))
+          modes = modes.filter(m => path.resolve(m.path) === requestedPath);
+        repositories.set(output, { environment, repo, url: new URL(url).href, modes: new Set(modes.map(m => m.id)) });
+      } catch (error) { modeError = error.message; }
+    }
     const preferences = await readPreferences(preferenceFile);
     preferences.repositories = [url, ...preferences.repositories.filter(value => value !== url)].slice(0, 12);
     await writePreferences(preferenceFile, preferences);
-    return { ...report, repository: repo.url, commit: repo.commit };
+    return { ...report, repository: repo.url, commit: repo.commit, snapshot: output, modes, modeError };
+  });
+  handle("asl:repository-mode", async (snapshot, mode) => {
+    const entry = repositories.get(snapshot);
+    if (!entry || !entry.modes.has(mode)) throw new Error("请重新解析仓库并选择其中的 Mode");
+    const file = path.join(entry.environment, "modes", mode, "SOURCE.md");
+    let original = "# Source\n";
+    try { original = await fs.readFile(file, "utf8"); } catch (error) { if (error.code !== "ENOENT") throw error; }
+    await fs.writeFile(file, upstreamDocument(original, entry.repo, entry.url));
+    const output = path.join(path.dirname(snapshot), `${randomUUID()}.zip`);
+    const report = await runCore("export", { workspace: entry.environment, mode, output, apply: true }, options);
+    selected.add(output);
+    return { source: output, report: { ...report, skills: (await runCore("inspect", { source: output }, options)).skills } };
+  });
+  handle("asl:preset-target", async (mode) => {
+    const target = presetDestination((await nativeInventory()).presetRoot, mode);
+    selected.add(target);
+    return target;
+  });
+  handle("asl:repository-updates", async (workspace) => {
+    if (!selected.has(path.resolve(workspace))) throw new Error("请先选择工作环境");
+    const catalog = await runCore("catalog", { workspace }, options);
+    return checkUpstreams(catalog.modes, (...args) => net.fetch(...args));
   });
   handle("asl:discover", (provider, query) =>
     discover(provider, query, (...args) => net.fetch(...args)),
@@ -275,6 +304,7 @@ app.whenReady().then(() => {
         (action === "import" && path.resolve(values.target) === example))
       throw new Error("内置示例只供查看。请先分享模式，再导入为独立技能库后编辑。");
     if (action === "userSync" && values.apply && !values.expected) throw new Error("请先查看同步预览");
+    if (action === "import" && values.apply && !values.expected) throw new Error("请先查看导入预览");
     for (const key of [
       "workspace",
       "source",

@@ -174,7 +174,9 @@ Over time, the Environment becomes more like its owner: it retains useful judgme
 
 ### Desktop preview
 
-The desktop interface uses the same Harness core. Open an environment, browse its Modes and Skills, share a selected Mode as a ZIP, import it into another environment, and apply it to an Agent project. Model accounts, external dependency installation, and automatic session launch are not implemented. See the [architecture status](docs/asl-architecture-views.md#view-9--当前项目状态) for verified scope and remaining work.
+Paste the GitHub URL of an ASL-compatible repository, select a Mode, and keep its complete working environment locally. Modes are read from the repository, not hardcoded in the App. Start with [Agent Skill Library](https://github.com/qihangzhang-272/agent-skill-library) or another compatible repository.
+
+Sources & Updates checks upstream when the App opens and every 15 minutes while running. Review Mode differences before updating; local changes are not silently overwritten. Codex and Claude Code use standard user-level directories by default; only project-level application needs a project folder. DeepSeek receives an independent preset; WorkBuddy currently supports project scope only. Native Agents still handle authentication and complex dependencies: importing content does not prove it is ready to run. See the [architecture status](docs/asl-architecture-views.md#view-9--当前项目状态) for verified scope and remaining work.
 
 To run from source, use Python 3.11+, Node.js 22.12+, and npm:
 
@@ -186,7 +188,7 @@ npm ci --prefix desktop
 npm start --prefix desktop
 ```
 
-Start with the built-in example. Your real environment remains an ordinary folder, not an App-owned database.
+Start with the GitHub import button. The first Mode creates a local environment automatically, without handwritten YAML or a repository-folder picker. Existing local environments, ZIP packages, and a read-only example remain available. Content stays in ordinary files, not an App-private database.
 
 Windows developers can build a portable folder with the Python core included. Keep the complete folder together; the exe alone is not portable. This is an unsigned preview, not an installer. Run these commands in PowerShell from the repository root, using a new output directory:
 

@@ -71,3 +71,21 @@ test("canceled native application never executes the write", async t => {
   assert.equal(result.value.canceled, true);
   assert.equal(app.executed.length, 0);
 });
+
+test("first launch does not inject developer libraries and owns a default import location", async t => {
+  const app = await desktop(t);
+  const { value } = await app.invoke("initial");
+  assert.equal(value.workspace, null);
+  assert.equal(value.libraries.length, 0);
+  assert.equal(value.managedLibrary, path.join(app.home, "workspace"));
+  assert.equal((await app.invoke("run", "import", { source: value.example, target: value.managedLibrary })).ok, true);
+  assert.equal((await app.invoke("run", "import", { source: value.example, target: value.managedLibrary, apply: true })).ok, false);
+});
+
+test("unparsed remote modes cannot be imported by guessing a cache path", async t => {
+  const app = await desktop(t);
+  const reply = await app.invoke("repository-mode", app.home, "creator-studio");
+  assert.equal(reply.ok, false);
+  assert.match(reply.error, /重新解析仓库/);
+  assert.equal(app.executed.length, 0);
+});
