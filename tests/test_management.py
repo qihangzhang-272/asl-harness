@@ -11,6 +11,140 @@ from asl_harness.workspace import HarnessError, Workspace
 from test_mode_only import _environment, _mode
 
 
+def test_complete_skill_file_read_edit_and_stale_protection(tmp_path):
+    root = _environment(tmp_path)
+    script = root / 'skills/creator/scripts/main.py'
+    script.parent.mkdir()
+    script.write_bytes(b'print(1)\n')
+    data = management.skill_files(root, 'creator', 'scripts/main.py')
+    assert data['document'] == 'print(1)\n'
+    assert any(f['path'] == 'scripts/main.py' for f in data['files'])
+    request = {'operation': 'skill.file.save', 'id': 'creator', 'file': 'scripts/main.py',
+               'document': 'print(2)\n', 'expected': data['fingerprint']}
+    management.edit(root, request, check=True)
+    assert script.read_text() == 'print(1)\n'
+    management.edit(root, request)
+    assert script.read_text() == 'print(2)\n'
+    with pytest.raises(HarnessError, match='刷新'):
+        management.edit(root, request)
+    for path in ('../SOURCE.md', '/etc/passwd', '.env', 'scripts/../../PROFILE.md'):
+        with pytest.raises(HarnessError):
+            management.skill_files(root, 'creator', path)
+
+
+def test_invalid_skill_file_edit_never_overwrites_original(tmp_path):
+    root = _environment(tmp_path)
+    data = management.skill_files(root, 'creator')
+    request = {'operation': 'skill.file.save', 'id': 'creator', 'file': 'SKILL.md',
+               'document': 'Not valid skill metadata', 'expected': data['fingerprint']}
+    with pytest.raises(HarnessError):
+        management.edit(root, request)
+    assert (root / 'skills/creator/SKILL.md').read_text() == data['document']
+
+
+def test_file_editor_preserves_windows_line_endings(tmp_path):
+    root = _environment(tmp_path)
+    path = root / 'skills/creator/example.txt'
+    path.write_bytes(b'one\r\ntwo\r\n')
+    data = management.skill_files(root, 'creator', 'example.txt')
+    management.edit(root, {'operation': 'skill.file.save', 'id': 'creator', 'file': 'example.txt',
+                          'document': 'one\ntwo\nthree\n', 'expected': data['fingerprint']})
+    assert path.read_bytes() == b'one\r\ntwo\r\nthree\r\n'
+
+
+def test_packaged_guide_names_its_own_core_not_an_old_global_cli(tmp_path, monkeypatch):
+    root = _environment(tmp_path)
+    monkeypatch.setattr(management.sys, 'frozen', True, raising=False)
+    monkeypatch.setattr(management.sys, 'executable', 'C:/ASL Workspace/resources/core/asl-harness.exe')
+    guide = management.editing_guide(root, 'creator-studio')['document']
+    assert '"C:/ASL Workspace/resources/core/asl-harness.exe" environment.catalog' in guide
+    assert '不要误用电脑上旧版本' in guide
+
+
+def test_map_schema_is_editable_portable_and_rejects_unsafe_fields(tmp_path):
+    root = _environment(tmp_path)
+    mode = management.catalog(root)['modes'][0]
+    request = {'operation': 'mode.save', 'id': mode['id'], 'expected': mode['fingerprint'],
+               'document': mode['document'], 'skills': mode['roots'],
+               'capabilities': [{'title': '探索', 'skills': ['creator'], 'icon': '🔎', 'color': '#007AFF'}]}
+    management.edit(root, request)
+    current = management.catalog(root)['modes'][0]
+    assert current['capabilities'][0]['icon'] == '🔎'
+    request['expected'] = current['fingerprint']
+    with pytest.raises(HarnessError):
+        management.edit(root, {**request, 'presentation': {'layout': 'tree'}})
+    for icon in ('<svg onload="alert(1)"/>', '<svg><script>1</script></svg>', '<svg><image href="https://evil"/></svg>'):
+        with pytest.raises(HarnessError):
+            management.edit(root, {**request, 'capabilities': [{'title': '探索', 'skills': ['creator'], 'icon': icon}]})
+    request['capabilities'][0]['icon'] = '<svg viewBox="0 0 24 24"><path d="M2 2 L20 20" stroke="currentColor"/></svg>'
+    management.edit(root, request)
+
+
+def test_mode_architecture_is_local_editable_and_portable_without_process_fields(tmp_path):
+    from asl_harness.portable import export_pack, import_pack
+    root = _environment(tmp_path)
+    mode = management.catalog(root)['modes'][0]
+    architecture = {'nodes': [
+        {'skill': 'foundation', 'title': '内容积累', 'icon': '🧠', 'color': '#007AFF'},
+        {'skill': 'creator', 'note': '本地沉淀的表达经验'}],
+        'edges': [{'from': 'foundation', 'to': 'creator', 'label': '参考'},
+                  {'from': 'creator', 'to': 'foundation'}]}
+    request = {'operation': 'mode.save', 'id': mode['id'], 'expected': mode['fingerprint'],
+               'document': mode['document'], 'skills': mode['roots'], 'architecture': architecture}
+    management.edit(root, request, check=True)
+    assert management.catalog(root)['modes'][0].get('architecture') is None
+    management.edit(root, request)
+    assert management.catalog(root)['modes'][0]['architecture'] == architecture
+    assert Workspace.open(root).modes[mode['id']].architecture == architecture
+    pack = tmp_path / 'architecture.zip'
+    export_pack(root, mode['id'], pack)
+    target = tmp_path / 'imported'
+    import_pack(pack, target)
+    assert management.catalog(target)['modes'][0]['architecture'] == architecture
+    guide = management.editing_guide(root, mode['id'])['document']
+    assert 'spec.architecture' in guide and '不要求操作步骤' in guide
+    mode = management.catalog(root)['modes'][0]
+    management.edit(root, {**request, 'expected': mode['fingerprint'], 'architecture': None})
+    assert management.catalog(root)['modes'][0]['architecture'] is None
+    assert (root / 'skills/creator/SKILL.md').exists()
+
+
+def test_architecture_rejects_only_structural_errors_and_prunes_removed_references(tmp_path):
+    root = _environment(tmp_path)
+    mode = management.catalog(root)['modes'][0]
+    request = {'operation': 'mode.save', 'id': mode['id'], 'expected': mode['fingerprint'],
+               'document': mode['document'], 'skills': mode['roots']}
+    invalid = [
+        {'nodes': [{'skill': 'outside'}]},
+        {'nodes': [{'skill': 'creator', 'parent': 'foundation'}]},
+        {'nodes': [{'title': '非技能节点'}]},
+        {'nodes': [{'skill': 'creator'}, {'skill': 'creator'}]},
+        {'edges': [{'from': 'creator', 'to': 'missing'}]},
+        {'nodes': [{'skill': 'creator', 'script': 'run()'}]},
+        {'nodes': [{'skill': 'creator', 'icon': '<svg onload="bad()"/>'}]},
+    ]
+    for value in invalid:
+        with pytest.raises(HarnessError, match='架构|SVG'):
+            management.edit(root, {**request, 'architecture': value})
+    architecture = {'nodes': [{'skill': 'creator'}, {'skill': 'foundation'}],
+                    'edges': [{'from': 'creator', 'to': 'foundation'}]}
+    management.edit(root, {**request, 'architecture': architecture})
+    mode = management.catalog(root)['modes'][0]
+    management.edit(root, {**request, 'expected': mode['fingerprint'], 'skills': ['foundation']})
+    assert management.catalog(root)['modes'][0]['architecture'] == {'nodes': [{'skill': 'foundation'}], 'edges': []}
+    assert (root / 'skills/creator/SKILL.md').exists()
+
+
+def test_architecture_edges_reference_mode_skills_without_redeclaring_nodes(tmp_path):
+    root = _environment(tmp_path)
+    mode = management.catalog(root)['modes'][0]
+    management.edit(root, {'operation': 'mode.save', 'id': mode['id'], 'expected': mode['fingerprint'],
+        'document': mode['document'], 'skills': mode['roots'],
+        'architecture': {'edges': [{'from': 'foundation', 'to': 'creator'}]}})
+    assert management.catalog(root)['modes'][0]['architecture'] == {
+        'nodes': [], 'edges': [{'from': 'foundation', 'to': 'creator'}]}
+
+
 def test_cli_saves_utf8_input_even_when_host_stdio_is_ascii(tmp_path):
     root = _environment(tmp_path)
     document = "# 中文模式验收\n\n包含配图、研究与表达 🎨。\n"
@@ -182,6 +316,28 @@ def test_standard_skill_import_does_not_rewrite_upstream_instructions(tmp_path):
     assert (root / "skills/ordinary/script.js").read_bytes() == (source / "script.js").read_bytes()
     assert not (source / "SOURCE.md").exists()
     assert source.as_uri() in (root / "skills/ordinary/SOURCE.md").read_text(encoding="utf-8")
+
+
+def test_general_guide_supports_empty_environment_without_creating_files(tmp_path):
+    root = tmp_path / 'new-environment'
+    result = management.editing_guide(root)
+    assert not root.exists()
+    assert str(root.resolve()) in result['document']
+    for text in ['工作目的', '不是一个人', 'ModeProjection', 'SOURCE.md', 'PROFILE.md', 'workspace.validate']:
+        assert text in result['document']
+
+
+def test_general_guide_describes_all_existing_modes_and_reports_invalid_content(tmp_path):
+    root = _environment(tmp_path)
+    (root / 'modes/creator-studio/MODE.md').write_text('# 长说明\n\n' + '重复原文' * 2000, encoding='utf-8')
+    result = management.editing_guide(root)
+    assert 'creator' in result['document']
+    assert '一个完整 Skill 一个节点' in result['document']
+    assert str(root / 'modes/creator-studio/MODE.md') in result['document']
+    assert '重复原文' not in result['document']
+    (root / 'modes/creator-studio/mode.yaml').write_text('broken: true', encoding='utf-8')
+    result = management.editing_guide(root)
+    assert '需要修正' in result['document']
 
 
 def test_mode_categories_persist_and_do_not_change_membership(tmp_path):

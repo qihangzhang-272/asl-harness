@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
+from .map_schema import icon_value, architecture_value
 
 
 MODE_API_VERSION = "asl-wep/v0.3.0"
@@ -195,6 +196,7 @@ class Mode:
     document: str
     skill_roots: tuple[str, ...]
     capabilities: tuple[dict, ...] | None = None
+    architecture: dict | None = None
 
 
 def _read_skill(package: Path, skill_id: str, environment: Path, *, source_text: str | None = None) -> Skill:
@@ -262,18 +264,32 @@ def validate_capabilities(value: object, allowed: set[str] | None = None) -> tup
     if not isinstance(value, list):
         raise HarnessError("MODE_INVALID", "能力类别必须是列表")
     for group in value:
-        if (not isinstance(group, dict) or set(group) != {"title", "skills"}
+        if (not isinstance(group, dict) or not {'title', 'skills'} <= set(group) <= {'title', 'skills', 'icon', 'color'}
                 or not isinstance(group["title"], str) or not group["title"].strip()
                 or len(group["title"]) > 80 or group["title"].strip() in titles
                 or not isinstance(group["skills"], list)):
             raise HarnessError("MODE_INVALID", "类别名称不能为空、重复或超过 80 字")
         titles.add(group["title"].strip())
+        if 'color' in group and (not isinstance(group['color'], str) or not re.fullmatch(r'#[a-fA-F0-9]{6}', group['color'])):
+            raise HarnessError('MODE_INVALID', '类别颜色需要是 #RRGGBB 格式')
+        if 'icon' in group:
+            try:
+                icon_value(group['icon'])
+            except ValueError as error:
+                raise HarnessError('MODE_INVALID', str(error)) from error
         for skill in group["skills"]:
             if (not isinstance(skill, str) or not SAFE_ID.fullmatch(skill)
                     or skill in assigned or allowed is not None and skill not in allowed):
                 raise HarnessError("MODE_INVALID", "分类只能包含当前模式的技能，且不能重复归类")
             assigned.add(skill)
-    return tuple({"title": g["title"].strip(), "skills": list(g["skills"])} for g in value)
+    return tuple({**g, "title": g["title"].strip(), "skills": list(g["skills"])} for g in value)
+
+
+def validate_architecture(value, allowed=None):
+    try:
+        return architecture_value(value, allowed)
+    except ValueError as error:
+        raise HarnessError('MODE_INVALID', str(error)) from error
 
 
 def _read_mode(package: Path, mode_id: str) -> Mode:
@@ -290,7 +306,7 @@ def _read_mode(package: Path, mode_id: str) -> Mode:
         or set(metadata) != {"id"}
         or metadata.get("id") != mode_id
         or not isinstance(spec, dict)
-        or not {"skills"} <= set(spec) <= {"skills", "capabilities"}
+        or not {"skills"} <= set(spec) <= {"skills", "capabilities", "architecture"}
         or not isinstance(skills, list)
         or not skills
         or any(not isinstance(item, str) or not SAFE_ID.fullmatch(item) for item in skills)
@@ -303,6 +319,7 @@ def _read_mode(package: Path, mode_id: str) -> Mode:
         document=document,
         skill_roots=tuple(skills),
         capabilities=validate_capabilities(spec.get("capabilities")),
+        architecture=validate_architecture(spec.get('architecture')),
     )
 
 
@@ -491,6 +508,7 @@ class Workspace:
         for mode in self.modes.values():
             if mode.capabilities is not None:
                 validate_capabilities(list(mode.capabilities), set(self.mode_skill_ids(mode.id)))
+            validate_architecture(mode.architecture, set(self.mode_skill_ids(mode.id)))
 
     def mode_skill_ids(self, mode_id: str) -> tuple[str, ...]:
         mode = self.modes.get(mode_id)

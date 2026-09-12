@@ -18,7 +18,7 @@ from .deepseek import export_preset, verify_preset
 from .sync import sync_environment
 from .portable import export_pack, inspect_pack, import_pack
 from .workspace import HarnessError, Workspace
-from .management import catalog, edit
+from .management import catalog, edit, skill_files, editing_guide
 from .discovery import scan_skills, unpack_skills
 from .user_projection import sync_user
 from .readiness import inspect_mode, setup_brief
@@ -38,6 +38,13 @@ def _parser() -> argparse.ArgumentParser:
 
     catalog_command = commands.add_parser("environment.catalog")
     catalog_command.add_argument("--workspace", required=True)
+    files_command = commands.add_parser('skill.files')
+    files_command.add_argument('--workspace', required=True)
+    files_command.add_argument('--skill', required=True)
+    files_command.add_argument('--file', default='SKILL.md')
+    guide_command = commands.add_parser('environment.guide')
+    guide_command.add_argument('--workspace', required=True)
+    guide_command.add_argument('--mode')
     edit_command = commands.add_parser("environment.edit")
     edit_command.add_argument("--workspace", required=True)
     edit_command.add_argument("--check", action="store_true")
@@ -125,6 +132,10 @@ def _execute(args: argparse.Namespace) -> dict:
         return {"ok": True, **unpack_skills(args.source, args.output)}
     if args.command == "environment.catalog":
         return {"ok": True, **catalog(args.workspace)}
+    if args.command == 'skill.files':
+        return {'ok': True, **skill_files(args.workspace, args.skill, args.file)}
+    if args.command == 'environment.guide':
+        return {'ok': True, **editing_guide(args.workspace, args.mode)}
     if args.command == "environment.edit":
         raw = sys.stdin.read(2 * 1024 * 1024 + 1)
         if len(raw) > 2 * 1024 * 1024:

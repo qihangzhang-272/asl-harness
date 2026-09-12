@@ -13,6 +13,61 @@ from asl_harness.workspace import HarnessError, Workspace
 from test_mode_only import _environment, _mode, _skill, _write
 
 
+def test_optional_map_is_a_mode_file_and_survives_sharing(tmp_path):
+    from asl_harness.management import catalog, edit
+    source = _environment(tmp_path)
+    mode = catalog(source)['modes'][0]
+    edit(source, {'operation': 'mode.save', 'id': mode['id'], 'expected': mode['fingerprint'],
+                 'document': mode['document'], 'skills': mode['roots'],
+                 'capabilities': [{'title': '我的工作', 'skills': ['creator'], 'icon': '🧠', 'color': '#0055AA'}],
+                 'architecture': {'edges': [{'from': 'foundation', 'to': 'creator'}]}})
+    package = tmp_path / 'shared.zip'
+    export_pack(source, mode['id'], package)
+    target = tmp_path / 'received'
+    import_pack(package, target)
+    restored = catalog(target)['modes'][0]
+    assert restored['capabilities'][0]['icon'] == '🧠'
+    assert restored['architecture'] == {'nodes': [], 'edges': [{'from': 'foundation', 'to': 'creator'}]}
+
+
+def test_import_explains_newlines_and_preserves_identical_local_bytes(tmp_path):
+    source = _environment(tmp_path)
+    pack = tmp_path / 'pack.zip'
+    export_pack(source, 'creator-studio', pack)
+    target = tmp_path / 'local'
+    import_pack(pack, target)
+    file = target / 'skills/creator/SKILL.md'
+    local = file.read_bytes().replace(b'\r\n', b'\n').replace(b'\n', b'\r\n')
+    file.write_bytes(local)
+    preview = import_pack(pack, target, check=True)
+    assert not preview['conflicts']
+    assert preview['actions']['skills/creator'] == 'unchanged'
+    assert preview['differences']['skills/creator'][0]['kind'] == 'line-endings'
+    import_pack(pack, target, expected=preview['fingerprint'])
+    assert file.read_bytes() == local
+    file.write_bytes(local + b'\r\nLocal decision.\r\n')
+    preview = import_pack(pack, target, check=True)
+    assert preview['conflicts'] == ['skills/creator']
+    change = preview['differences']['skills/creator'][0]
+    assert change['path'] == 'SKILL.md' and 'Local decision.' in change['diff']
+
+
+def test_mode_origin_only_is_not_a_business_conflict(tmp_path):
+    source = _environment(tmp_path)
+    pack = tmp_path / 'pack.zip'
+    export_pack(source, 'creator-studio', pack)
+    target = tmp_path / 'local'
+    import_pack(pack, target)
+    _write(source / 'modes/creator-studio/SOURCE.md', '# Source\n\n<!-- asl:upstream -->\n- Commit: ' + 'a' * 40 + '\n<!-- /asl:upstream -->\n')
+    newer = tmp_path / 'new.zip'
+    export_pack(source, 'creator-studio', newer)
+    preview = import_pack(newer, target, check=True)
+    assert not preview['conflicts']
+    assert preview['actions']['modes/creator-studio'] == 'source-update'
+    import_pack(newer, target, expected=preview['fingerprint'])
+    assert (target / 'modes/creator-studio/SOURCE.md').exists()
+
+
 def test_cloud_origin_survives_export_import_without_importing_personal_content(tmp_path):
     from asl_harness.management import catalog
     source = _environment(tmp_path)

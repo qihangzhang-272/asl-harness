@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import difflib
 import os
 import re
 import shutil
@@ -297,23 +298,67 @@ def inspect_pack(source: str | Path) -> dict:
         return report
 
 
+def _comparison_text(data: bytes | None) -> str | None:
+    if data is None or b'\0' in data:
+        return None
+    try:
+        return data.decode('utf-8').replace('\r\n', '\n')
+    except UnicodeDecodeError:
+        return None
+
+
+def _package_differences(local: Path, incoming: Path, *, mode: bool = False) -> list[dict]:
+    def files(root):
+        return {p.relative_to(root).as_posix(): p for p in root.rglob('*') if p.is_file()
+                and not any(part in GENERATED_DIRECTORIES or part == '.git' for part in p.relative_to(root).parts)}
+    before, after = files(local), files(incoming)
+    result = []
+    for name in sorted(before.keys() | after.keys()):
+        a = before[name].read_bytes() if name in before else None
+        b = after[name].read_bytes() if name in after else None
+        if a == b:
+            continue
+        left, right = _comparison_text(a), _comparison_text(b)
+        kind = 'added' if a is None else 'removed' if b is None else 'content'
+        if left is not None and left == right:
+            kind = 'line-endings'
+        elif mode and name == 'SOURCE.md' and right is not None and '<!-- asl:upstream -->' in right:
+            strip = lambda text: re.sub(r'<!-- asl:upstream -->.*?<!-- /asl:upstream -->', '', text, flags=re.S).strip()
+            if strip(left or '# Source') == strip(right):
+                kind = 'source-record'
+        entry = {'path': name, 'kind': kind}
+        if kind not in {'line-endings', 'source-record'}:
+            if max(len(a or b''), len(b or b'')) <= 1024 * 1024 and (a is None or left is not None) and (b is None or right is not None):
+                delta = ''.join(difflib.unified_diff((left or '').splitlines(True), (right or '').splitlines(True),
+                                                   fromfile='本地/' + name, tofile='导入版本/' + name, n=3))
+                entry.update(diff=delta[:12000], truncated=len(delta) > 12000)
+            else:
+                entry['binary'] = True
+        result.append(entry)
+    return result
+
+
 def import_pack(source: str | Path, target: str | Path, *, check: bool = False, replace: bool = False, expected: str | None = None) -> dict:
     destination = Path(target).resolve()
     with _opened_pack(source) as (incoming, report):
         mode_id = report["mode"]
         existing = Workspace.open(destination) if destination.exists() else None
         actions = {}
+        differences = {}
         packages = {f"skills/{name}": item.path for name, item in incoming.skills.items()}
         packages[f"modes/{mode_id}"] = incoming.modes[mode_id].path
         for relative, package in packages.items():
             local = destination / relative
             if not local.resolve().is_relative_to(destination):
                 _fail(f"import target escapes Environment: {relative}")
-            actions[relative] = ("add" if not local.exists() else "unchanged"
-                                 if package_fingerprint(package) == package_fingerprint(local)
-                                 else "replace" if replace else "conflict")
+            changes = _package_differences(local, package, mode=relative.startswith('modes/')) if local.exists() else []
+            differences[relative] = changes
+            significant = [c for c in changes if c['kind'] != 'line-endings']
+            actions[relative] = ('add' if not local.exists() else 'unchanged' if not significant
+                                 else 'source-update' if all(c['kind'] == 'source-record' for c in significant)
+                                 else 'replace' if replace else 'conflict')
         conflicts = [path for path, action in actions.items() if action == "conflict"]
-        changes = [path for path, action in actions.items() if action in {"add", "replace"}]
+        changes = [path for path, action in actions.items() if action in {"add", "replace", "source-update"}]
         changed_skills = {path.split("/")[1] for path, action in actions.items() if path.startswith("skills/") and action != "unchanged"}
         affected = sorted(name for name in existing.modes if changed_skills.intersection(existing.mode_skill_ids(name))) if existing else []
         fingerprint = _digest(json.dumps({
@@ -325,7 +370,7 @@ def import_pack(source: str | Path, target: str | Path, *, check: bool = False, 
             raise HarnessError("PACK_PREVIEW_STALE", "本地内容或导入包已改变，请重新查看导入预览")
         result = {**report, "operation": "mode.import", "target": str(destination), "check": check,
                   "fingerprint": fingerprint,
-                  "actions": actions, "conflicts": conflicts, "affectedModes": affected,
+                  "actions": actions, "differences": differences, "conflicts": conflicts, "affectedModes": affected,
                   "changed": bool(changes), "profileAction": "preserved" if existing else "imported" if report["includedProfile"] else "local-default"}
         if check:
             return result
@@ -342,7 +387,9 @@ def import_pack(source: str | Path, target: str | Path, *, check: bool = False, 
         elif changes:
             with _rollback_paths(destination, [*changes, "WORKSPACE.md"]):
                 for relative in changes:
-                    if actions[relative] == "replace":
+                    if actions[relative] == 'source-update':
+                        shutil.copy2(packages[relative] / 'SOURCE.md', destination / relative / 'SOURCE.md')
+                    elif actions[relative] == "replace":
                         _replace_package(packages[relative], destination / relative)
                     else:
                         shutil.copytree(packages[relative], destination / relative)
