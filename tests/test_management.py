@@ -39,7 +39,7 @@ def test_invalid_skill_file_edit_never_overwrites_original(tmp_path):
                'document': 'Not valid skill metadata', 'expected': data['fingerprint']}
     with pytest.raises(HarnessError):
         management.edit(root, request)
-    assert (root / 'skills/creator/SKILL.md').read_text() == data['document']
+    assert (root / 'skills/creator/SKILL.md').read_text(encoding='utf-8') == data['document']
 
 
 def test_file_editor_preserves_windows_line_endings(tmp_path):
