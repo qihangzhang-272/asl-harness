@@ -5,6 +5,8 @@ const definitions = {
   scan: ["skill.scan", ["source"]],
   unpack: ["skill.unpack", ["source", "output"]],
   catalog: ["environment.catalog", ["workspace"]],
+  files: ['skill.files', ['workspace', 'skill', 'file']],
+  guide: ['environment.guide', ['workspace']],
   edit: ["environment.edit", ["workspace"]],
   describe: ["workspace.validate", ["workspace"]],
   state: ["state", ["workspace"]],
@@ -31,7 +33,7 @@ function commandArgs(action, values = {}) {
     throw new Error("不支持的操作");
   const [command, required] = definition;
   const optional =
-    action === "readiness"
+    action === 'guide' ? ['mode'] : action === "readiness"
       ? ["project", "probe", "skillsDir"]
       : action === "userSync"
       ? ["apply", "expected", "remove", "skillsDir"]
@@ -65,7 +67,7 @@ function commandArgs(action, values = {}) {
       Array.isArray(values.request))
   )
     throw new Error("修改请求必须是对象");
-  for (const key of optional.filter((key) => !["request", "expected", "project", "skillsDir"].includes(key)))
+  for (const key of optional.filter((key) => !["request", "expected", "project", "skillsDir", "mode"].includes(key)))
     if (key in values && typeof values[key] !== "boolean")
       throw new Error("开关必须是布尔值");
   if (values.mode && !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(values.mode))
@@ -90,6 +92,7 @@ function commandArgs(action, values = {}) {
   for (const key of required)
     for (const value of Array.isArray(values[key]) ? values[key] : [values[key]]) args.push(`--${names[key] || key}`, value);
   if (action === "readiness" && values.project) args.push("--project", values.project);
+  if (action === 'guide' && values.mode) args.push('--mode',values.mode);
   if (values.probe) args.push("--probe");
   if (values.skillsDir) args.push("--skills-dir", values.skillsDir);
   if (values.includeProfile) args.push("--include-profile");

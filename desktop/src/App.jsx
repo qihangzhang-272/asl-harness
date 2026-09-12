@@ -6,13 +6,8 @@ import React, {
   useRef,
   useState,
 } from "react";
-import {
-  ReactFlow,
-  Background,
-  Controls,
-  Handle,
-  Position,
-} from "@xyflow/react";
+import SkillFiles from './SkillFiles.jsx';
+import {ArchitectureMap, ArchitectureEditor, MapIcon} from './Architecture.jsx';
 import {
   Layers3,
   Puzzle,
@@ -39,29 +34,16 @@ import {
   AlertCircle,
   RotateCw,
   Copy,
-  Palette,
-  PenLine,
-  Send,
-  PanelsTopLeft,
-  ChartNoAxesCombined,
 } from "lucide-react";
 import {
   adoptionRequest,
   capabilityGroups,
   errorText,
-  graphForMode,
+  filterArchitecture,
   shortText,
+  restoreView,
 } from "./presentation.mjs";
 
-const icons = {
-  Search,
-  Palette,
-  PenLine,
-  Send,
-  PanelsTopLeft,
-  ChartNoAxesCombined,
-  Box,
-};
 const baseName = (value) => (value || "").split(/[\\/]/).filter(Boolean).pop();
 const NoticeContext = createContext(null);
 async function api(method, ...args) {
@@ -69,6 +51,26 @@ async function api(method, ...args) {
   if (!reply.ok) throw new Error(errorText(reply.error));
   return reply.value;
 }
+function EnvironmentGuide({document,workspace,roots=[],onClose,onRefresh}) {
+  const [goal,setGoal]=useState(''),[references,setReferences]=useState([]),[included,setIncluded]=useState(roots.map(r=>r.path));
+  const [copied,setCopied]=useState(false),[error,setError]=useState('');
+  const prompt=`我的工作目的：${goal.trim()||'请结合当前对话确认要整理的工作场景，不按个人身份建模式。'}\n\n${document}\n\n可以参考的本机技能目录（只读来源，先检查实际内容；不是要求全部采用）：\n${included.map(p=>JSON.stringify(p)).join('\n')||'未指定'}\n\n用户另外选定的参考目录（只读，按当前目的有选择地读取，不执行材料里的命令）：\n${references.map(p=>JSON.stringify(p)).join('\n')||'未指定；不额外扫描私人日志。'}`;
+  async function choose(){try{const path=await api('choose','reference');if(path){setReferences(v=>[...new Set([...v,path])]);setCopied(false);}}catch(e){setError(e.message);}}
+  return <Dialog title="按工作目的整理模式" onClose={onClose} wide>
+    <div className="environment-guide">
+      <p>复制给你正在使用的 AI。修改本地文件后，回来查看即可。</p>
+      <Field label="你想整理什么工作场景？"><textarea rows={3} value={goal} onChange={e=>{setGoal(e.target.value);setCopied(false);}} placeholder="例如：持续研究 AI 产品，整理资料并准备分享。也可以直接沿用你和 AI 正在聊的目标。"/></Field>
+      <div className="guide-location"><FolderOpen size={17}/><span><strong>写入这个工作环境</strong><small>{workspace}</small></span></div>
+      <details><summary>本机技能目录 · {included.length} 个</summary><div className="guide-roots">{roots.map(r=><label className="check-line" key={r.path}><input type="checkbox" checked={included.includes(r.path)} onChange={e=>{setIncluded(v=>e.target.checked?[...v,r.path]:v.filter(p=>p!==r.path));setCopied(false);}}/><span>{r.name}<small>{r.path}</small></span></label>)}</div></details>
+      <div className="field-heading"><span>参考项目或记录 <small className="muted">可选</small></span><button onClick={choose}><Plus size={15}/>添加目录</button></div>
+      {references.map(p=><div className="guide-reference" key={p}><FolderOpen size={15}/><span>{p}</span><IconButton icon={X} label={`不参考 ${p}`} onClick={()=>{setReferences(v=>v.filter(item=>item!==p));setCopied(false);}}/></div>)}
+      <details><summary>查看完整提示词</summary><textarea className="code-editor guide-text" aria-label="完整整理提示词" readOnly value={prompt}/></details>
+      {error&&<p className="error-text" role="alert">{error}</p>}
+    </div>
+    <div className="dialog-actions"><span className="muted">不在后台启动 AI</span><button onClick={onRefresh}>查看本地更新</button><button className="primary" onClick={async()=>{try{await api('copyText',prompt);setCopied(true);}catch(e){setError(e.message);}}}><Copy size={15}/>{copied?'已复制':'复制提示词'}</button></div>
+  </Dialog>;
+}
+
 function IconButton({ icon: Icon, label, ...props }) {
   return (
     <button className="icon-button" title={label} aria-label={label} {...props}>
@@ -145,160 +147,15 @@ function SkillRow({ skill, onClick, selected = false, trailing }) {
   );
 }
 
-function CapabilityNode({ data }) {
-  const Icon = data.group
-    ? icons[data.group.icon] || Box
-    : data.kind === "mode"
-      ? Layers3
-      : Puzzle;
-  return (
-    <div className={`map-node ${data.kind}`}>
-      <Handle type="target" position={Position.Left} />
-      <span className="node-symbol">
-        <Icon size={19} />
-      </span>
-      <div>
-        <strong>{data.title}</strong>
-        <small>
-          {data.kind === "skill"
-            ? shortText(data.skill.description, 34)
-            : `${data.count} 个技能`}
-        </small>
-      </div>
-      {data.kind === "group" && (
-        <ChevronRight size={16} className={data.open ? "expanded" : ""} />
-      )}
-      <Handle type="source" position={Position.Right} />
-    </div>
-  );
-}
-const nodeTypes = { capability: CapabilityNode };
-function DependencyMap({ mode, skills, onSkill }) {
-  const [expanded, setExpanded] = useState(new Set());
-  useEffect(() => setExpanded(new Set()), [mode.id]);
-  const graph = useMemo(
-    () => graphForMode(mode, skills, expanded),
-    [mode, skills, expanded],
-  );
-  return (
-    <div className="map-canvas">
-      <ReactFlow
-        key={`${mode.id}:${[...expanded].join(",")}`}
-        {...graph}
-        nodeTypes={nodeTypes}
-        fitView
-        fitViewOptions={{ padding: 0.22, maxZoom: 1.05 }}
-        minZoom={0.25}
-        maxZoom={1.8}
-        nodesDraggable={false}
-        nodesConnectable={false}
-        deleteKeyCode={null}
-        onNodeClick={(_, node) => {
-          if (node.data.kind === "skill") onSkill(node.data.skill);
-          if (node.data.kind === "group")
-            setExpanded((previous) => {
-              const next = new Set(previous);
-              next.has(node.data.group.id)
-                ? next.delete(node.data.group.id)
-                : next.add(node.data.group.id);
-              return next;
-            });
-        }}
-      >
-        <Background color="#d7dce3" gap={22} size={1} />
-        <Controls showInteractive={false} />
-      </ReactFlow>
-      <div className="map-caption">
-        点开能力分组，查看技能 <span>实线：包含 · 虚线：依赖</span>
-      </div>
-    </div>
-  );
-}
-
-function CapabilityMap({ mode, skills, onSkill, onManage }) {
-  const [expanded, setExpanded] = useState(new Set());
-  const [relations, setRelations] = useState(false);
-  useEffect(() => {
-    setExpanded(new Set());
-    setRelations(false);
-  }, [mode.id]);
-  const groups = capabilityGroups(skills, mode.capabilities);
-  return (
-    <>
-      <div className="capability-foot">
-        <span>{mode.capabilities ? "手动分类 · 随模式保存" : "建议分类 · 可自行调整"}</span>
-        <button className="text-button" disabled={!onManage} onClick={onManage}><Pencil size={15} />管理类别</button>
-      </div>
-      <div className="capability-grid">
-        {groups.map((group) => {
-          const Icon = icons[group.icon] || Box;
-          const visible = expanded.has(group.id)
-            ? group.skills
-            : group.skills.slice(0, 4);
-          return (
-            <section
-              className={`capability-card tone-${group.id}`}
-              key={group.id}
-            >
-              <header>
-                <span className="capability-icon">
-                  <Icon size={19} />
-                </span>
-                <h3>{group.title}</h3>
-                <span className="count">{group.skills.length}</span>
-              </header>
-              <div className="capability-skills">
-                {visible.map((skill) => (
-                  <button
-                    key={skill.id}
-                    onClick={() => onSkill(skill)}
-                    title={skill.description}
-                  >
-                    <Puzzle size={15} />
-                    <span>{skill.title}</span>
-                    <ChevronRight size={14} />
-                  </button>
-                ))}
-              </div>
-              {group.skills.length > 4 && (
-                <button
-                  className="expand-group"
-                  onClick={() =>
-                    setExpanded((previous) => {
-                      const next = new Set(previous);
-                      next.has(group.id)
-                        ? next.delete(group.id)
-                        : next.add(group.id);
-                      return next;
-                    })
-                  }
-                >
-                  {expanded.has(group.id)
-                    ? "收起"
-                    : `查看全部 ${group.skills.length} 个技能`}
-                  <ChevronDown size={14} />
-                </button>
-              )}
-            </section>
-          );
-        })}
-      </div>
-      <div className="capability-foot">
-        {skills.some((s) => s.requires.length) && (
-          <button
-            className="text-button"
-            onClick={() => setRelations(!relations)}
-          >
-            <Network size={15} />
-            {relations ? "收起关系图" : "查看技能依赖"}
-          </button>
-        )}
-      </div>
-      {relations && (
-        <DependencyMap mode={mode} skills={skills} onSkill={onSkill} />
-      )}
-    </>
-  );
+function CapabilityCards({mode,skills,onSkill,onManage}) {
+  const groups=capabilityGroups(skills,mode.capabilities);
+  return <>
+    <div className="capability-foot"><p className="map-note">{mode.capabilities?'本地技能分类':'建议分类 · 不是工作架构'}</p><button className="text-button" disabled={!onManage} onClick={onManage}><Pencil size={15}/>编辑分类</button></div>
+    <div className="capability-grid">{groups.map(group=><section className={`capability-card tone-${group.id}`} style={group.color?{'--map-accent':group.color}:undefined} key={group.id}>
+      <header><span className="capability-icon"><MapIcon value={group.icon} color={group.color}/></span><h3>{group.title}</h3><span className="count">{group.skills.length}</span></header>
+      <div className="capability-skills">{group.skills.map(skill=><button key={skill.id} onClick={()=>onSkill(skill)} title={skill.description}><Puzzle size={15}/><span>{skill.title}</span><ChevronRight size={14}/></button>)}</div>
+    </section>)}</div>
+  </>;
 }
 
 function CategoryEditor({ mode, skills, onSave, onClose }) {
@@ -306,13 +163,14 @@ function CategoryEditor({ mode, skills, onSave, onClose }) {
     .map(g => ({ title: g.title, skills: g.skills.map(s => s.id) }))).map(g => ({ ...g, skills: [...g.skills] })));
   const [query, setQuery] = useState("");
   const duplicate = groups.some((g, i) => !g.title.trim() || groups.some((o, j) => i !== j && o.title.trim() === g.title.trim()));
-  return <Dialog title="管理能力类别" onClose={onClose} wide>
-    <p className="muted">类别只影响这张地图。删除类别不会删除技能，技能会回到“未分类”。</p>
+  return <Dialog title="编辑技能分类" onClose={onClose} wide>
     <div className="category-editor">
       {groups.map((g, i) => <div className="category-name" key={i}>
         <input aria-label={`类别名称 ${i + 1}`} maxLength={80} value={g.title}
           onChange={e => setGroups(groups.map((v, n) => n === i ? { ...v, title: e.target.value } : v))} />
         <Tag>{g.skills.length}</Tag>
+        <input aria-label={`类别图标 ${i+1}`} className="glyph-input" placeholder="emoji / SVG" value={g.icon || ''} onChange={e=>setGroups(groups.map((v,n)=>n===i?{...v,icon:e.target.value}:v))}/>
+        <input aria-label={`类别颜色 ${i+1}`} type="color" value={g.color || '#007AFF'} onChange={e=>setGroups(groups.map((v,n)=>n===i?{...v,color:e.target.value}:v))}/>
         <IconButton icon={X} label={`删除类别 ${i + 1}`} onClick={() => setGroups(groups.filter((_, n) => n !== i))} />
       </div>)}
       <button onClick={() => setGroups([...groups, { title: "", skills: [] }])}><Plus size={16} />新增类别</button>
@@ -330,7 +188,7 @@ function CategoryEditor({ mode, skills, onSave, onClose }) {
     </div>
     {duplicate && <p className="muted">请填写不重复的类别名称。</p>}
     <div className="dialog-actions"><button onClick={onClose}>取消</button><button className="primary" disabled={duplicate} onClick={() => onSave({ operation: "mode.save", id: mode.id,
-      expected: mode.fingerprint, document: mode.document, skills: mode.roots, capabilities: groups })}>保存分类</button></div>
+      expected: mode.fingerprint, document: mode.document, skills: mode.roots, capabilities: groups.map(g=>{const value={...g};if(!value.icon)delete value.icon;return value;}) })}>保存分类</button></div>
   </Dialog>;
 }
 
@@ -364,6 +222,23 @@ function DiscoveredSkills({ report, catalog, readOnly, onInspect, onAdd, onMode,
   </>;
 }
 
+function ModeSkills({ mode, catalog, Dialog, onClose, onSave, onAdd, onInspect, onMode, task }) {
+  const [tab, setTab] = useState('library'), [roots, setRoots] = useState(new Set(mode.roots));
+  const [query, setQuery] = useState(''), [url, setUrl] = useState(''), [report, setReport] = useState(null);
+  const included = new Set(roots);
+  for (const id of included) for (const dependency of catalog.skills.find(s=>s.id===id)?.requires || []) included.add(dependency);
+  return <Dialog title={`管理 ${mode.title} 的技能`} onClose={onClose} wide>
+    <div className="mode-skill-tabs tabs">{[['library','本地库'],['github','GitHub'],['local','本机已安装']].map(([id,label])=><button key={id} className={tab===id?'active':''} onClick={()=>{setTab(id);setReport(null);}}>{label}</button>)}</div>
+    {tab==='library' ? <><div className="field-heading"><span>{included.size} 个技能在当前 Mode 中</span><small>移出 Mode 不删除技能文件</small></div><div className="search"><Search size={16}/><input aria-label="筛选库内技能" placeholder="查找技能" value={query} onChange={e=>setQuery(e.target.value)}/></div>
+      <div className="picker-list mode-member-list">{catalog.skills.filter(s=>`${s.title} ${s.id}`.toLowerCase().includes(query.toLowerCase())).map(s=><label className="skill-picker-item" key={s.id}><input type="checkbox" checked={included.has(s.id)} disabled={included.has(s.id)&&!roots.has(s.id)} onChange={e=>setRoots(old=>{const next=new Set(old);e.target.checked?next.add(s.id):next.delete(s.id);return next;})}/><span><strong>{s.title}</strong><small>{shortText(s.description,85)}</small></span>{included.has(s.id)&&!roots.has(s.id)&&<Tag>依赖带入</Tag>}</label>)}</div>
+      <div className="dialog-actions"><button onClick={onClose}>关闭</button><button className="primary" disabled={!roots.size} onClick={()=>onSave({operation:'mode.save',id:mode.id,expected:mode.fingerprint,document:mode.document,skills:[...roots]})}>保存所选技能</button></div></> : <>
+      {tab==='github' ? <form className="search large" onSubmit={e=>{e.preventDefault();task(async()=>setReport(await api('githubSkills',url)));}}><Link2 size={16}/><input type="url" required aria-label="添加技能的 GitHub 地址" placeholder="粘贴仓库或技能目录地址" value={url} onChange={e=>setUrl(e.target.value)}/><button className="primary">解析技能</button></form> : <div className="heading-actions"><button className="primary" onClick={()=>task(async()=>setReport(await api('localSkills')))}>扫描本机技能</button><button onClick={()=>task(async()=>{const folder=await api('choose','skillFolder');if(folder)setReport(await api('localSkills',folder));})}><FolderOpen size={15}/>选择目录</button></div>}
+      <p className="map-note">添加目标：{mode.title}。支持 ASL 库与普通 SKILL.md 技能包；不会执行仓库里的安装脚本。</p>
+      {report ? <DiscoveredSkills report={report} catalog={catalog} onAdd={onAdd} onInspect={onInspect} onMode={onMode}/> : <Empty title="选择想加入的技能" icon={Puzzle}><p>解析结果会列出技能与配套内容，由你决定添加哪些。</p></Empty>}
+    </>}
+  </Dialog>;
+}
+
 function ModeEditor({ item, allSkills, onSave, onClose }) {
   const [id, setId] = useState(
     item?.id || `mode-${crypto.randomUUID().slice(0, 8)}`,
@@ -395,6 +270,7 @@ function ModeEditor({ item, allSkills, onSave, onClose }) {
             document: `# ${name.trim()}\n\n${body}`,
             skills: [...roots],
             ...(item?.fingerprint ? { expected: item.fingerprint } : {}),
+            ...(!item?.fingerprint ? {architecture:filterArchitecture(item?.architecture,included)} : {}),
             ...(!item?.fingerprint && item?.capabilities ? {
               capabilities: item.capabilities.map(group => ({ ...group, skills: group.skills.filter(id => included.has(id)) })),
             } : {}),
@@ -569,6 +445,7 @@ function SkillDetails({
   onArchive,
   onAdd,
   onRemove,
+  onBrowse,
 }) {
   const [tab, setTab] = useState("overview");
   useEffect(() => setTab("overview"), [skill.id]);
@@ -588,6 +465,7 @@ function SkillDetails({
         <h2>{skill.title}</h2>
         <p className="description">{shortText(skill.description, 150)}</p>
         <div className="inspector-actions">
+          <button onClick={onBrowse}><FolderOpen size={15}/>文件与结构</button>
           <button onClick={onAdd} disabled={readOnly}>
             <Plus size={15} />
             加入模式
@@ -707,9 +585,7 @@ function SkillDetails({
             <p className="muted">账号登录由对应 Agent 处理。</p>
           </>
         )}
-        {tab === "content" && (
-          <pre className="document">{texts?.["SKILL.md"] || "正在读取…"}</pre>
-        )}
+        {tab === "content" && <><button onClick={onBrowse}><FolderOpen size={15}/>浏览全部 {skill.fileCount} 个文件</button><pre className="document">{texts?.["SKILL.md"] || "正在读取…"}</pre></>}
       </div>
     </aside>
   );
@@ -972,6 +848,8 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(null);
   const [modal, setModal] = useState(null);
+  const [ready,setReady]=useState(false);
+  const [resumeDiscovery,setResumeDiscovery]=useState(null);
   useEffect(() => setMessage(null), [modal?.kind]);
   const [native, setNative] = useState(null);
   const [provider, setProvider] = useState("github-import");
@@ -1003,6 +881,26 @@ export default function App() {
   const [market, setMarket] = useState(null);
   const [marketError, setMarketError] = useState("");
   const gate = useRef(false);
+  const [externalChange, setExternalChange] = useState(false);
+  useEffect(() => {
+    if (!workspace || workspace === initial?.example) return;
+    const stop = window.asl.onEnvironmentChanged(data => {
+      if (data.workspace !== workspace) return;
+      if (data.error) { setMessage({error:true,text:`实时检测不可用：${data.error}。可以手动刷新。`}); return; }
+      setExternalChange(true);
+    });
+    api('watch', workspace).catch(error=>setMessage({error:true,text:error.message}));
+    return stop;
+  }, [workspace]);
+  useEffect(() => {
+    if (externalChange && !modal && !busy) {
+      setExternalChange(false);
+      task(async()=>{
+        try { await load(workspace); }
+        catch (error) { throw new Error(`本地文件需要修正：${error.message}。界面暂保留上次有效内容。`); }
+      });
+    }
+  }, [modal, externalChange, busy]);
   const detailRequest = useRef(0);
   const contentRef = useRef(null);
   useEffect(() => { contentRef.current?.scrollTo(0, 0); }, [page, modeId]);
@@ -1024,15 +922,26 @@ export default function App() {
     detailRequest.current++;
     setTexts(null);
     const data = await api("run", "catalog", { workspace: root });
+    const preferences=await api('remember',root);
+    const changed=root!==workspace;
     setWorkspace(root);
     setCatalog(data);
-    setModeId((previous) =>
-      data.modes.some((m) => m.id === previous) ? previous : data.modes[0]?.id,
-    );
-    setSelected(null);
-    await api("remember", root);
+    if(changed){
+      const saved=restoreView(data,preferences.views?.[root]);
+      setModeId(saved.mode);setPage(saved.page);setView(saved.view);setQuery(saved.query);
+      setProvider(saved.provider);setGithubUrl(saved.githubUrl);setGithubReport(null);setLocalReport(null);
+      setSelected(null);
+      if(saved.skill)await selectSkill(data.skills.find(s=>s.id===saved.skill),root);
+      if(saved.page==='discover' && (saved.provider==='local'||saved.provider==='github-import'&&saved.githubUrl))setResumeDiscovery(saved);
+    }else{
+      setModeId(previous=>data.modes.some(m=>m.id===previous)?previous:data.modes[0]?.id);
+      const current=data.skills.find(s=>s.id===selected?.id);
+      if(current)await selectSkill(current,root);
+      else setSelected(null);
+    }
     setInitial((previous) => ({
       ...previous,
+      views:preferences.views,
       libraries: [
         root,
         ...(previous?.libraries || []).filter((p) => p !== root),
@@ -1044,8 +953,28 @@ export default function App() {
       const data = await api("initial");
       setInitial(data);
       if (data.workspace) await load(data.workspace);
+      setReady(true);
     });
   }, []);
+  useEffect(()=>{
+    if(!ready||!workspace||!catalog||busy)return;
+    api('rememberView',workspace,{mode:modeId||'',page,view,skill:selected?.id||'',query,provider,githubUrl})
+      .catch(error=>setMessage({error:true,text:`界面位置未保存：${error.message}`}));
+  },[ready,workspace,catalog,busy,modeId,page,view,selected?.id,query,provider,githubUrl]);
+  useEffect(()=>{
+    if(!resumeDiscovery||busy)return;
+    const saved=resumeDiscovery;setResumeDiscovery(null);
+    task(async()=>{
+      if(saved.provider==='local')setLocalReport(await api('localSkills'));
+      else setGithubReport(await api('githubSkills',saved.githubUrl));
+    });
+  },[resumeDiscovery,busy]);
+  useEffect(()=>{
+    if(!initial||workspace)return;
+    const check=()=>task(async()=>{const data=await api('initial');if(data.workspace)await load(data.workspace);});
+    window.addEventListener('focus',check);
+    return ()=>window.removeEventListener('focus',check);
+  },[initial,workspace]);
   useEffect(() => {
     if (page === "agents") task(async () => setNative(await api("native")));
     if (page === "discover" && provider === "local" && !localReport) task(async () => setLocalReport(await api("localSkills")));
@@ -1063,11 +992,11 @@ export default function App() {
     const root = await api("choose", "environment");
     if (root) await load(root);
   }
-  async function selectSkill(skill) {
+  async function selectSkill(skill,root=workspace) {
     setSelected(skill);
     setTexts(null);
     const sequence = ++detailRequest.current;
-    const data = await api("readSkill", workspace, skill.id);
+    const data = await api("readSkill", root, skill.id);
     if (sequence === detailRequest.current) setTexts(data);
   }
   async function editContent(request, addedTo) {
@@ -1113,8 +1042,8 @@ export default function App() {
     if (report.skills.length === 1) await inspectDiscovered(report.skills[0]);
     else { setLocalReport(report); setExtraSkillRoot(source); setProvider("local"); setPage("discover"); }
   }
-  function adoptSkill(skill) {
-    setModal({ kind: "local-import", ...skill, mode: page === "modes" ? mode?.id || "" : "", category: "",
+  function adoptSkill(skill, targetMode) {
+    setModal({ kind: "local-import", ...skill, mode: targetMode || (page === "modes" ? mode?.id || "" : ""), category: "",
       useExisting: catalog.skills.some(s => s.id === skill.id) });
   }
   function showMode(id) { if (id) setModeId(id); setSelected(null); setPage("modes"); }
@@ -1130,6 +1059,16 @@ export default function App() {
     setPage("discover");
   }
   function connectCloud() { setModal(null); setProvider("github-import"); setPage("discover"); }
+  async function openGuide(modeId) {
+    const target=workspace&&!readOnly?workspace:initial.managedLibrary;
+    const [guide,roots]=await Promise.all([api('run','guide',{workspace:target,...(modeId?{mode:modeId}:{})}),api('guideRoots')]);
+    setModal({kind:'agent-guide',...guide,workspace:target,roots});
+  }
+  async function refreshLocal() {
+    const target=modal?.workspace||workspace;
+    if(target){await load(target);setModal(null);}
+    else{const data=await api('initial');if(data.workspace)await load(data.workspace);}
+  }
   async function importRepositoryMode(item) {
     const pack = await api("repositoryMode", githubReport.snapshot, item.id);
     const target = workspace && !readOnly ? workspace : initial.managedLibrary;
@@ -1268,6 +1207,7 @@ export default function App() {
               onClick={() => task(chooseLibrary)}
             />
           </div>
+          <small className="app-version">{initial?.version && `v${initial.version}${initial.packaged?'':' · 开发版'}`}</small>
         </aside>
         <div className="app-main">
           <header className="topbar">
@@ -1287,17 +1227,18 @@ export default function App() {
               )}
             </span>
             <div>
+              {initial&&<button className="text-button" onClick={()=>task(()=>openGuide())}><Pencil size={15}/>交给 AI 整理</button>}
               {workspace === initial?.example && (
                 <Tag tone="amber">内置示例 · 只读</Tag>
               )}
               {busy ? (
                 <LoaderCircle size={17} className="spin" />
               ) : (
-                catalog && (
+                initial && (
                   <IconButton
                     icon={RotateCw}
                     label="刷新技能库"
-                    onClick={() => task(() => load(workspace))}
+                    onClick={() => task(refreshLocal)}
                   />
                 )
               )}
@@ -1315,14 +1256,16 @@ export default function App() {
                     <br />
                     各就其位。
                   </h1>
-                  <p>管理模式与技能，在熟悉的 Agent 中使用。</p>
+                  <p>围绕工作场景组织技能，内容留在本地。</p>
                   <button
                     className="primary"
-                    onClick={connectCloud}
+                    disabled={!initial}
+                    onClick={()=>task(()=>openGuide())}
                   >
-                    <Link2 size={18} />
-                    从 GitHub 导入工作模式
+                    <FolderOpen size={18} />
+                    从这台电脑开始
                   </button>
+                  <button className="welcome-secondary" onClick={connectCloud}><Download size={17}/>导入别人分享的工作模式</button>
                   <button className="text-button" onClick={() => task(chooseLibrary)}>打开本地环境（高级）</button>
                   {initial?.libraries?.length > 0 && (
                     <div className="recent-list">
@@ -1354,7 +1297,7 @@ export default function App() {
                     {updates?.error && <p className="inline-note">{updates.error}。本地模式仍可使用。</p>}
                     {!catalog?.modes.some(m => m.upstream) ? <Empty icon={Link2} title="尚未连接云端 Mode"><p>从符合 ASL 协议的 GitHub 仓库导入 Mode，这里会持续显示来源和更新。</p><button className="primary" onClick={connectCloud}>连接云端仓库</button></Empty> : <div className="update-list">{catalog.modes.filter(m => m.upstream).map(item => {
                       const row = updates?.modes.find(r => r.mode === item.id);
-                      return <article className="update-card" key={item.id}><div className="field-heading"><button className="row-main" onClick={() => showMode(item.id)}><Layers3 size={21} /><strong>{item.title}</strong><ChevronRight size={15} /></button><Tag tone={row?.status === "error" ? "warning" : ""}>{({current:"已同步此版本", "new-commit":"上游有新提交", error:"暂时无法检查"})[row?.status] || "等待检查"}</Tag></div><p>{item.upstream.repository.replace("https://github.com/", "")}</p><p className="muted">已导入 {item.upstream.commit.slice(0, 8)}{row?.status === "new-commit" && ` → 云端 ${row.commit.slice(0, 8)}`}</p>{row?.error && <p className="error-text">{row.error}；不会影响本地使用。</p>}<div className="heading-actions"><button onClick={() => task(() => api("external", item.upstream.repository))}><ArrowUpRight size={15} />查看仓库</button><button className={row?.status === "new-commit" ? "primary" : ""} onClick={() => task(() => inspectGithub(item.upstream.url))}>查看 Mode 差异<ChevronRight size={15} /></button></div></article>;
+                      return <article className="update-card" key={item.id}><div className="field-heading"><button className="row-main" onClick={() => showMode(item.id)}><Layers3 size={21} /><strong>{item.title}</strong><ChevronRight size={15} /></button><Tag tone={row?.status === "error" ? "warning" : ""}>{({current:"上游暂无新提交", "new-commit":"上游有新提交", error:"暂时无法检查"})[row?.status] || "等待检查"}</Tag></div><p>{item.upstream.repository.replace("https://github.com/", "")}</p><p className="muted">已导入 {item.upstream.commit.slice(0, 8)}{row?.status === "new-commit" && ` → 云端 ${row.commit.slice(0, 8)}`}</p>{row?.error && <p className="error-text">{row.error}；不会影响本地使用。</p>}<div className="heading-actions"><button onClick={() => task(() => api("external", item.upstream.repository))}><ArrowUpRight size={15} />查看仓库</button><button className={row?.status === "new-commit" ? "primary" : ""} onClick={() => task(() => inspectGithub(item.upstream.url))}>查看 Mode 差异<ChevronRight size={15} /></button></div></article>;
                     })}</div>}
                     <p className="muted">新提交可能只改了仓库其他内容；导入预览会列出这个 Mode 的实际差异。只比较上游版本，不把本地编辑误称为已与云端一致。</p>
                   </section>}
@@ -1431,10 +1374,15 @@ export default function App() {
                         <Link2 size={16} />
                         {mode.upstream ? <><span>{mode.upstream.repository.replace("https://github.com/", "")}<small>已导入 {mode.upstream.commit.slice(0, 8)} · 本地可编辑副本</small></span><button onClick={() => task(() => inspectGithub(mode.upstream.url))}><RotateCw size={14} />检查上游</button></> : <><span>本地模式<small>尚未绑定云端来源</small></span><button onClick={connectCloud}>连接云端仓库<ChevronRight size={14} /></button></>}
                       </div>
+                      <details className="mode-method" key={mode.id}>
+                        <summary>模式说明</summary>
+                        <pre>{mode.document.replace(/^#\s+.+\r?\n?/, '').trim()}</pre>
+                      </details>
                       <div className="mode-toolbar">
                         <div className="tabs">
                           {[
-                            ["map", "能力地图", Network],
+                            ["map", "逻辑架构", Network],
+                            ["categories", "技能分类", Layers3],
                             ["list", "技能列表", List],
                           ].map(([id, label, Icon]) => (
                             <button
@@ -1451,7 +1399,7 @@ export default function App() {
                           className="text-button"
                           disabled={readOnly}
                           onClick={() =>
-                            setModal({ kind: "mode-editor", item: mode })
+                            setModal({ kind: "mode-skills", mode })
                           }
                         >
                           <Plus size={16} />
@@ -1460,14 +1408,15 @@ export default function App() {
                       </div>
                       {view === "map" ? (
                         <>
-                          <CapabilityMap
+                          <ArchitectureMap
                             mode={mode}
                             skills={modeSkills}
-                            onSkill={(skill) => task(() => selectSkill(skill))}
-                            onManage={readOnly ? null : () => setModal({ kind: "categories" })}
+                            onSkill={(skill)=>task(()=>selectSkill(skill))}
+                            onEdit={readOnly?null:()=>setModal({kind:'architecture'})}
+                            onGuide={()=>task(()=>openGuide(mode.id))}
                           />
                         </>
-                      ) : (
+                      ) : view === 'categories' ? <CapabilityCards mode={mode} skills={modeSkills} onSkill={skill=>task(()=>selectSkill(skill))} onManage={readOnly?null:()=>setModal({kind:'categories'})}/> : (
                         <div className="mode-skill-list">
                           <p className="muted">来自 mode.yaml 的技能清单与技能声明的依赖，不做关键词分组。</p>
                           <div className="list-surface">
@@ -1801,8 +1750,9 @@ export default function App() {
                   detailRequest.current++;
                 }}
                 onEdit={() =>
-                  setModal({ kind: "skill-editor", item: selected, texts })
+                  setModal({ kind: "skill-files", item: selected })
                 }
+                onBrowse={()=>setModal({kind:'skill-files',item:selected})}
                 onArchive={() =>
                   task(() =>
                     editContent({
@@ -1890,6 +1840,12 @@ export default function App() {
             onClose={() => setModal(null)}
           />
         )}
+        {modal?.kind === 'skill-files' && <SkillFiles item={modal.item} Dialog={Dialog} readOnly={readOnly} onClose={()=>setModal(null)}
+          readFile={file=>api('run','files',{workspace,skill:modal.item.id,file})}
+          saveFile={async request=>{await api('run','edit',{workspace,request});await api('run','edit',{workspace,request,apply:true});await load(workspace);}}/>}
+        {modal?.kind === 'agent-guide' && <EnvironmentGuide {...modal} onClose={()=>setModal(null)} onRefresh={()=>task(refreshLocal)}/>}
+        {modal?.kind === 'mode-skills' && <ModeSkills mode={modal.mode} catalog={catalog} Dialog={Dialog} onClose={()=>setModal(null)} onMode={id=>{setModal(null);showMode(id);}} task={task}
+          onSave={request=>task(()=>editContent(request))} onAdd={skill=>adoptSkill(skill,modal.mode.id)} onInspect={skill=>task(()=>inspectDiscovered(skill))}/>}
         {modal?.kind === "review" && (
           <Dialog
             title={
@@ -1956,6 +1912,7 @@ export default function App() {
             onApplied={(text, values) => { setMessage({ text }); api("native").then(setNative).catch(() => {}); if (values) setModal({ kind: "setup", values, resultMessage: text }); }}
           />
         )}
+        {modal?.kind === 'architecture' && <ArchitectureEditor mode={mode} skills={modeSkills} Dialog={Dialog} Field={Field} onSave={request=>task(()=>editContent(request))} onClose={()=>setModal(null)}/>}
         {modal?.kind === "categories" && <CategoryEditor mode={mode} skills={modeSkills} onClose={() => setModal(null)} onSave={request => task(() => editContent(request))} />}
         {modal?.kind === "discovered-detail" && <Dialog title={modal.skill.title} onClose={() => setModal(null)} wide>
           <p>{modal.skill.description}</p>
@@ -2125,8 +2082,8 @@ export default function App() {
             {!modal.report.changed && !modal.report.conflicts.length && <p className="inline-note">所选 Mode 的内容已一致，无需更新。</p>}
             <div className="review-list import-changes">
               {Object.entries(modal.report.actions).filter(([, action]) => action !== "unchanged").sort((a, b) => (a[1] === "conflict" ? -1 : 0) - (b[1] === "conflict" ? -1 : 0)).map(([id, action]) => (
-                <div key={id}>
-                  <span>{id}</span>
+                <div className="import-package" key={id}>
+                  <div className="field-heading"><span>{id}</span>
                   <Tag tone={action === "conflict" ? "amber" : ""}>
                     {
                       {
@@ -2134,13 +2091,16 @@ export default function App() {
                         unchanged: "已存在",
                         conflict: "有本地差异",
                         replace: "替换",
+                        'source-update': '登记云端来源',
                       }[action]
                     }
-                  </Tag>
+                  </Tag></div>
+                  {!!modal.report.differences?.[id]?.length && <details><summary>查看文件差异</summary>{modal.report.differences[id].filter(change=>change.kind!=='line-endings').map(change=><div className="file-diff" key={change.path}><div><code>{change.path}</code><Tag>{({'content':'内容修改',added:'导入新增',removed:'本地独有 · 替换会移除','source-record':'上游版本记录'})[change.kind]}</Tag></div>{change.diff&&<pre>{change.diff}</pre>}{change.truncated&&<small>仅显示前 12,000 字符，请在本地核对完整文件。</small>}{change.binary&&<small>二进制或大文件，请在本地对比。</small>}</div>)}</details>}
                 </div>
               ))}
             </div>
             {Object.values(modal.report.actions).includes("unchanged") && <p className="muted">{Object.values(modal.report.actions).filter(action => action === "unchanged").length} 项内容已一致，保持不变。</p>}
+            {Object.values(modal.report.differences || {}).some(changes=>changes.some(c=>c.kind==='line-endings')) && <p className="muted">已忽略 {Object.values(modal.report.differences).flat().filter(c=>c.kind==='line-endings').length} 个文件的换行差别，不会因此覆盖本地文件。</p>}
             {modal.report.conflicts.length > 0 && (
               <><p className="inline-note">同名内容存在差异，默认保留本地版本。</p><label className="check-line"><input type="checkbox" checked={modal.replace} onChange={e => setModal({ ...modal, replace: e.target.checked })} />我确认替换以上差异内容</label></>
             )}

@@ -41,7 +41,8 @@ export function capabilityGroups(skills, authored = null) {
   if (Array.isArray(authored)) {
     const assigned = new Set(authored.flatMap(g => g.skills));
     const groups = authored.map((g, index) => ({ id: `custom-${index}`, title: g.title,
-      icon: GROUPS.find(row => row[1] === g.title)?.[2] || "Box",
+      icon: typeof g.icon === 'string' ? g.icon : GROUPS.find(row => row[1] === g.title)?.[2] || "Box",
+      color: /^#[\da-f]{6}$/i.test(g.color || '') ? g.color : '#007AFF',
       skills: g.skills.map(id => skills.find(s => s.id === id)).filter(Boolean) }));
     const rest = skills.filter(s => !assigned.has(s.id));
     if (rest.length) groups.push({ id: "unclassified", title: "未分类", icon: "Box", skills: rest });
@@ -106,78 +107,35 @@ export function scopeLabel(scope, target = "") {
       ? `仅预设 · ${target}`
       : `仅项目 · ${target}`;
 }
-export function graphForMode(mode, skills, expanded = new Set()) {
-  const groups = capabilityGroups(skills, mode.capabilities);
-  const nodes = [];
-  const edges = [];
-  let y = 0;
-  for (const group of groups) {
-    const open = expanded.has(group.id);
-    const height = open ? Math.max(76, group.skills.length * 90) : 76;
-    nodes.push({
-      id: `group:${group.id}`,
-      type: "capability",
-      position: { x: 270, y: y + (height - 67) / 2 },
-      data: {
-        kind: "group",
-        group,
-        open,
-        title: group.title,
-        count: group.skills.length,
-      },
-      width: 222,
-      height: 67,
-    });
-    edges.push({
-      id: `member:${group.id}`,
-      source: "mode",
-      target: `group:${group.id}`,
-      type: "smoothstep",
-      data: { kind: "contains" },
-      style: { stroke: "#bec9d5" },
-    });
-    if (open)
-      group.skills.forEach((skill, index) => {
-        nodes.push({
-          id: `skill:${skill.id}`,
-          type: "capability",
-          position: { x: 566, y: y + index * 90 },
-          data: { kind: "skill", skill, title: skill.title },
-          width: 280,
-          height: 74,
-        });
-        edges.push({
-          id: `contains:${skill.id}`,
-          source: `group:${group.id}`,
-          target: `skill:${skill.id}`,
-          type: "smoothstep",
-          data: { kind: "contains" },
-          style: { stroke: "#d7dde5" },
-        });
-      });
-    y += height + 18;
-  }
-  nodes.unshift({
-    id: "mode",
-    type: "capability",
-    position: { x: 0, y: Math.max(0, (y - 130) / 2) },
-    data: { kind: "mode", title: mode.title, count: skills.length },
-    width: 210,
-    height: 110,
+// ponytail: Mermaid owns layout and routing; this only projects validated local content.
+export function diagramForMode(mode, skills) {
+  const escape = text => String(text).replace(/["<>#\x60\r\n\u2028\u2029]/g,ch=>`#${ch.codePointAt(0)};`);
+  const nodes=skills.map((skill,index)=>{
+    const entry=mode.architecture?.nodes?.find(n=>n.skill===skill.id)||{};
+    return {id:skill.id,alias:`n${index}`,data:{...entry,skill,title:entry.title||skill.title}};
   });
-  const visible = new Set(nodes.map((n) => n.id));
-  for (const skill of skills)
-    for (const required of skill.requires || []) {
-      if (visible.has(`skill:${skill.id}`) && visible.has(`skill:${required}`))
-        edges.push({
-          id: `requires:${skill.id}:${required}`,
-          source: `skill:${skill.id}`,
-          target: `skill:${required}`,
-          type: "smoothstep",
-          label: "依赖",
-          data: { kind: "requires" },
-          style: { stroke: "#9a80c4", strokeDasharray: "4 4" },
-        });
-    }
-  return { nodes, edges };
+  const aliases=new Map(nodes.map(n=>[n.id,n.alias]));
+  const edges=(mode.architecture?.edges||[]).filter(e=>aliases.has(e.from)&&aliases.has(e.to))
+    .map(e=>({source:e.from,target:e.to,label:e.label}));
+  const heading=edges.length?'flowchart TB':`block-beta\ncolumns ${Math.min(3,Math.max(1,Math.ceil(Math.sqrt(nodes.length))))}`;
+  const lines=[heading,...nodes.map(n=>{
+    const icon=n.data.icon||'';
+    const prefix=icon.startsWith('<svg')?'◈ ':/[^\x00-\x7f]/.test(icon)?icon+' ':'';
+    return `${n.alias}["${escape(prefix+n.data.title)}"]`;
+  }),...edges.map(e=>`${aliases.get(e.source)} -->${e.label?`|"${escape(e.label)}"|`:''} ${aliases.get(e.target)}`)];
+  return {nodes,edges,source:lines.join('\n')};
+}
+
+export function restoreView(catalog, saved={}) {
+  const mode=catalog.modes.find(m=>m.id===saved.mode)||catalog.modes[0];
+  const page=['modes','skills','discover','updates','agents'].includes(saved.page)?saved.page:'modes';
+  const skill=catalog.skills.find(s=>s.id===saved.skill && (page!=='modes'||mode?.skills.includes(s.id)));
+  return {mode:mode?.id||'',page,view:['map','categories','list'].includes(saved.view)?saved.view:'map',
+    skill:skill?.id||'',query:saved.query||'',provider:['github-import','local','dsh','github'].includes(saved.provider)?saved.provider:'github-import',githubUrl:saved.githubUrl||''};
+}
+
+export function filterArchitecture(architecture, included) {
+  if(!architecture)return architecture;
+  return {nodes:(architecture.nodes||[]).filter(n=>included.has(n.skill)),
+    edges:(architecture.edges||[]).filter(e=>included.has(e.from)&&included.has(e.to))};
 }

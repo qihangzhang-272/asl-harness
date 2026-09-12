@@ -2,6 +2,29 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { upstreamDocument, presetDestination } = require('../repository.cjs');
 
+test('local watcher coalesces content edits, ignores cache files and stops cleanly', async t => {
+  const fs = require('node:fs/promises'), path = require('node:path'), os = require('node:os');
+  const { watchEnvironment } = require('../repository.cjs');
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'asl-watch-'));
+  await fs.mkdir(path.join(root, 'skills', 'sample', '__pycache__'), { recursive: true });
+  const events = [];
+  const stop = watchEnvironment(root, event => events.push(event));
+  t.after(async () => { stop(); await fs.rm(root, { recursive: true, force: true }); });
+  const pause = () => new Promise(resolve => setTimeout(resolve, 800));
+  await fs.writeFile(path.join(root, 'skills/sample/__pycache__/ignored.pyc'), 'cache');
+  await fs.writeFile(path.join(root, 'README.md'), 'navigation');
+  await pause();
+  assert.equal(events.length, 0);
+  await fs.writeFile(path.join(root, 'skills/sample/SKILL.md'), 'first');
+  await fs.writeFile(path.join(root, 'skills/sample/SKILL.md'), 'second');
+  await pause();
+  assert.deepEqual(events, [{ workspace: root }]);
+  stop();
+  await fs.writeFile(path.join(root, 'skills/sample/SKILL.md'), 'after close');
+  await pause();
+  assert.equal(events.length, 1);
+});
+
 test('cloud binding keeps upstream notices and replaces only its own block', () => {
   const repo = { url: 'https://github.com/example/skills', commit: 'a'.repeat(40) };
   const original = '# Source\nCopyright example\n';

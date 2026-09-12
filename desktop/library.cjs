@@ -1,5 +1,15 @@
 const fs = require("node:fs/promises");
 const path = require("node:path");
+let pending = Promise.resolve();
+
+function viewValue(value) {
+  const allowed=['mode','page','view','skill','query','provider','githubUrl'];
+  if (!value || typeof value!=='object' || Array.isArray(value) || Object.keys(value).some(k=>!allowed.includes(k)) ||
+      Object.values(value).some(v=>typeof v!=='string'||v.length>2048) ||
+      value.page && !['modes','skills','discover','updates','agents'].includes(value.page) ||
+      value.view && !['map','categories','list'].includes(value.view)) throw new Error('界面位置格式无效');
+  return Object.fromEntries(Object.entries(value).filter(([,v])=>v));
+}
 
 async function isLibrary(root) {
   if (typeof root !== "string" || !path.isAbsolute(root)) return false;
@@ -21,7 +31,12 @@ async function readPreferences(file) {
   const libraries = [];
   for (const root of Array.isArray(value.libraries) ? value.libraries : [])
     if (await isLibrary(root)) libraries.push(path.resolve(root));
+  const views = {};
+  for(const root of libraries) {
+    try { if(value.views?.[root]) views[root]=viewValue(value.views[root]); } catch {}
+  }
   return {
+    views,
     libraries: [...new Set(libraries)].slice(0, 12),
     lastLibrary: libraries.includes(value.lastLibrary)
       ? value.lastLibrary
@@ -47,18 +62,31 @@ async function writePreferences(file, value) {
 async function rememberLibrary(file, root) {
   root = path.resolve(root);
   if (!(await isLibrary(root))) throw new Error("这个文件夹不是 ASL 技能库");
-  const value = await readPreferences(file);
-  value.lastLibrary = root;
-  value.libraries = [root, ...value.libraries.filter((p) => p !== root)].slice(
-    0,
-    12,
-  );
-  await writePreferences(file, value);
-  return value;
+  return updatePreferences(file,value=>({...value,lastLibrary:root,
+    libraries:[root,...value.libraries.filter(p=>p!==root)].slice(0,12)}));
+}
+function updatePreferences(file,update) {
+  const next=pending.catch(()=>{}).then(async()=>{
+    const value=await update(await readPreferences(file));
+    await writePreferences(file,value);
+    return value;
+  });
+  pending=next;
+  return next;
+}
+async function rememberView(file,root,state) {
+  root=path.resolve(root);
+  const view=viewValue(state);
+  return updatePreferences(file,value=>{
+    if(!value.libraries.includes(root))throw new Error('请先打开这个工作环境');
+    return {...value,views:{...value.views,[root]:view}};
+  });
 }
 module.exports = {
   readPreferences,
   writePreferences,
   rememberLibrary,
   isLibrary,
+  rememberView,
+  updatePreferences,
 };

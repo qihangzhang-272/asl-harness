@@ -12,7 +12,8 @@ async function desktop(t) {
   t.after(() => fs.rm(home, { recursive: true, force: true }));
   const directory = path.resolve(__dirname, "..");
   const localRequire = createRequire(path.join(directory, "main.cjs"));
-  const handlers = new Map(), calls = [];
+  const handlers = new Map(), calls = [], events=new Map();
+  let focused=0;
   const webContents = { on() {}, setWindowOpenHandler() {}, session: { setPermissionRequestHandler() {} } };
   let page;
   const dialog = {
@@ -22,9 +23,10 @@ async function desktop(t) {
     async showMessageBox() { return { response: this.confirm }; },
   };
   const electron = {
-    app: { isPackaged: false, whenReady: () => Promise.resolve(), on() {}, quit() {},
+    app: { isPackaged: false, whenReady: () => Promise.resolve(), on(name,fn) {events.set(name,fn);}, quit() {},
+      commandLine:{hasSwitch:()=>true}, setName() {},setPath() {},getVersion:()=> '0.2.0',requestSingleInstanceLock:()=>true,
       getPath: name => name === "documents" ? path.join(home, "missing", "Desktop") : home },
-    BrowserWindow: class { constructor() { this.webContents = webContents; } removeMenu() {} loadFile(file) { page = require("node:url").pathToFileURL(file).href; } },
+    BrowserWindow: class { constructor() { this.webContents = webContents; } isMinimized(){return false;} show(){} focus(){focused++;} removeMenu() {} loadFile(file) { page = require("node:url").pathToFileURL(file).href; } },
     dialog, ipcMain: { handle: (key, fn) => handlers.set(key, fn) }, shell: {}, net: {},
   };
   const executed = [];
@@ -35,9 +37,26 @@ async function desktop(t) {
       : localRequire(name),
   });
   await new Promise(resolve => setImmediate(resolve));
-  return { home, dialog, calls, executed, invoke: (method, ...args) => handlers.get(`asl:${method}`)(
+  return { home, dialog, calls, executed, events,focused:()=>focused, invoke: (method, ...args) => handlers.get(`asl:${method}`)(
     { sender: webContents, senderFrame: { url: page } }, ...args) };
 }
+test('reopen focuses the existing window and exposes version plus remembered views',async t=>{
+  const app=await desktop(t);
+  const initial=(await app.invoke('initial')).value;
+  assert.equal(initial.version,'0.2.0');
+  assert.deepEqual(initial.views,{});
+  assert.equal(typeof app.events.get('second-instance'),'function');
+  app.events.get('second-instance')();
+  assert.equal(app.focused(),1);
+});
+test('view updates are constrained to an opened environment',async t=>{
+  const app=await desktop(t);
+  assert.equal((await app.invoke('remember-view',app.home,{mode:'writing'})).ok,false);
+  const initial=(await app.invoke('initial')).value;
+  await app.invoke('remember',initial.example);
+  assert.equal((await app.invoke('remember-view',initial.example,{mode:'writing',page:'modes',view:'map'})).ok,true);
+  assert.equal((await app.invoke('initial')).value.views[initial.example].mode,'writing');
+});
 
 test("folder selection falls back to a real home and cancellation grants nothing", async t => {
   const app = await desktop(t);

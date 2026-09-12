@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, shell, net } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, shell, net, clipboard } = require("electron");
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
@@ -7,20 +7,27 @@ const { runCore, commandArgs } = require("./bridge.cjs");
 const {
   readPreferences,
   rememberLibrary,
-  writePreferences,
+  updatePreferences,
+  rememberView,
   isLibrary,
 } = require("./library.cjs");
 const { nativeInventory, existingDirectory, localSkillRoots } = require("./native.cjs");
 const { discover, publicUrl, githubSnapshot } = require("./market.cjs");
 const { assistantInventory, launchAssistant, sessionStatus } = require("./assistant.cjs");
-const { upstreamDocument, presetDestination, checkUpstreams } = require("./repository.cjs");
+const { upstreamDocument, presetDestination, checkUpstreams, watchEnvironment } = require("./repository.cjs");
 
 const root = path.resolve(__dirname, "..");
+app.setName('ASL Workspace');
+if(!app.commandLine.hasSwitch('user-data-dir'))
+  app.setPath('userData',path.join(app.getPath('appData'),'ASL Workspace'));
+const primary = app.requestSingleInstanceLock();
+if(!primary) app.quit();
 const page = pathToFileURL(path.join(__dirname, "dist/index.html")).href;
 let window;
 const selected = new Set();
 const repositories = new Map();
 let busy = false;
+let stopWatching;
 const options = app.isPackaged
   ? {
       root: process.resourcesPath,
@@ -51,7 +58,10 @@ function handle(channel, fn) {
   });
 }
 
-app.whenReady().then(() => {
+app.on('second-instance',()=>{
+  if(window){if(window.isMinimized())window.restore();window.show();window.focus();}
+});
+if(primary) app.whenReady().then(() => {
   const preferenceFile = path.join(app.getPath("userData"), "libraries.json");
   const sessionRoot = path.join(app.getPath("userData"), "setup-sessions");
   const managedLibrary = path.join(app.getPath("userData"), "workspace");
@@ -90,13 +100,35 @@ app.whenReady().then(() => {
     selected.add(example);
     const libraries = [...preferences.libraries];
     for (const location of libraries) selected.add(location);
-    return { workspace: initial, example, managedLibrary, libraries, repositories: preferences.repositories, packaged: app.isPackaged };
+    return { workspace: initial, example, managedLibrary, libraries, views:preferences.views,
+      repositories: preferences.repositories, packaged: app.isPackaged, version:app.getVersion() };
   });
 
+  handle('asl:watch', async (workspace) => {
+    if (!selected.has(path.resolve(workspace))) throw new Error('请先选择工作环境');
+    stopWatching?.();
+    stopWatching = watchEnvironment(workspace, data => { if (!window.isDestroyed()) window.webContents.send('asl:environment-changed', data); });
+    return { watching: workspace };
+  });
+  handle('asl:copy-text', async text => {
+    if (typeof text !== 'string' || text.length > 256000) throw new Error('复制内容过大');
+    await clipboard.writeText(text);
+    return { copied: true };
+  });
   handle("asl:remember", async (workspace) => {
     if (!selected.has(path.resolve(workspace)))
       throw new Error("请先选择技能库");
     return rememberLibrary(preferenceFile, workspace);
+  });
+  handle('asl:remember-view',async(workspace,view)=>{
+    if(!selected.has(path.resolve(workspace)))throw new Error('请先选择工作环境');
+    return rememberView(preferenceFile,workspace,view);
+  });
+  handle('asl:guide-roots',async()=>{
+    const roots=[];
+    for(const item of await localSkillRoots())
+      if(await existingDirectory([item.path]))roots.push(item);
+    return roots;
   });
   handle("asl:native", async () => {
     const report = await nativeInventory();
@@ -202,9 +234,7 @@ app.whenReady().then(() => {
         repositories.set(output, { environment, repo, url: new URL(url).href, modes: new Set(modes.map(m => m.id)) });
       } catch (error) { modeError = error.message; }
     }
-    const preferences = await readPreferences(preferenceFile);
-    preferences.repositories = [url, ...preferences.repositories.filter(value => value !== url)].slice(0, 12);
-    await writePreferences(preferenceFile, preferences);
+    await updatePreferences(preferenceFile,p=>({...p,repositories:[url,...p.repositories.filter(value=>value!==url)].slice(0,12)}));
     return { ...report, repository: repo.url, commit: repo.commit, snapshot: output, modes, modeError };
   });
   handle("asl:repository-mode", async (snapshot, mode) => {
@@ -255,6 +285,7 @@ app.whenReady().then(() => {
         "skillFolder",
         "userSkills",
         "skillSearchRoot",
+        "reference",
       ].includes(kind)
     ) {
       result = await dialog.showOpenDialog(window, {
@@ -266,6 +297,7 @@ app.whenReady().then(() => {
           skillFolder: "选择包含 SKILL.md 的完整技能文件夹",
           userSkills: "选择所选 Agent 的用户技能目录（直接存放各技能文件夹的位置）",
           skillSearchRoot: "选择要发现技能的目录",
+          reference: "选择允许 AI 参考的项目或记录目录",
         }[kind],
         defaultPath: directory,
         properties: ["openDirectory"],
@@ -353,8 +385,7 @@ app.whenReady().then(() => {
         result.presetRegistered = inventory.presets.some(p => path.resolve(p.path) === path.resolve(values.output));
       }
       if (action === "project") {
-        const preferences = await readPreferences(preferenceFile);
-        preferences.targets = [
+        await updatePreferences(preferenceFile,preferences=>({...preferences,targets:[
           {
             project: values.project,
             host: values.host,
@@ -363,8 +394,7 @@ app.whenReady().then(() => {
           ...preferences.targets.filter(
             (t) => !(t.project === values.project && t.host === values.host),
           ),
-        ].slice(0, 30);
-        await writePreferences(preferenceFile, preferences);
+        ].slice(0, 30)}));
       }
       return result;
     } finally {

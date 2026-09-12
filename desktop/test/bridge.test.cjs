@@ -4,6 +4,19 @@ const { commandArgs, runCore } = require("../bridge.cjs");
 const path = require("node:path");
 const fs = require("node:fs/promises");
 const os = require("node:os");
+
+test('complete file preview and Agent guide use the same read-only core', async () => {
+  const root = path.resolve(__dirname, '../..'), workspace = path.join(root, 'examples/personal-environment');
+  const data = await runCore('catalog', {workspace}, {root});
+  const files = await runCore('files', {workspace, skill: data.skills[0].id, file: 'SKILL.md'}, {root});
+  assert.ok(files.files.some(f => f.path === 'SKILL.md' && f.editable));
+  assert.ok(files.document.includes('description:'));
+  const guide = await runCore('guide', {workspace, mode: data.modes[0].id}, {root});
+  assert.ok(guide.document.includes('mode.yaml'));
+  assert.ok(guide.document.includes('不要求操作步骤'));
+  assert.ok(guide.document.includes('spec.architecture'));
+  await assert.rejects(() => runCore('files', {workspace, skill: data.skills[0].id, file: '../PROFILE.md'}, {root}));
+});
 test("WorkBuddy project apply and local scans are explicit actions", () => {
   assert.ok(commandArgs("project", { workspace: "库", mode: "creator", project: "项目", host: "workbuddy" }).includes("workbuddy"));
   assert.throws(() => commandArgs("userSync", { workspace: "库", mode: "creator", host: "workbuddy" }));
