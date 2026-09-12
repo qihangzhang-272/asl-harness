@@ -2,6 +2,18 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { upstreamDocument, presetDestination } = require('../repository.cjs');
 
+test('watcher resolves native long paths before subscribing to filesystem events', t => {
+  const fs = require('node:fs');
+  const short = 'C:\\Users\\RUNNER~1\\workspace';
+  const full = 'C:\\Users\\runneradmin\\workspace';
+  t.mock.method(fs.realpathSync, 'native', root => { assert.equal(root, short); return full; });
+  t.mock.method(fs, 'watch', root => {
+    assert.equal(root, full);
+    return { on() {}, close() {} };
+  });
+  require('../repository.cjs').watchEnvironment(short, () => {})();
+});
+
 test('local watcher coalesces content edits, ignores cache files and stops cleanly', async t => {
   const fs = require('node:fs/promises'), path = require('node:path'), os = require('node:os');
   const { watchEnvironment } = require('../repository.cjs');

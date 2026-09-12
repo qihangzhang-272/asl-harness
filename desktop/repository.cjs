@@ -27,7 +27,8 @@ async function checkUpstreams(modes, fetch) {
 function watchEnvironment(root, notify) {
   const fs = require('node:fs');
   let timer;
-  const watcher = fs.watch(root, { recursive: true, persistent: false }, (_event, file) => {
+  // libuv can abort on Windows 8.3 aliases; subscribe with the native long path.
+  const watcher = fs.watch(fs.realpathSync.native(root), { recursive: true, persistent: false }, (_event, file) => {
     const parts = String(file || '').split(/[\\/]/);
     if (!['skills', 'modes', 'PROFILE.md'].includes(parts[0]) || parts.some(p => ['.git', '__pycache__', 'node_modules', '.pytest_cache'].includes(p))) return;
     // Windows also reports parent-directory metadata for ignored cache writes.
