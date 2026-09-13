@@ -7,7 +7,6 @@ import platform
 import re
 import shutil
 import subprocess
-import tomllib
 from pathlib import Path
 
 import yaml
@@ -15,6 +14,7 @@ import yaml
 from .adapters import RUNTIME_REQUIREMENTS
 from .user_projection import locations
 from .workspace import Workspace
+from .native_mcp import inspect_mcp
 
 
 def doctor_summary(value: dict) -> list[dict]:
@@ -25,30 +25,14 @@ def doctor_summary(value: dict) -> list[dict]:
             for key, item in value.items() if isinstance(item, dict) and isinstance(item.get("name", key), str)]
 
 
-def _mcp_names(host: str, home: Path, env: dict, project: Path | None) -> set[str]:
-    names = set()
-    if host == "codex-app":
-        files = [Path(env.get("CODEX_HOME") or home / ".codex") / "config.toml"]
-        if project:
-            files.append(project / ".codex" / "config.toml")
-    elif host == "claude-code":
-        files = [Path(env["CLAUDE_CONFIG_DIR"]) / ".claude.json" if env.get("CLAUDE_CONFIG_DIR") else home / ".claude.json"]
-        if project:
-            files.append(project / ".mcp.json")
-    else:
-        return names
-    for file in files:
-        try:
-            if file.stat().st_size > 2 * 1024 * 1024:
-                continue
-            text = file.read_text(encoding="utf-8")
-            data = tomllib.loads(text) if file.suffix == ".toml" else json.loads(text)
-            values = data.get("mcp_servers" if file.suffix == ".toml" else "mcpServers", {})
-            if isinstance(values, dict):
-                names.update(values)
-        except (OSError, ValueError, TypeError, AttributeError):
-            pass
-    return names
+def _mcp_names(host: str, home: Path, env: dict, project: Path | None) -> set[str] | None:
+    if host not in {'codex-app', 'claude-code'}:
+        return set()
+    report = inspect_mcp(host, home=home, env=env, project=project)
+    if any(source['error'] for source in report['sources']):
+        return None
+    effective = {s['name']: s['enabled'] for source in report['sources'] for s in source['servers']}
+    return {name for name, enabled in effective.items() if enabled}
 
 
 def inspect_mode(workspace: Workspace, mode_id: str, host: str, *, project: Path | None = None,
@@ -64,7 +48,7 @@ def inspect_mode(workspace: Workspace, mode_id: str, host: str, *, project: Path
         if key not in checks:
             found = shutil.which(name) if kind == "binary" else None
             status = ("found" if found else "missing") if kind == "binary" else (
-                ("unknown" if host not in {"codex-app", "claude-code"} else "configured" if name in connections else "missing") if kind == "mcp" else
+                ("unknown" if host not in {"codex-app", "claude-code"} or connections is None else "configured" if name in connections else "missing") if kind == "mcp" else
                 ("configured" if env.get(name) else "unknown"))
             checks[key] = {"kind": kind, "name": name, "status": status,
                            "verified": False, "skills": [], "path": found}

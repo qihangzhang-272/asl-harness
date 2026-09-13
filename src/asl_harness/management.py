@@ -38,6 +38,17 @@ def _title(text: str, fallback: str) -> str:
     return match.group(1).strip() if match else fallback
 
 
+def mode_upstream(path: Path) -> dict | None:
+    file = path / 'SOURCE.md'
+    if file.is_file() and file.stat().st_size <= 1024 * 1024:
+        block = re.search(r'<!-- asl:upstream -->\s*(.*?)<!-- /asl:upstream -->', file.read_text(encoding='utf-8'), re.S)
+        if block:
+            fields = dict(re.findall(r'^- (Repository|URL|Commit): (.+)$', block.group(1), re.M))
+            if all(key in fields for key in ('Repository', 'URL', 'Commit')):
+                return {'repository': fields['Repository'], 'url': fields['URL'], 'commit': fields['Commit']}
+    return None
+
+
 def catalog(root: str | Path) -> dict:
     workspace = Workspace.open(root)
     report = workspace.summary()
@@ -51,15 +62,7 @@ def catalog(root: str | Path) -> dict:
             capabilities=list(mode.capabilities) if mode.capabilities is not None else None,
             architecture=mode.architecture,
         )
-        source_file = mode.path / "SOURCE.md"
-        item["upstream"] = None
-        if source_file.is_file() and source_file.stat().st_size <= 1024 * 1024:
-            text = source_file.read_text(encoding="utf-8")
-            block = re.search(r"<!-- asl:upstream -->\s*(.*?)<!-- /asl:upstream -->", text, re.S)
-            if block:
-                fields = dict(re.findall(r"^- (Repository|URL|Commit): (.+)$", block.group(1), re.M))
-                if all(key in fields for key in ("Repository", "URL", "Commit")):
-                    item["upstream"] = {"repository": fields["Repository"], "url": fields["URL"], "commit": fields["Commit"]}
+        item['upstream'] = mode_upstream(mode.path)
     for item in report["skills"]:
         skill = workspace.skills[item["id"]]
         document = (skill.path / "SKILL.md").read_text(encoding="utf-8")

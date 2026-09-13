@@ -22,6 +22,8 @@ from .management import catalog, edit, skill_files, editing_guide
 from .discovery import scan_skills, unpack_skills
 from .user_projection import sync_user
 from .readiness import inspect_mode, setup_brief
+from .local_modes import scan_modes
+from .native_mcp import inspect_mcp, edit_mcp, discover_mcp
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -30,6 +32,16 @@ def _parser() -> argparse.ArgumentParser:
         description="Validate ASL Environments, sync complete Skills, and project one Mode to a native Host.",
     )
     commands = parser.add_subparsers(dest="command", required=True)
+    local = commands.add_parser('environment.discover')
+    local.add_argument('--source', action='append', default=[])
+    local.add_argument('--parent', type=Path)
+    commands.add_parser('mcp.discover').add_argument('--source', action='append', default=[])
+    for name in ('mcp.inspect', 'mcp.edit'):
+        mcp = commands.add_parser(name)
+        mcp.add_argument('--host-id', choices=['codex-app', 'claude-code'], required=True)
+        mcp.add_argument('--project', type=Path)
+        if name == 'mcp.edit':
+            mcp.add_argument('--scope', choices=['user', 'project', 'local'], required=True)
     scan = commands.add_parser("skill.scan")
     scan.add_argument("--source", action="append", required=True)
     unpack = commands.add_parser("skill.unpack")
@@ -126,6 +138,20 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def _execute(args: argparse.Namespace) -> dict:
+    if args.command == 'environment.discover':
+        return {'ok': True, **scan_modes(args.source, parent=args.parent)}
+    if args.command == 'mcp.inspect':
+        return {'ok': True, **inspect_mcp(args.host_id, project=args.project)}
+    if args.command == 'mcp.discover':
+        return {'ok': True, **discover_mcp(args.source)}
+    if args.command == 'mcp.edit':
+        raw = sys.stdin.read(2 * 1024 * 1024 + 1)
+        if len(raw) > 2 * 1024 * 1024:
+            raise HarnessError('MCP_ENTRY', '配置请求过大')
+        request = json.loads(raw)
+        if not isinstance(request, dict):
+            raise HarnessError('MCP_ENTRY', '配置请求必须是对象')
+        return {'ok': True, **edit_mcp(args.host_id, args.scope, request, project=args.project)}
     if args.command == "skill.scan":
         return {"ok": True, **scan_skills(args.source)}
     if args.command == "skill.unpack":
