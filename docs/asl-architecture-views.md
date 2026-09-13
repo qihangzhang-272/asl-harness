@@ -652,7 +652,7 @@ Hook 不单独保存运行记录。Codex、Claude Code、Cordis 使用自己的 
 
 **发现与添加的边界：**本机只扫描已知 Agent 技能目录或用户选择的目录，按真实路径去重；不扫描整块磁盘，不把同名当成同版本。GitHub 读取仓库 / 目录链接，先固定 commit，再只读解包；识别 ASL 仓库时默认只展示正式 `skills/`，不混入归档。每张技能卡片都有“添加到 Mode”，选择目标 Mode 和可选类别，预览影响后保存；“查看解析”只是辅助入口。脚本、终端命令、安装声明和共享依赖只触发配套内容提醒，不再隐藏添加按钮；只导入所选 Skill 目录，不自动复制目录外依赖、拆分仓库或运行安装脚本，既有路径、链接和结构校验仍保留。添加不等于可运行；连接 Agent 后仍需重新应用模式和检查运行环境。库中有同名 Skill 时默认复用库内版本，不覆盖已有修改；用户可以显式选择本次发现的版本替换，预览所有受影响 Mode。卡片显示库内版本所在的 Mode，点击名称进入管理；这不是两份内容相同的证明。解析是静态线索，不是完整语义理解、独立性证明或运行验收；当前不做对话导入 Agent。下载暂存不成为技能真源，不进入分享包；来源保留具体 commit 与许可记录。
 
-**配置这台电脑：**同步后检查 Mode 对应的原始依赖声明、工具路径与 MCP 名称，支持 Agent Reach 的渠道 doctor；不会把“存在”当作“可用”。点击“让 AI 配置”后，用当前电脑已安装的 Claude Code / Codex CLI 打开独立原生会话，完整任务材料留在 App 本机配置会话目录，继承原来的模型、账号与原生权限。助手阅读原始 Mode / Skill，按本机情况安装或复用依赖、处理连接并实际验证；App 可重新检查。配置助手当前只实现 Windows 入口，不迁移秘密、不自动升级宿主、不接管登录、不直接请求另一个模型 API。原生会话可能因版本、账号或网络失败；失败与“已打开 / 已结束”分开，不记录成“就绪”。
+**配置这台电脑：**同步后检查 Mode 对应的原始依赖声明、工具路径与 MCP 名称，支持 Agent Reach 的渠道 doctor；不会把“存在”当作“可用”。用户可“复制配置提示词”交给自己的 Agent，不必启动后台进程；也可主动点击“打开原生助手”，使用当前电脑已安装的 Claude Code / Codex CLI 打开独立会话，完整任务材料留在 App 本机配置会话目录，继承原来的模型、账号与原生权限。助手阅读原始 Mode / Skill，按本机情况安装或复用依赖、处理连接并实际验证；App 可重新检查。配置助手当前只实现 Windows 入口，不迁移秘密、不自动升级宿主、不接管登录、不直接请求另一个模型 API。原生会话可能因版本、账号或网络失败；失败与“已打开 / 已结束”分开，不记录成“就绪”。
 
 ```mermaid
 flowchart LR
@@ -678,7 +678,14 @@ flowchart LR
     POLL --> UI
     UI -->|用户确认实际差异| CORE
     IPC --> NATIVE["本机只读检测<br/>配置存在 / MCP 名称 / DSH 预设<br/>不是登录或实际加载的证明"]
+    NATIVE --> LOCAL["已知项目与本地 Mode<br/>发现 / 更新 / 导入共用<br/>不递归扫描整块硬盘"]
+    LOCAL --> CHOICE
+    IPC --> MCPEDIT["Claude / Codex 原生 MCP 编辑<br/>选用户或项目 → 确认后逐条写入<br/>检查文件变化、保留备份"]
+    MCPEDIT --> HOST
+    MCPEDIT --> RESULT
     CORE --> CHECK["Mode 原文 / 完整 Skill 路径<br/>本机运行时 / MCP / 可选渠道体检"]
+    CHECK --> PROMPT["复制配置提示词<br/>用户交给自己的 Agent"]
+    PROMPT -.配置后复查.-> CHECK
     IPC --> ASSIST["用户点击配置<br/>打开原生 Claude / Codex CLI<br/>沿用原生模型、权限与登录"]
     CHECK --> ASSIST
     ASSIST -.会话结束后用户复查.-> CHECK
@@ -688,7 +695,7 @@ flowchart LR
     RESULT --> UI
     classDef done fill:#dcfce7,stroke:#16a34a,color:#14532d;
     classDef generated fill:#f3f4f6,stroke:#6b7280,color:#1f2937;
-    class UI,IPC,CORE,ENV,FIELDS,GUIDE,MARKET,SCAN,CHOICE,NATIVE,CHECK,ASSIST,REMOTE,ORIGIN,POLL done;
+    class UI,IPC,CORE,ENV,FIELDS,GUIDE,MARKET,SCAN,CHOICE,NATIVE,LOCAL,MCPEDIT,CHECK,PROMPT,ASSIST,REMOTE,ORIGIN,POLL done;
     class PACK,HOST,RESULT generated;
 ```
 
