@@ -120,6 +120,8 @@ flowchart TB
         EDIT["内容管理 · 代码已测<br/>Mode 创建 / 修改 / 复制 / 归档<br/>完整技能包浏览与文件编辑 / 影响预览"]
         STEWARD["现有 AI 的整理入口 · 提示词已实现<br/>按工作目的理解场景，读取授权本地文件<br/>沿用 / 调整 / 新建 Mode；不自动启动 CLI"]
         SETUP["本机配置交接 · 代码已有<br/>Mode + 原始 Skill + 本机缺项<br/>启动原生 Claude / Codex，结束后复查"]
+        LOCAL["本机发现 · 已验证<br/>标准技能 / MCP 位置 + 已登记项目<br/>Mode 同名与同源分开；不扫描硬盘"]
+        MCPEDIT["原生 MCP 管理 · 已验证<br/>Claude / Codex 用户与项目范围<br/>逐条编辑 / 停用 / 版本检查 / 备份"]
         LEARN["培养与推荐 · 待开发<br/>相关经验召回、合并、更正与撤回<br/>没有积分或随机变异调度器"]
     end
 
@@ -167,6 +169,10 @@ flowchart TB
 
     USER --> APP
     APP -->|管理操作| INTAKE
+    APP -->|可取消读取，不锁住导航| LOCAL
+    LOCAL -->|复用已有内容，提示配置位置| INTAKE
+    APP -->|选定范围并确认| MCPEDIT
+    MCPEDIT -->|仅改原生声明，登录仍归宿主| RUNTIME
     APP -->|来源与更新窗口| UPSTREAM
     SOURCES -->|云端版本基准，不在 App 硬编码 Mode| UPSTREAM
     UPSTREAM -->|用户确认后，复用完整 Mode 包导入| PORTABLE
@@ -208,7 +214,7 @@ flowchart TB
     classDef generated fill:#f3f4f6,stroke:#6b7280,color:#1f2937,stroke-dasharray:4 3;
     classDef external fill:#f5f3ff,stroke:#7c3aed,color:#4c1d95;
     class USER,HOST,ROOT,MODES locked;
-    class SKILLS,CORE,EDIT,STEWARD,CASE,SETUP,UPSTREAM done;
+    class SKILLS,CORE,EDIT,STEWARD,CASE,SETUP,UPSTREAM,LOCAL,MCPEDIT done;
     class APP,INTAKE,PORTABLE,LEARN,CONTEXT,MODEL,ADAPTER,DSH,CC,CX,WB,FUTURE,HOOK,DSH_UI pending;
     class PROJECTION,MAP generated;
     class SOURCES,RUNTIME external;
@@ -1365,6 +1371,34 @@ MCP 的可移植性高于宿主 Plugin，因此当前架构优先让 Skill 声�
 
 <!-- ASL:PROJECT STATUS START -->
 
+### 2026-09-12 可用性修复（0.2.2，本地验收通过，发布状态见下文）
+
+**目标：**先解决读取时整页无法点击、本地已有 Mode 未被识别、MCP 只有名称没有管理入口，再盘点业务内容与愿景缺口；不扩大市场、另建数据库或自动运行 Agent。
+
+**实现边界：**React 负责显示和编辑，Electron 负责可取消读取、选定路径及写入确认；Python 复用协议识别和原生配置解析。只维护这份架构真源。新增代码按读取请求、本地目录识别、MCP 配置、对应界面分责，不向 `App.jsx` / `main.cjs` 继续堆完整功能。
+
+1. **读取与写入分离**：先补慢请求、取消后迟到结果、重复请求的失败测试，再接通下载及核心读取取消；阅读期间可导航，保存仍防重复操作。通过真实 Electron 界面验证慢网、取消、重试。
+2. **本地 Mode 识别**：复用 `WORKSPACE.md`、`modes/*/mode.yaml`、`MODE.md`，只读取已登记环境和明确选择的目录，限定范围，不扫描全盘。发现、检查更新、导入共用结果；同名不等于同源，目录别名去重，失效目录单独提示。先测跨库已有模式与冲突，再接界面。
+3. **MCP 管理**：先支持 Claude Code / Codex 的用户和选定项目，显示原文件与范围；新增、修改保留其他配置，密钥遮罩保留原值，提交前校验文件版本，原子写入并保留备份。先在隔离 home 验证作用域、损坏文件、并发修改与凭据保护，再做表单与实际 App 检查。插件和组织托管连接不冒充普通可编辑配置。
+4. **收口**：运行 Python / 桌面回归与生产构建，隔离配置检验打包程序；按功能中文小步提交并维护本节实测状态。未经验证的宿主连接、跨电脑迁移仍列为未完成；不修改个人技能源、真实原生配置和运行中的窗口。
+
+**已完成的实际变化：**
+
+- `read-requests.cjs` / `useReadTasks.jsx` 管理可取消读取；`repository-import.cjs` 承担 GitHub 下载和解析。同一 App 会话内相同提交复用解析结果，仍会查询上游版本，不新增常驻缓存数据库。读取不再把整个界面设为 inert；迟到结果不能覆盖新请求，启动恢复不能把用户拉回旧页面。写操作保留确认与串行保护，不宣称任意写入可撤销。
+- `local_modes.py` 读取 ASL 标记和 Mode 定义；本机发现、更新页、远端导入共用同一识别逻辑。已知目录包含 App 登记环境、应用项目及 Claude / Codex 登记项目；最多 64 个项目，自选目录只读下一层。普通技能识别沿用完整包扫描、深度与目录上限，不执行脚本。同名不是同源；来源 URL 是线索，真正是否覆盖仍以包差异及指纹为准。
+- `native_mcp.py` 统一配置解析、项目发现和就绪检查，不再用界面正则判断 MCP。Claude 的用户、共享项目和私有项目分开；Codex 的用户和项目 TOML 分开。新增、编辑、停用、移除只写选中条目；保存前检查完整原文件版本，保留其他字段、TOML 注释和一份备份。已知环境变量、请求头等值以占位符保留；不把原生凭据写入 Mode 或 App 偏好。符号链接配置只读，避免破坏用户原来的链接。
+- `AgentPage.jsx` / `McpPanel.jsx` / `LocalModes.jsx` 分担页面职责。MCP 可按名字、Agent、项目检索，能打开具体作用范围。刷新时退出旧表单，窄窗口编辑自动定位。复杂技能仍展示脚本、引用和依赖；配置页新增“复制配置提示词”，不强制启动 Agent。
+
+**本轮验证：**Python 128 项通过、4 项因平台 / 符号链接权限跳过；桌面 56 项通过；生产构建、冻结核心中文输入、依赖审计通过（已知漏洞 0）。真实 Electron 与冻结 EXE 使用隔离 home 和真实 Skill Library 副本验证：慢请求中切页 / 取消、真实 GitHub 4 Mode / 37 Skill 解析、本机重名 Mode 提示、项目 Skill 连同脚本加入指定 Mode、保留原来源、重开恢复、MCP 增改删与项目开关、取消确认、过期保存拒绝、TOML 注释和环境变量保留、900×680 窄窗编辑。原生确认弹窗通过隔离对话返回值测试，不宣称实测了真实账号授权或服务连接。验收过程中未修改真实 Skill Library、真实 MCP 配置或用户正在运行的窗口。
+
+0.2.2 已生成本地 Windows 便携 ZIP，387 个文件，约 166 MiB；压缩包完整性检查通过，运行文件与源码构建产物一致，仅含内置示例，不含个人业务技能、账号配置或测试库。尚未发布新的 GitHub Release，也未替换用户正在运行的 0.2.1。源码提交 / 远端检查、App 下载发布、当前窗口实际运行版本是不同状态。
+
+本机只读抽查：Claude / Codex 登记项目 52 个，发现 4 处含 MCP 的作用域、8 个条目，0 处解析错误；单次核心发现约 0.15 秒（不是全 App 启动耗时，也不代表所有机器）。仅本轮明确检查的标准目录可称已发现；任意磁盘目录、其他系统用户、托管插件与远端账号中的连接不在这个数量内。WorkBuddy 保留原有配置名称识别；DeepSeek Preset 保留原有识别和导出，本轮没有假装实现它们全部 MCP 的原生编辑。
+
+实现参考：[CC Switch 的逐条导入与原配置保留](https://github.com/farion1231/cc-switch/blob/main/src-tauri/src/mcp/claude.rs)、[Claude MCP 原生作用域与开关](https://code.claude.com/docs/en/mcp)、[Codex MCP 配置](https://learn.chatgpt.com/docs/extend/mcp?surface=cli)。仅借鉴交互和范围处理，不复制其数据库、账号管理或全库同步机制。
+
+**业务内容盘点与后续缺口：**正式库仍是 4 个 Mode、37 个去重 Skill，本轮不改写业务方法。它们尚未维护完整的 `spec.architecture` 关系，App 如实显示技能节点，不能宣称已经自动理解工作逻辑。下一步应由用户或其授权 Agent 补场景关联，再做真实 Agent 的依赖安装 / 登录 / 工作任务验收；不继续加一套强制 Workflow。跨电脑运行、未知复杂仓库的自动融合、WorkBuddy / DSH 原生 MCP 编辑仍不计入完成。
+
 ### GitHub 分发与安全检查（2026-09-12，0.2.1）
 
 源码通过 Git 提交与同步，Windows 可执行程序作为 GitHub Release 附件分发，不将二进制包、账号或工作环境放进源码仓库。采用 [GitHub Releases](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository) 的版本标签、下载附件和说明机制，参考 CC Switch 的 Windows Portable ZIP 命名与解压使用方式。桌面版本标签为 `app-v0.2.1`，与协议 / Python 核心版本分开；中英文 README 提供直接下载及 EXE 打开说明。
@@ -1458,7 +1492,8 @@ Windows 便携版在本机成功构建并启动；移除子进程 PATH 与系统
 | 状态 | 模块 | 当前事实 | 尚缺的增量 |
 | --- | --- | --- | --- |
 | 🟢 已实现 | Environment 与 Mode | Personal / 公开 Skill Library 各 37 Skill、4 Mode；完整包与 SOURCE 留在本地；可选 `spec.capabilities` 保存分类，`spec.architecture` 保存技能显示与关联 | 没有地图也可使用；跨资料 / 记忆关联与模型偏好未加入 |
-| 🟢 代码已测 | Harness CLI | 19 个命令；本轮新增 `skill.files`、`environment.guide`，文件保存复用 `environment.edit` | 不重写 Agent Loop；旧版全局 CLI 需更新或使用 App 随包核心 |
+| 🟢 代码已测 | Harness CLI | 23 个命令；本轮新增 `environment.discover`、`mcp.discover`、`mcp.inspect`、`mcp.edit`；文件编辑仍走原入口 | 不重写 Agent Loop；旧版全局 CLI 需更新或使用 App 随包核心 |
+| 🟢 本机已测 | 本机发现与 MCP 编辑 | 标准目录和已登记项目有界发现；Claude / Codex 原生作用域管理；读取取消、重复识别、隔离配置增改删及并发保护已测 | 未登记目录需选择；发现配置不等于登录或连接成功；不管理所有宿主的插件内部 MCP |
 | 🟢 本机已测 | 用户级同步 | Codex / Claude 原生用户目录、预览、切换 / 停用、冲突保护与原子回滚；Codex GUI 写入链在隔离 home 已完成 | 全局原生其他技能仍可用，不是强沙箱；来源改变后需主动刷新；不自动接管已有同名技能 |
 | 🟢 代码已测 | 局部保护 | 日常投影 / Hook 只检查当前 Mode 闭包；用户改动冲突不被静默覆盖 | 不相关候选不能阻断日常工作；不承担业务规则语义裁判 |
 | 🟢 代码已测 | DeepSeek Preset 导出 | 完整能力复制、配置指纹、显式 Hook 定位已有实现 | 生成记录带本机绝对路径，是本机投影，不是通用迁移包 |
@@ -1489,7 +1524,7 @@ Windows 便携版在本机成功构建并启动；移除子进程 PATH 与系统
 
 这些是实现推进顺序，不是业务工作流。协议、App 与适配器围绕同一个真实操作闭环推进，不先造一个巨大的抽象协议，也不把可分享和模型配置拖成遥远的附加功能。
 
-**当前工程形式：**独立桌面 App 使用 Electron + React + Vite，图标来自 Lucide，技能架构使用 Mermaid 与 SVG 缩放。复用成熟组件，不新增常驻 API 服务或数据库。`desktop/bridge.cjs` 把受限管理操作转成 CLI 参数，编辑内容通过 stdin 传入；`management.py` 执行内容管理并生成空环境 / 已有模式的整理提示词。整理入口只复制提示词，不调用 `assistant.cjs`。`user_projection.py` 维护受管用户副本与同步记录；`readiness.py` 读原始 Skill 及机器条件；现有配置页的 `assistant.cjs` 才用固定程序和数据参数启动原生 CLI，任务文件与结束回执留在 App 本机目录，不存原生输出或密钥。`library.cjs` 在同一偏好文件保存最近环境、各环境的界面位置、来源与配置项目引用，串行写入避免并发丢失。`native.cjs` 只读检测，`market.cjs` 只读发现，`repository.cjs` 查询上游、维护可迁移来源记录，不另造数据库。Windows 构建内置 Python 核心；DSH 内的原生管理插件仍为后续入口。
+**当前工程形式：**独立桌面 App 使用 Electron + React + Vite，图标来自 Lucide，技能架构使用 Mermaid 与 SVG 缩放。复用成熟组件，不新增常驻 API 服务或数据库。`desktop/bridge.cjs` 把受限管理操作转成 CLI 参数，编辑内容通过 stdin 传入；`management.py` 执行内容管理并生成空环境 / 已有模式的整理提示词。整理入口只复制提示词，不调用 `assistant.cjs`。`user_projection.py` 维护受管用户副本与同步记录；`readiness.py` 读原始 Skill 及机器条件；现有配置页的 `assistant.cjs` 才用固定程序和数据参数启动原生 CLI，任务文件与结束回执留在 App 本机目录，不存原生输出或密钥。`library.cjs` 在同一偏好文件保存最近环境、各环境的界面位置、来源与配置项目引用，串行写入避免并发丢失。`native.cjs` 汇总只读宿主检测，`native_mcp.py` 统一读取和逐条编辑原生 MCP，`local_modes.py` 识别已登记的本地环境；`market.cjs` 只读发现，`repository.cjs` 维护可迁移来源记录，`repository-import.cjs` 下载和解析完整仓库包。`read-requests.cjs` / `useReadTasks.jsx` 隔离可取消读取，不干预写入确认。Windows 构建内置 Python 核心；DSH 内的原生管理插件仍为后续入口。
 
 这个选择的理由是减少重写：现有核心是 Python，而 DSH / 桌面 UI 生态主要是 JavaScript / TypeScript。仅做 DSH 插件会失去独立跨宿主管理能力；直接 Fork CC Switch 会继承本任务不需要的提供商与代理业务；先引入 Rust 后端也不会消除现有 Python 核心。先用一条产品路径验证，再决定是否有必要更换技术。
 
