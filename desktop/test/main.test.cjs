@@ -108,3 +108,19 @@ test("unparsed remote modes cannot be imported by guessing a cache path", async 
   assert.match(reply.error, /重新解析仓库/);
   assert.equal(app.executed.length, 0);
 });
+
+test('cancellable reads reject writes and native MCP saves require explicit scope and confirmation', async t => {
+  const app = await desktop(t);
+  const initial = (await app.invoke('initial')).value;
+  for (const [action, values] of [['edit', {workspace:initial.example,apply:true}], ['mcpSave',{host:'codex-app'}], ['nativeMcp',{source:[]}]] ) {
+    assert.equal((await app.invoke('read','qa-read','run',[action,values])).ok,false);
+  }
+  assert.equal((await app.invoke('mcp-save',{host:'codex-app',scope:'project',project:app.home,request:{name:'new'}})).ok,false);
+  const before = app.executed.length;
+  const canceled = await app.invoke('mcp-save',{host:'codex-app',scope:'user',request:{name:'new',definition:{command:'node'}}});
+  assert.equal(canceled.value.canceled,true);
+  assert.equal(app.executed.length,before);
+  app.dialog.confirm=1;
+  assert.equal((await app.invoke('mcp-save',{host:'codex-app',scope:'user',request:{name:'new',definition:{command:'node'}}})).ok,true);
+  assert.equal(app.executed.at(-1)[0],'mcpSave');
+});

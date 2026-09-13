@@ -1,5 +1,10 @@
 const { contextBridge, ipcRenderer } = require("electron");
 contextBridge.exposeInMainWorld("asl", {
+  read: (id, method, args) => ipcRenderer.invoke('asl:read', id, method, args),
+  cancelRead: id => ipcRenderer.invoke('asl:cancel-read', id),
+  localModes: parent => ipcRenderer.invoke('asl:local-modes', parent),
+  mcp: values => ipcRenderer.invoke('asl:mcp', values),
+  mcpSave: values => ipcRenderer.invoke('asl:mcp-save', values),
   initial: () => ipcRenderer.invoke("asl:initial"),
   remember: (workspace) => ipcRenderer.invoke("asl:remember", workspace),
   rememberView: (workspace,view) => ipcRenderer.invoke('asl:remember-view',workspace,view),

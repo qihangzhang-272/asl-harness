@@ -139,3 +139,13 @@ export function filterArchitecture(architecture, included) {
   return {nodes:(architecture.nodes||[]).filter(n=>included.has(n.skill)),
     edges:(architecture.edges||[]).filter(e=>included.has(e.from)&&included.has(e.to))};
 }
+export function repositoryKey(value) {
+  return (value || '').replace(/^git@github\.com:/i, 'https://github.com/')
+    .replace(/\/$/, '').replace(/\.git$/i, '').toLowerCase();
+}
+
+export function matchLocalModes(modes, id, repository) {
+  return (modes || []).filter(mode => mode.id === id).map(mode => ({ ...mode,
+    sameSource: !!repository && repositoryKey(mode.repository || mode.upstream?.repository) === repositoryKey(repository),
+  })).sort((a, b) => Number(b.sameSource) - Number(a.sameSource));
+}

@@ -1,6 +1,6 @@
 """Build a Windows portable desktop folder without changing the user's Python.
 
-Run with a build-only venv containing PyInstaller and PyYAML, after npm ci in desktop/.
+Run with a build-only venv containing PyInstaller and project dependencies, after npm ci in desktop/.
 The output path must be new. No installer, auto-update service, or signing claim.
 """
 from __future__ import annotations
@@ -40,7 +40,7 @@ def build(output: Path) -> Path:
     (app / "electron.exe").rename(app / "ASL Workspace.exe")
     assets = app / "resources/app"
     assets.mkdir()
-    for name in ("package.json", "main.cjs", "preload.cjs", "bridge.cjs", "library.cjs", "native.cjs", "market.cjs", "assistant.cjs", "repository.cjs"):
+    for name in ("package.json", "main.cjs", "preload.cjs", "bridge.cjs", "library.cjs", "native.cjs", "market.cjs", "assistant.cjs", "repository.cjs", "read-requests.cjs", "repository-import.cjs"):
         shutil.copy2(desktop / name, assets / name)
     shutil.copytree(desktop / "dist", assets / "dist")
     shutil.copytree(work / "dist/asl-harness", app / "resources/core")
@@ -70,9 +70,10 @@ def build(output: Path) -> Path:
             if source.is_file() and source.name.lower().startswith(("license", "copying", "notice")):
                 destination.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(source, destination / source.name)
-    for file in importlib.metadata.files("PyYAML") or []:
-        if file.name == "LICENSE":
-            shutil.copy2(file.locate(), notices / "PyYAML-LICENSE.txt")
+    for package in ('PyYAML', 'tomlkit'):
+        for file in importlib.metadata.files(package) or []:
+            if file.name == "LICENSE":
+                shutil.copy2(file.locate(), notices / f"{package}-LICENSE.txt")
     for name in ("LICENSE.txt", "LICENSE_PYTHON.txt", "LICENSE"):
         source = Path(sys.base_prefix) / name
         if source.is_file():

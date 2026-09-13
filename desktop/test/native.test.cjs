@@ -25,11 +25,14 @@ test("native inventory exposes configuration presence, never credentials", async
     await fs.writeFile(
       path.join(home, ".claude.json"),
       JSON.stringify({
-        mcpServers: { example: { env: { SECRET: "do-not-return" } } },
+        mcpServers: { example: { command: 'node', env: { SECRET: "do-not-return" } } },
         oauthAccount: { token: "hidden" },
       }),
     );
-    const data = await nativeInventory(home);
+    const { runCore } = require('../bridge.cjs');
+    const env = { USERPROFILE: home, HOME: home, CODEX_HOME: path.join(home, '.codex'), CLAUDE_CONFIG_DIR: '' };
+    const mcp = await runCore('nativeMcp', { source: [] }, { root: path.resolve(__dirname, '../..'), env });
+    const data = await nativeInventory(home, env, mcp);
     assert.equal(
       data.hosts.find((h) => h.id === "claude-code").configured,
       true,
@@ -76,4 +79,15 @@ test("folder dialogs use an existing directory, not a deleted test Desktop", asy
   await fs.writeFile(file, "not a directory");
   assert.equal(await existingDirectory([path.join(home, "old-test", "Desktop"), file, home]), home);
   assert.equal(await existingDirectory([path.join(home, "missing")]), undefined);
+});
+
+test('local skill discovery includes registered project roots without assuming global sync', async t => {
+  const { localSkillRoots } = require('../native.cjs');
+  const home = await fs.mkdtemp(path.join(os.tmpdir(), 'asl-project-skills-'));
+  t.after(() => fs.rm(home, { recursive: true, force: true }));
+  const project = path.join(home, 'project'), skillRoot = path.join(project, '.claude', 'skills');
+  await fs.mkdir(skillRoot, {recursive:true});
+  const result = await localSkillRoots(home, {}, [project, project]);
+  assert.equal(result.length, 1);
+  assert.equal(result[0].path, skillRoot);
 });

@@ -1,5 +1,16 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
+
+test('local Mode matching spans environments but never treats a name as source identity', async () => {
+  const { matchLocalModes } = await import('../src/presentation.mjs');
+  const rows = [{id:'write', workspace:'/a', repository:'git@github.com:Author/Skills.git'},
+    {id:'write', workspace:'/b', repository:'https://github.com/other/skills'},
+    {id:'research', workspace:'/c', repository:'https://github.com/author/skills'}];
+  const matches = matchLocalModes(rows, 'write', 'https://github.com/author/skills/');
+  assert.equal(matches.length, 2);
+  assert.equal(matches[0].sameSource, true);
+  assert.equal(matches[1].sameSource, false);
+});
 test('restoration validates mode and skill against the selected local environment',async()=>{
   const {restoreView}=await import('../src/presentation.mjs');
   const catalog={modes:[{id:'research',skills:['lookup']},{id:'writing',skills:['draft']}],skills:[{id:'lookup'},{id:'draft'}]};

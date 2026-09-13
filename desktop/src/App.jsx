@@ -7,6 +7,9 @@ import React, {
   useState,
 } from "react";
 import SkillFiles from './SkillFiles.jsx';
+import AgentPage from './AgentPage.jsx';
+import { LocalModes, RepositoryModes } from './LocalModes.jsx';
+import { useReadTasks, ReadStatus } from './useReadTasks.jsx';
 import {ArchitectureMap, ArchitectureEditor, MapIcon} from './Architecture.jsx';
 import {
   Layers3,
@@ -42,6 +45,7 @@ import {
   filterArchitecture,
   shortText,
   restoreView,
+  matchLocalModes,
 } from "./presentation.mjs";
 
 const baseName = (value) => (value || "").split(/[\\/]/).filter(Boolean).pop();
@@ -102,6 +106,7 @@ function Dialog({ title, children, onClose, wide = false }) {
         <IconButton icon={X} label="关闭" onClick={onClose} />
       </div>
       <div className="dialog-body">
+        {notice?.reads && <ReadStatus tasks={notice.reads}/>}
         {notice?.error && (
           <div className="dialog-error" role="alert">
             <AlertCircle size={17} />
@@ -222,7 +227,7 @@ function DiscoveredSkills({ report, catalog, readOnly, onInspect, onAdd, onMode,
   </>;
 }
 
-function ModeSkills({ mode, catalog, Dialog, onClose, onSave, onAdd, onInspect, onMode, task }) {
+function ModeSkills({ mode, catalog, Dialog, onClose, onSave, onAdd, onInspect, onMode, task, read }) {
   const [tab, setTab] = useState('library'), [roots, setRoots] = useState(new Set(mode.roots));
   const [query, setQuery] = useState(''), [url, setUrl] = useState(''), [report, setReport] = useState(null);
   const included = new Set(roots);
@@ -232,7 +237,7 @@ function ModeSkills({ mode, catalog, Dialog, onClose, onSave, onAdd, onInspect, 
     {tab==='library' ? <><div className="field-heading"><span>{included.size} 个技能在当前 Mode 中</span><small>移出 Mode 不删除技能文件</small></div><div className="search"><Search size={16}/><input aria-label="筛选库内技能" placeholder="查找技能" value={query} onChange={e=>setQuery(e.target.value)}/></div>
       <div className="picker-list mode-member-list">{catalog.skills.filter(s=>`${s.title} ${s.id}`.toLowerCase().includes(query.toLowerCase())).map(s=><label className="skill-picker-item" key={s.id}><input type="checkbox" checked={included.has(s.id)} disabled={included.has(s.id)&&!roots.has(s.id)} onChange={e=>setRoots(old=>{const next=new Set(old);e.target.checked?next.add(s.id):next.delete(s.id);return next;})}/><span><strong>{s.title}</strong><small>{shortText(s.description,85)}</small></span>{included.has(s.id)&&!roots.has(s.id)&&<Tag>依赖带入</Tag>}</label>)}</div>
       <div className="dialog-actions"><button onClick={onClose}>关闭</button><button className="primary" disabled={!roots.size} onClick={()=>onSave({operation:'mode.save',id:mode.id,expected:mode.fingerprint,document:mode.document,skills:[...roots]})}>保存所选技能</button></div></> : <>
-      {tab==='github' ? <form className="search large" onSubmit={e=>{e.preventDefault();task(async()=>setReport(await api('githubSkills',url)));}}><Link2 size={16}/><input type="url" required aria-label="添加技能的 GitHub 地址" placeholder="粘贴仓库或技能目录地址" value={url} onChange={e=>setUrl(e.target.value)}/><button className="primary">解析技能</button></form> : <div className="heading-actions"><button className="primary" onClick={()=>task(async()=>setReport(await api('localSkills')))}>扫描本机技能</button><button onClick={()=>task(async()=>{const folder=await api('choose','skillFolder');if(folder)setReport(await api('localSkills',folder));})}><FolderOpen size={15}/>选择目录</button></div>}
+      {tab==='github' ? <form className="search large" onSubmit={e=>{e.preventDefault();read('mode-discovery', '解析技能', async call=>setReport(await call('githubSkills',url)));}}><Link2 size={16}/><input type="url" required aria-label="添加技能的 GitHub 地址" placeholder="粘贴仓库或技能目录地址" value={url} onChange={e=>setUrl(e.target.value)}/><button className="primary">解析技能</button></form> : <div className="heading-actions"><button className="primary" onClick={()=>read('mode-discovery', '发现本机技能', async call=>setReport(await call('localSkills')))}>扫描本机技能</button><button onClick={()=>read('mode-discovery', '读取技能目录', async call=>{const folder=await call('choose','skillFolder');if(folder)setReport(await call('localSkills',folder));})}><FolderOpen size={15}/>选择目录</button></div>}
       <p className="map-note">添加目标：{mode.title}。支持 ASL 库与普通 SKILL.md 技能包；不会执行仓库里的安装脚本。</p>
       {report ? <DiscoveredSkills report={report} catalog={catalog} onAdd={onAdd} onInspect={onInspect} onMode={onMode}/> : <Empty title="选择想加入的技能" icon={Puzzle}><p>解析结果会列出技能与配套内容，由你决定添加哪些。</p></Empty>}
     </>}
@@ -628,7 +633,7 @@ function SetupDialog({ values, title, onClose, task, resultMessage }) {
     </> : <div className="inline-note"><LoaderCircle size={18} className="spin" />正在检查本机环境…</div>}
     <Field label="用谁来配置"><select value={assistant} onChange={e => setAssistant(e.target.value)}><option value="" disabled>选择已安装的 Agent</option>{assistants.map(item => <option key={item.id} value={item.id} disabled={!item.available}>{item.name}{!item.available && " · 未安装"}</option>)}</select><small>沿用该工具的模型、套餐和登录。安装授权在原生窗口确认。</small></Field>
     {session && <div className="inline-note">{session.status === "failed" ? <AlertCircle size={18} /> : <Check size={18} />}<span>{session.status === "failed" ? "原生 Agent 未成功完成。请检查其模型与连接，或换一个助手重试。" : session.status === "ended" ? "配置会话已结束，请复查本机结果。" : "配置助手已打开，请在原生窗口继续。"}<small>会话结束不代表所有连接已验证。</small></span></div>}
-    <div className="dialog-actions"><button onClick={() => task(() => check(true))} disabled={checking}><RotateCw size={16} className={checking ? "spin" : ""} />重新检查</button><button className="primary" disabled={!assistant || !report || checking} onClick={() => task(async () => { const result = await api("setup", assistant, values); if (!result.canceled) setSession(result); })}>让 AI 配置<ArrowUpRight size={16} /></button></div>
+    <div className="dialog-actions"><button onClick={() => task(() => check(true))} disabled={checking}><RotateCw size={16} className={checking ? "spin" : ""} />重新检查</button><button disabled={!report || checking} onClick={()=>task(()=>api('copyText',report.brief))}><Copy size={16}/>复制配置提示词</button><button className="primary" disabled={!assistant || !report || checking} onClick={() => task(async () => { const result = await api("setup", assistant, values); if (!result.canceled) setSession(result); })}>打开原生助手<ArrowUpRight size={16} /></button></div>
   </Dialog>;
 }
 
@@ -840,13 +845,17 @@ export default function App() {
   const [workspace, setWorkspace] = useState(null);
   const [catalog, setCatalog] = useState(null);
   const [modeId, setModeId] = useState(null);
-  const [page, setPage] = useState("modes");
+  const [page, updatePage] = useState("modes");
+  const navigationVersion = useRef(0);
+  const setPage = value => { navigationVersion.current++; updatePage(value); };
   const [view, setView] = useState("map");
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState(null);
   const [texts, setTexts] = useState(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(null);
+  const reads = useReadTasks(error => setMessage({ error: true, text: error.message }));
+  const read = reads.read;
   const [modal, setModal] = useState(null);
   const [ready,setReady]=useState(false);
   const [resumeDiscovery,setResumeDiscovery]=useState(null);
@@ -854,6 +863,7 @@ export default function App() {
   const [native, setNative] = useState(null);
   const [provider, setProvider] = useState("github-import");
   const [localReport, setLocalReport] = useState(null);
+  const [localModeReport, setLocalModeReport] = useState(null);
   const [extraSkillRoot, setExtraSkillRoot] = useState(null);
   const [githubUrl, setGithubUrl] = useState("");
   const [githubReport, setGithubReport] = useState(null);
@@ -881,6 +891,10 @@ export default function App() {
   const [market, setMarket] = useState(null);
   const [marketError, setMarketError] = useState("");
   const gate = useRef(false);
+  const loadRequest = useRef(0);
+  useEffect(() => {
+    reads.cancel('github'); reads.cancel('local'); reads.cancel('market'); reads.cancel('detail');
+  }, [workspace]);
   const [externalChange, setExternalChange] = useState(false);
   useEffect(() => {
     if (!workspace || workspace === initial?.example) return;
@@ -895,8 +909,8 @@ export default function App() {
   useEffect(() => {
     if (externalChange && !modal && !busy) {
       setExternalChange(false);
-      task(async()=>{
-        try { await load(workspace); }
+      read('environment', '刷新工作环境', async call=>{
+        try { await load(workspace, call); }
         catch (error) { throw new Error(`本地文件需要修正：${error.message}。界面暂保留上次有效内容。`); }
       });
     }
@@ -905,7 +919,7 @@ export default function App() {
   const contentRef = useRef(null);
   useEffect(() => { contentRef.current?.scrollTo(0, 0); }, [page, modeId]);
   async function task(action) {
-    if (gate.current) return;
+    if (gate.current) { setMessage({ text: '当前保存或预览尚未结束，请稍候。' }); return; }
     gate.current = true;
     setBusy(true);
     setMessage(null);
@@ -918,25 +932,32 @@ export default function App() {
       setBusy(false);
     }
   }
-  async function load(root) {
+  async function load(root, call = api) {
+    const request = ++loadRequest.current;
+    const navigation = navigationVersion.current;
     detailRequest.current++;
     setTexts(null);
-    const data = await api("run", "catalog", { workspace: root });
-    const preferences=await api('remember',root);
+    const data = await call("run", "catalog", { workspace: root });
+    if (request !== loadRequest.current) return;
+    const preferences=await call('remember',root);
+    if (request !== loadRequest.current) return;
     const changed=root!==workspace;
     setWorkspace(root);
     setCatalog(data);
     if(changed){
       const saved=restoreView(data,preferences.views?.[root]);
-      setModeId(saved.mode);setPage(saved.page);setView(saved.view);setQuery(saved.query);
+      setModeId(saved.mode);setView(saved.view);setQuery(saved.query);
+      // A late startup read must not undo a page the user has already opened.
+      const restorePage = navigation === navigationVersion.current;
+      if (restorePage) setPage(saved.page);
       setProvider(saved.provider);setGithubUrl(saved.githubUrl);setGithubReport(null);setLocalReport(null);
       setSelected(null);
-      if(saved.skill)await selectSkill(data.skills.find(s=>s.id===saved.skill),root);
-      if(saved.page==='discover' && (saved.provider==='local'||saved.provider==='github-import'&&saved.githubUrl))setResumeDiscovery(saved);
+      if(saved.skill)await selectSkill(data.skills.find(s=>s.id===saved.skill),root,call);
+      if(restorePage && saved.page==='discover' && (saved.provider==='local'||saved.provider==='github-import'&&saved.githubUrl))setResumeDiscovery(saved);
     }else{
       setModeId(previous=>data.modes.some(m=>m.id===previous)?previous:data.modes[0]?.id);
       const current=data.skills.find(s=>s.id===selected?.id);
-      if(current)await selectSkill(current,root);
+      if(current)await selectSkill(current,root,call);
       else setSelected(null);
     }
     setInitial((previous) => ({
@@ -947,12 +968,13 @@ export default function App() {
         ...(previous?.libraries || []).filter((p) => p !== root),
       ],
     }));
+    return true;
   }
   useEffect(() => {
-    task(async () => {
-      const data = await api("initial");
+    read('environment', '打开工作环境', async call => {
+      const data = await call("initial");
       setInitial(data);
-      if (data.workspace) await load(data.workspace);
+      if (data.workspace) await load(data.workspace, call);
       setReady(true);
     });
   }, []);
@@ -964,9 +986,9 @@ export default function App() {
   useEffect(()=>{
     if(!resumeDiscovery||busy)return;
     const saved=resumeDiscovery;setResumeDiscovery(null);
-    task(async()=>{
-      if(saved.provider==='local')setLocalReport(await api('localSkills'));
-      else setGithubReport(await api('githubSkills',saved.githubUrl));
+    read(saved.provider === 'local' ? 'local' : 'github', '恢复发现结果', async call=>{
+      if(saved.provider==='local')setLocalReport(await call('localSkills'));
+      else setGithubReport(await call('githubSkills',saved.githubUrl));
     });
   },[resumeDiscovery,busy]);
   useEffect(()=>{
@@ -976,9 +998,22 @@ export default function App() {
     return ()=>window.removeEventListener('focus',check);
   },[initial,workspace]);
   useEffect(() => {
-    if (page === "agents") task(async () => setNative(await api("native")));
-    if (page === "discover" && provider === "local" && !localReport) task(async () => setLocalReport(await api("localSkills")));
+    if (page === "agents") read('native', '读取 Agent 配置', async call => setNative(await call("native")));
+    if (page === "discover" && provider === "local" && !localReport) read('local', '发现本机技能', async call => setLocalReport(await call("localSkills")));
   }, [page, provider]);
+  useEffect(() => {
+    if (page === 'discover' || page === 'updates') scanLocalModes();
+  }, [page, workspace, updateTick]);
+  const scanLocalModes = parent => read('local-modes', '识别本机工作模式', async call => setLocalModeReport(await call('localModes', parent)));
+  const chooseModeDirectory = async () => {
+    const parent = await api('choose', 'skillSearchRoot');
+    if (parent) await scanLocalModes(parent);
+  };
+  const openLocalMode = async item => {
+    if (busy) return;
+    if (!await openLibrary(item.workspace)) return;
+    setModal(null); setModeId(item.id); setPage('modes');
+  };
   const mode = catalog?.modes.find((m) => m.id === modeId);
   const readOnly = workspace === initial?.example;
   const modeSkills = useMemo(
@@ -990,13 +1025,14 @@ export default function App() {
   );
   async function chooseLibrary() {
     const root = await api("choose", "environment");
-    if (root) await load(root);
+    if (root) await openLibrary(root);
   }
-  async function selectSkill(skill,root=workspace) {
+  const openLibrary = root => read('environment', '打开工作环境', call => load(root, call));
+  async function selectSkill(skill,root=workspace,call=api) {
     setSelected(skill);
     setTexts(null);
     const sequence = ++detailRequest.current;
-    const data = await api("readSkill", root, skill.id);
+    const data = await call("readSkill", root, skill.id);
     if (sequence === detailRequest.current) setTexts(data);
   }
   async function editContent(request, addedTo) {
@@ -1054,9 +1090,12 @@ export default function App() {
   async function inspectGithub(url = githubUrl) {
     setGithubReport(null);
     setGithubUrl(url);
-    setGithubReport(await api("githubSkills", url));
     setProvider("github-import");
     setPage("discover");
+    return read('github', '读取 GitHub 仓库', async call => {
+      setLocalModeReport(await call('localModes'));
+      setGithubReport(await call('githubSkills', url));
+    });
   }
   function connectCloud() { setModal(null); setProvider("github-import"); setPage("discover"); }
   async function openGuide(modeId) {
@@ -1069,16 +1108,22 @@ export default function App() {
     if(target){await load(target);setModal(null);}
     else{const data=await api('initial');if(data.workspace)await load(data.workspace);}
   }
-  async function importRepositoryMode(item) {
+  async function importRepositoryMode(item, chosenTarget) {
+    if (!chosenTarget) {
+      const local = await api('localModes');
+      setLocalModeReport(local);
+      const matches = matchLocalModes(local.modes, item.id, githubReport.repository);
+      if (matches.length) { setModal({ kind: 'repository-target', item, matches }); return; }
+    }
     const pack = await api("repositoryMode", githubReport.snapshot, item.id);
-    const target = workspace && !readOnly ? workspace : initial.managedLibrary;
+    const target = chosenTarget || (workspace && !readOnly ? workspace : initial.managedLibrary);
     const report = await api("run", "import", { source: pack.source, target });
     setModal({ kind: "import-review", source: pack.source, target, report, title: item.title, replace: false });
   }
   async function searchMarket() {
     setMarketError("");
     try {
-      setMarket(await api("discover", provider, marketQuery));
+      await read('market', '搜索公开目录', async call => setMarket(await call("discover", provider, marketQuery)));
     } catch (e) {
       setMarketError(e.message);
       setMarket(null);
@@ -1111,8 +1156,8 @@ export default function App() {
   );
 
   return (
-    <NoticeContext.Provider value={{ ...message, busy }}>
-      <div className="app" inert={busy} aria-busy={busy}>
+    <NoticeContext.Provider value={{ ...message, busy, reads }}>
+      <div className="app" aria-busy={busy}>
         <aside className="sidebar">
           <div className="brand">
             <span className="brand-symbol">
@@ -1204,7 +1249,7 @@ export default function App() {
             <IconButton
               icon={FolderOpen}
               label="切换技能库"
-              onClick={() => task(chooseLibrary)}
+              onClick={() => chooseLibrary()}
             />
           </div>
           <small className="app-version">{initial?.version && `v${initial.version}${initial.packaged?'':' · 开发版'}`}</small>
@@ -1246,6 +1291,11 @@ export default function App() {
           </header>
           <div className="content-with-detail">
             <main className="content" ref={contentRef}>
+              {!modal && <ReadStatus tasks={reads}/>}
+              {['discover', 'updates'].includes(page) && <details className="local-mode-disclosure" open={provider === 'local'}>
+                <summary>本机工作模式 · {localModeReport?.modes.length ?? '读取中'}</summary>
+                <LocalModes report={localModeReport} onOpen={openLocalMode} onScan={()=>scanLocalModes()} onChoose={()=>task(chooseModeDirectory)}/>
+              </details>}
               {!catalog && !["discover", "agents", "updates"].includes(page) ? (
                 <div className="welcome">
                   <div className="welcome-logo">
@@ -1266,13 +1316,13 @@ export default function App() {
                     从这台电脑开始
                   </button>
                   <button className="welcome-secondary" onClick={connectCloud}><Download size={17}/>导入别人分享的工作模式</button>
-                  <button className="text-button" onClick={() => task(chooseLibrary)}>打开本地环境（高级）</button>
+                  <button className="text-button" onClick={() => chooseLibrary()}>打开本地环境（高级）</button>
                   {initial?.libraries?.length > 0 && (
                     <div className="recent-list">
                       {initial.libraries.map((root) => (
                         <button
                           key={root}
-                          onClick={() => task(() => load(root))}
+                          onClick={() => openLibrary(root)}
                         >
                           <Layers3 size={18} />
                           <span>{baseName(root)}</span>
@@ -1283,7 +1333,7 @@ export default function App() {
                   )}
                   <button
                     className="text-button"
-                    onClick={() => task(() => load(initial.example))}
+                    onClick={() => openLibrary(initial.example)}
                   >
                     查看内置示例
                     <ChevronRight size={14} />
@@ -1297,7 +1347,7 @@ export default function App() {
                     {updates?.error && <p className="inline-note">{updates.error}。本地模式仍可使用。</p>}
                     {!catalog?.modes.some(m => m.upstream) ? <Empty icon={Link2} title="尚未连接云端 Mode"><p>从符合 ASL 协议的 GitHub 仓库导入 Mode，这里会持续显示来源和更新。</p><button className="primary" onClick={connectCloud}>连接云端仓库</button></Empty> : <div className="update-list">{catalog.modes.filter(m => m.upstream).map(item => {
                       const row = updates?.modes.find(r => r.mode === item.id);
-                      return <article className="update-card" key={item.id}><div className="field-heading"><button className="row-main" onClick={() => showMode(item.id)}><Layers3 size={21} /><strong>{item.title}</strong><ChevronRight size={15} /></button><Tag tone={row?.status === "error" ? "warning" : ""}>{({current:"上游暂无新提交", "new-commit":"上游有新提交", error:"暂时无法检查"})[row?.status] || "等待检查"}</Tag></div><p>{item.upstream.repository.replace("https://github.com/", "")}</p><p className="muted">已导入 {item.upstream.commit.slice(0, 8)}{row?.status === "new-commit" && ` → 云端 ${row.commit.slice(0, 8)}`}</p>{row?.error && <p className="error-text">{row.error}；不会影响本地使用。</p>}<div className="heading-actions"><button onClick={() => task(() => api("external", item.upstream.repository))}><ArrowUpRight size={15} />查看仓库</button><button className={row?.status === "new-commit" ? "primary" : ""} onClick={() => task(() => inspectGithub(item.upstream.url))}>查看 Mode 差异<ChevronRight size={15} /></button></div></article>;
+                      return <article className="update-card" key={item.id}><div className="field-heading"><button className="row-main" onClick={() => showMode(item.id)}><Layers3 size={21} /><strong>{item.title}</strong><ChevronRight size={15} /></button><Tag tone={row?.status === "error" ? "warning" : ""}>{({current:"上游暂无新提交", "new-commit":"上游有新提交", error:"暂时无法检查"})[row?.status] || "等待检查"}</Tag></div><p>{item.upstream.repository.replace("https://github.com/", "")}</p><p className="muted">已导入 {item.upstream.commit.slice(0, 8)}{row?.status === "new-commit" && ` → 云端 ${row.commit.slice(0, 8)}`}</p>{row?.error && <p className="error-text">{row.error}；不会影响本地使用。</p>}<div className="heading-actions"><button onClick={() => task(() => api("external", item.upstream.repository))}><ArrowUpRight size={15} />查看仓库</button><button className={row?.status === "new-commit" ? "primary" : ""} onClick={() => inspectGithub(item.upstream.url)}>查看 Mode 差异<ChevronRight size={15} /></button></div></article>;
                     })}</div>}
                     <p className="muted">新提交可能只改了仓库其他内容；导入预览会列出这个 Mode 的实际差异。只比较上游版本，不把本地编辑误称为已与云端一致。</p>
                   </section>}
@@ -1372,7 +1422,7 @@ export default function App() {
                       </div>
                       <div className="mode-origin">
                         <Link2 size={16} />
-                        {mode.upstream ? <><span>{mode.upstream.repository.replace("https://github.com/", "")}<small>已导入 {mode.upstream.commit.slice(0, 8)} · 本地可编辑副本</small></span><button onClick={() => task(() => inspectGithub(mode.upstream.url))}><RotateCw size={14} />检查上游</button></> : <><span>本地模式<small>尚未绑定云端来源</small></span><button onClick={connectCloud}>连接云端仓库<ChevronRight size={14} /></button></>}
+                        {mode.upstream ? <><span>{mode.upstream.repository.replace("https://github.com/", "")}<small>已导入 {mode.upstream.commit.slice(0, 8)} · 本地可编辑副本</small></span><button onClick={() => inspectGithub(mode.upstream.url)}><RotateCw size={14} />检查上游</button></> : <><span>本地模式<small>尚未绑定云端来源</small></span><button onClick={connectCloud}>连接云端仓库<ChevronRight size={14} /></button></>}
                       </div>
                       <details className="mode-method" key={mode.id}>
                         <summary>模式说明</summary>
@@ -1411,12 +1461,12 @@ export default function App() {
                           <ArchitectureMap
                             mode={mode}
                             skills={modeSkills}
-                            onSkill={(skill)=>task(()=>selectSkill(skill))}
+                            onSkill={(skill)=>read('detail', '读取技能', call=>selectSkill(skill,workspace,call))}
                             onEdit={readOnly?null:()=>setModal({kind:'architecture'})}
                             onGuide={()=>task(()=>openGuide(mode.id))}
                           />
                         </>
-                      ) : view === 'categories' ? <CapabilityCards mode={mode} skills={modeSkills} onSkill={skill=>task(()=>selectSkill(skill))} onManage={readOnly?null:()=>setModal({kind:'categories'})}/> : (
+                      ) : view === 'categories' ? <CapabilityCards mode={mode} skills={modeSkills} onSkill={skill=>read('detail', '读取技能', call=>selectSkill(skill,workspace,call))} onManage={readOnly?null:()=>setModal({kind:'categories'})}/> : (
                         <div className="mode-skill-list">
                           <p className="muted">来自 mode.yaml 的技能清单与技能声明的依赖，不做关键词分组。</p>
                           <div className="list-surface">
@@ -1426,7 +1476,7 @@ export default function App() {
                                     skill={skill}
                                     selected={selected?.id === skill.id}
                                     onClick={() =>
-                                      task(() => selectSkill(skill))
+                                      read('detail', '读取技能', call=>selectSkill(skill,workspace,call))
                                     }
                                   />
                                 ))}
@@ -1480,7 +1530,7 @@ export default function App() {
                             key={skill.id}
                             skill={skill}
                             selected={selected?.id === skill.id}
-                            onClick={() => task(() => selectSkill(skill))}
+                            onClick={() => read('detail', '读取技能', call=>selectSkill(skill,workspace,call))}
                             trailing={
                               <Tag>
                                 {skill.usedBy.length
@@ -1535,7 +1585,7 @@ export default function App() {
                           className="search large"
                           onSubmit={(e) => {
                             e.preventDefault();
-                            task(searchMarket);
+                            searchMarket();
                           }}
                         >
                           <Search size={18} />
@@ -1556,32 +1606,20 @@ export default function App() {
                       </div>
                       {provider === "local" && <>
                         <div className="field-heading"><span className="muted">{extraSkillRoot ? "自选目录中的技能" : "从本机 Agent 的技能目录发现，不自动导入"}</span><div className="heading-actions">
-                          <button onClick={() => task(async () => { const root = await api("choose", "skillSearchRoot"); if (root) { setExtraSkillRoot(root); setLocalReport(await api("localSkills", root)); } })}><FolderOpen size={16} />选择目录</button>
-                          <button onClick={() => task(async () => { setExtraSkillRoot(null); setLocalReport(await api("localSkills")); })}><RotateCw size={16} />扫描本机</button>
+                          <button onClick={() => read('local', '发现目录技能', async call => { const root = await call('choose', 'skillSearchRoot'); if (root) { setExtraSkillRoot(root); setLocalReport(await call('localSkills', root)); } })}><FolderOpen size={16} />选择目录</button>
+                          <button onClick={() => read('local', '发现本机技能', async call => { setExtraSkillRoot(null); setLocalReport(await call('localSkills')); })}><RotateCw size={16} />扫描本机</button>
                         </div></div>
                         <DiscoveredSkills report={localReport} catalog={catalog} readOnly={readOnly} onAdd={adoptSkill} onMode={showMode} onInspect={skill => task(() => inspectDiscovered(skill))} />
                       </>}
                       {provider === "github-import" && <>
-                        <form className="search large" onSubmit={e => { e.preventDefault(); task(() => inspectGithub()); }}>
+                        <form className="search large" onSubmit={e => { e.preventDefault(); inspectGithub(); }}>
                           <Link2 size={18} /><input required type="url" aria-label="GitHub 仓库地址" placeholder="https://github.com/作者/仓库，或技能目录链接" value={githubUrl} onChange={e => setGithubUrl(e.target.value)} />
                           <button className="primary">读取仓库</button>
                         </form>
                         <p className="muted">从云端读取 Mode 和技能，选择后保存到本机。不执行安装脚本。</p>
-                        {!!initial?.repositories?.length && !githubReport && <div className="recent-repositories"><small>最近查看</small>{initial.repositories.map(url => <button key={url} onClick={() => task(() => inspectGithub(url))}>{url.replace("https://github.com/", "")}<ChevronRight size={14} /></button>)}</div>}
+                        {!!initial?.repositories?.length && !githubReport && <div className="recent-repositories"><small>最近查看</small>{initial.repositories.map(url => <button key={url} onClick={() => inspectGithub(url)}>{url.replace("https://github.com/", "")}<ChevronRight size={14} /></button>)}</div>}
                         {githubReport && <><p className="path-line">{githubReport.repository} · {githubReport.commit.slice(0, 8)}</p>
-                          {!!githubReport.modes?.length ? <section className="repository-modes"><div className="field-heading"><h2>仓库中的工作模式</h2><Tag>{githubReport.modes.length} 个 Mode</Tag></div><div className="market-grid">
-                            {githubReport.modes.map(item => {
-                              const local = catalog?.modes.find(m => m.id === item.id);
-                              const same = local?.upstream?.repository === githubReport.repository && local.upstream.commit === githubReport.commit;
-                              return <article className="market-card" key={item.id}>
-                                <div className="market-card-top"><Layers3 size={23} />{local && <Tag>{same ? "已导入此版本" : "库内有同名模式"}</Tag>}</div>
-                                <h3>{item.title}</h3><p>{shortText(item.document.split("\n").filter(line => line.trim() && !line.startsWith("#")).join(" "), 145)}</p>
-                                <div className="capability-tags">{item.capabilities?.map(group => <Tag key={group.title}>{group.title}</Tag>)}</div>
-                                <details><summary>{item.skills.length} 个完整技能</summary><ul>{item.skills.map(id => <li key={id}>{id}</li>)}</ul></details>
-                                <button className="primary" onClick={() => task(() => importRepositoryMode(item))}><Download size={15} />{local ? "检查差异 / 更新" : "导入此 Mode"}</button>
-                              </article>;
-                            })}
-                          </div></section> : <p className="inline-note">{githubReport.modeError ? `Mode 定义未通过解析：${githubReport.modeError}` : "这个仓库未在所选位置定义 ASL Mode。可以选择下面的技能，加入自己的 Mode。"}</p>}
+                          {!!githubReport.modes?.length ? <RepositoryModes report={githubReport} localModes={localModeReport?.modes} onOpen={openLocalMode} onImport={item=>task(()=>importRepositoryMode(item))}/> : <p className="inline-note">{githubReport.modeError ? `Mode 定义未通过解析：${githubReport.modeError}` : "这个仓库未在所选位置定义 ASL Mode。可以选择下面的技能，加入自己的 Mode。"}</p>}
                           <details><summary>仓库结构与配套声明</summary><p className="muted">这些是解析线索；不表示每个技能都依赖它们。</p>
                             {githubReport.repositoryDependencies?.map(d => <p key={d.file}>{d.file} · {d.kind}</p>)}
                             <pre className="repository-tree">{githubReport.repositoryFiles?.slice(0, 120).join("\n")}{githubReport.repositoryFiles?.length > 120 ? "\n… 其余文件请在仓库查看" : ""}</pre>
@@ -1591,7 +1629,7 @@ export default function App() {
                       {["dsh", "github"].includes(provider) && (marketError ? (
                         <Empty icon={AlertCircle} title="暂时无法连接来源">
                           <p>{marketError}</p>
-                          <button onClick={() => task(searchMarket)}>
+                          <button onClick={() => searchMarket()}>
                             重试
                           </button>
                         </Empty>
@@ -1617,7 +1655,7 @@ export default function App() {
                                     ? `☆ ${item.stars.toLocaleString()}`
                                     : ""}
                                 </span>
-                                {item.kind === "repository" && <button onClick={() => task(() => inspectGithub(item.url))}><Download size={15} />选择技能</button>}
+                                {item.kind === "repository" && <button onClick={() => inspectGithub(item.url)}><Download size={15} />选择技能</button>}
                                 <button
                                   onClick={() =>
                                     task(() => api("external", item.url))
@@ -1641,7 +1679,7 @@ export default function App() {
                           </p>
                           <button
                             className="primary"
-                            onClick={() => task(searchMarket)}
+                            onClick={() => searchMarket()}
                           >
                             浏览{provider === "dsh" ? "插件" : "项目"}
                           </button>
@@ -1650,92 +1688,9 @@ export default function App() {
                       ))}
                     </>
                   )}
-                  {page === "agents" && (
-                    <>
-                      <div className="page-heading">
-                        <div>
-                          <h1>Agent 配置</h1>
-                          <p>选择模式，明确应用的位置。</p>
-                        </div>
-                        <button disabled={busy} onClick={() => task(async () => setNative(await api("native")))}><RotateCw size={16} />重新检测</button>
-                      </div>
-                      <div className="agent-grid">
-                        {native?.hosts.map((host) => (
-                          <article className="agent-card" key={host.id}>
-                            <div className="agent-card-title">
-                              <span className={`host-symbol ${host.id}`}>
-                                {host.name[0]}
-                              </span>
-                              <h2>{host.name}</h2>
-                              <Tag tone={host.configured ? "green" : ""}>
-                                {host.configured ? "已找到配置" : host.directoryFound ? "只有目录" : "未找到配置"}
-                              </Tag>
-                            </div>
-                            <small className="native-location" title={host.directory}>{host.directory}</small>
-                            <div className="agent-meta">
-                              <span>可用范围</span>
-                              <b>
-                                {host.scopes.length
-                                  ? host.scopes
-                                      .map((s) =>
-                                        s === "project"
-                                          ? "所选项目"
-                                          : s === "user" ? "当前用户" : "独立预设",
-                                      )
-                                      .join("、")
-                                  : "尚未接入"}
-                              </b>
-                            </div>
-                            {host.userMode && <div className="agent-meta"><span>默认工作模式</span><b>{host.userMode.mode}</b></div>}
-                            <div className="agent-meta">
-                              <span>本机 MCP 声明</span>
-                              <b>{host.connections?.length ?? "未检测"}</b>
-                            </div>
-                            {host.connections?.length > 0 && (
-                              <div className="connection-tags">
-                                {host.connections.map((name) => (
-                                  <Tag key={name}>{name}</Tag>
-                                ))}
-                              </div>
-                            )}
-                            <button
-                              disabled={!catalog?.modes.length || !host.scopes.length}
-                              onClick={() =>
-                                setModal({ kind: "connect", host: host.id })
-                              }
-                            >
-                              {host.scopes.length ? "配置工作模式" : "暂不支持应用模式"}
-                              <ChevronRight size={15} />
-                            </button>
-                            {host.userMode?.workspace === workspace && catalog.modes.some(m => m.id === host.userMode.mode) && <div className="agent-tools"><button onClick={() => setModal({ kind: "connect", host: host.id, scope: "user", modeId: host.userMode.mode })}>同步 / 停用</button><button onClick={() => setModal({ kind: "setup", values: { workspace, mode: host.userMode.mode, host: host.id, scope: "user", ...(host.userMode.skillsDir !== host.skillRoot && { skillsDir: host.userMode.skillsDir }) } })}>检查配置</button></div>}
-                          </article>
-                        ))}
-                      </div>
-                      {native?.targets?.length > 0 && (
-                        <section className="configured-projects">
-                          <h2>配置过的项目</h2>
-                          <div className="list-surface">
-                            {native.targets.map((target) => (
-                              <div
-                                className="project-row"
-                                key={`${target.host}:${target.project}`}
-                              >
-                                <FolderOpen size={18} />
-                                <span>
-                                  <strong>{baseName(target.project)}</strong>
-                                  <small>{target.project}</small>
-                                </span>
-                                <Tag>
-                                  {native.hosts.find(h => h.id === target.host)?.name || target.host}{" "}
-                                  · 项目级
-                                </Tag>
-                              </div>
-                            ))}
-                          </div>
-                        </section>
-                      )}
-                    </>
-                  )}
+                  {page === "agents" && <AgentPage native={native} catalog={catalog} workspace={workspace} busy={busy} Tag={Tag}
+                    onConnect={values=>setModal({kind:"connect",...values})} onSetup={values=>setModal({kind:"setup",...values})}
+                    refresh={()=>read("native", "读取 Agent 配置", async call=>setNative(await call("native")))}/>}
                 </>
               )}
             </main>
@@ -1824,6 +1779,17 @@ export default function App() {
             </div>
           </Dialog>
         )}
+        {modal?.kind === 'repository-target' && <Dialog title="选择本地模式" onClose={()=>setModal(null)} wide>
+          <p>本机已有 {modal.item.title}。先打开已有内容，或选择要比较和更新的位置。</p>
+          <div className="list-surface">{modal.matches.map(item=><div className="project-row" key={item.workspace}>
+            <FolderOpen size={18}/><span><strong>{item.title} · {item.sameSource ? '同源模式' : '仅名称相同'}</strong><small>{item.workspace}</small></span>
+            <button onClick={()=>openLocalMode(item)}>打开</button><button className="primary" onClick={()=>task(()=>importRepositoryMode(modal.item,item.workspace))}>比较差异</button>
+          </div>)}</div>
+          <div className="dialog-actions"><button onClick={()=>setModal(null)}>取消</button>
+            {workspace && !readOnly && !modal.matches.some(item=>item.workspace===workspace) && <button onClick={()=>task(()=>importRepositoryMode(modal.item,workspace))}>加入当前环境</button>}
+            <button onClick={()=>task(async()=>{const target=await api('choose','newEnvironment');if(target)await importRepositoryMode(modal.item,target);})}>另存为独立环境</button>
+          </div>
+        </Dialog>}
         {modal?.kind === "mode-editor" && (
           <ModeEditor
             item={modal.item}
@@ -1844,7 +1810,7 @@ export default function App() {
           readFile={file=>api('run','files',{workspace,skill:modal.item.id,file})}
           saveFile={async request=>{await api('run','edit',{workspace,request});await api('run','edit',{workspace,request,apply:true});await load(workspace);}}/>}
         {modal?.kind === 'agent-guide' && <EnvironmentGuide {...modal} onClose={()=>setModal(null)} onRefresh={()=>task(refreshLocal)}/>}
-        {modal?.kind === 'mode-skills' && <ModeSkills mode={modal.mode} catalog={catalog} Dialog={Dialog} onClose={()=>setModal(null)} onMode={id=>{setModal(null);showMode(id);}} task={task}
+        {modal?.kind === 'mode-skills' && <ModeSkills mode={modal.mode} catalog={catalog} Dialog={Dialog} onClose={()=>setModal(null)} onMode={id=>{setModal(null);showMode(id);}} task={task} read={read}
           onSave={request=>task(()=>editContent(request))} onAdd={skill=>adoptSkill(skill,modal.mode.id)} onInspect={skill=>task(()=>inspectDiscovered(skill))}/>}
         {modal?.kind === "review" && (
           <Dialog

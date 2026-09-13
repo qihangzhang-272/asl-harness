@@ -12,7 +12,9 @@ const {
   isLibrary,
 } = require("./library.cjs");
 const { nativeInventory, existingDirectory, localSkillRoots } = require("./native.cjs");
-const { discover, publicUrl, githubSnapshot } = require("./market.cjs");
+const { discover, publicUrl } = require("./market.cjs");
+const { readRepository } = require('./repository-import.cjs');
+const { ReadRequests } = require('./read-requests.cjs');
 const { assistantInventory, launchAssistant, sessionStatus } = require("./assistant.cjs");
 const { upstreamDocument, presetDestination, checkUpstreams, watchEnvironment } = require("./repository.cjs");
 
@@ -26,6 +28,8 @@ const page = pathToFileURL(path.join(__dirname, "dist/index.html")).href;
 let window;
 const selected = new Set();
 const repositories = new Map();
+const readers = new Map();
+const reads = new ReadRequests();
 let busy = false;
 let stopWatching;
 const options = app.isPackaged
@@ -58,6 +62,11 @@ function handle(channel, fn) {
   });
 }
 
+function readHandle(method, channel, fn) {
+  readers.set(method, fn);
+  handle(channel, (...args) => fn(args));
+}
+
 app.on('second-instance',()=>{
   if(window){if(window.isMinimized())window.restore();window.show();window.focus();}
 });
@@ -65,6 +74,14 @@ if(primary) app.whenReady().then(() => {
   const preferenceFile = path.join(app.getPath("userData"), "libraries.json");
   const sessionRoot = path.join(app.getPath("userData"), "setup-sessions");
   const managedLibrary = path.join(app.getPath("userData"), "workspace");
+  async function machineInventory(signal) {
+    const preferences = await readPreferences(preferenceFile);
+    const source = [...new Set([...preferences.libraries, ...preferences.targets.map(t => t.project), managedLibrary])]
+      .filter(p => typeof p === 'string' && path.isAbsolute(p)).slice(0, 64);
+    const report = await runCore('nativeMcp', { source }, { ...options, signal });
+    for (const project of report.projects) selected.add(path.resolve(project));
+    return report;
+  }
   selected.add(managedLibrary);
   window = new BrowserWindow({
     width: 1320,
@@ -88,6 +105,13 @@ if(primary) app.whenReady().then(() => {
   window.webContents.session.setPermissionRequestHandler(
     (_contents, _permission, callback) => callback(false),
   );
+
+  handle('asl:read', (id, method, args) => {
+    if (!readers.has(method) || !Array.isArray(args)) throw new Error('不支持的读取');
+    if (method === 'run' && (args[1]?.apply || ['project', 'preset', 'mcpSave'].includes(args[0]))) throw new Error('写入不可通过读取入口执行');
+    return reads.run(id, signal => readers.get(method)(args, signal));
+  });
+  handle('asl:cancel-read', id => { reads.cancel(id); return { canceled: true }; });
 
   handle("asl:initial", async () => {
     const preferences = await readPreferences(preferenceFile);
@@ -126,12 +150,12 @@ if(primary) app.whenReady().then(() => {
   });
   handle('asl:guide-roots',async()=>{
     const roots=[];
-    for(const item of await localSkillRoots())
+    for(const item of await localSkillRoots(undefined, undefined, (await machineInventory()).projects))
       if(await existingDirectory([item.path]))roots.push(item);
     return roots;
   });
-  handle("asl:native", async () => {
-    const report = await nativeInventory();
+  readHandle('native', "asl:native", async (_args, signal) => {
+    const report = await nativeInventory(undefined, undefined, await machineInventory(signal));
     for (const preset of report.presets) selected.add(preset.path);
     for (const host of report.hosts)
       if (typeof host.userMode?.skillsDir === "string" && path.isAbsolute(host.userMode.skillsDir)) selected.add(path.resolve(host.userMode.skillsDir));
@@ -163,12 +187,39 @@ if(primary) app.whenReady().then(() => {
     } finally { busy = false; }
   });
   handle("asl:setup-status", (id) => sessionStatus(sessionRoot, id));
-  handle("asl:local-skills", async (extra) => {
+  readHandle('localSkills', "asl:local-skills", async ([extra], signal) => {
     if (extra && !selected.has(path.resolve(extra))) throw new Error("请先选择要扫描的目录");
-    const roots = extra ? [{ name: "自选目录", path: extra }] : await localSkillRoots();
-    const report = await runCore("scan", { source: roots.map(r => r.path) }, options);
+    const roots = extra ? [{ name: "自选目录", path: extra }] : await localSkillRoots(undefined, undefined, (await machineInventory(signal)).projects);
+    if (!roots.length) return { skills: [], issues: [], roots };
+    const report = await runCore("scan", { source: roots.map(r => r.path) }, { ...options, signal });
     for (const skill of report.skills) selected.add(path.resolve(skill.source));
     return { ...report, roots };
+  });
+  readHandle('localModes', 'asl:local-modes', async ([parent], signal) => {
+    if (parent && !selected.has(path.resolve(parent))) throw new Error('请先选择扫描目录');
+    const source = (await machineInventory(signal)).projects;
+    const report = await runCore('localModes', { source, ...(parent ? { parent } : {}) }, { ...options, signal });
+    for (const mode of report.modes) selected.add(path.resolve(mode.workspace));
+    return report;
+  });
+  readHandle('mcp', 'asl:mcp', async ([values], signal) => {
+    commandArgs('mcp', values);
+    if (values.project && !selected.has(path.resolve(values.project))) throw new Error('请先选择项目');
+    return runCore('mcp', values, { ...options, signal });
+  });
+  handle('asl:mcp-save', async values => {
+    commandArgs('mcpSave', values);
+    if (values.project && !selected.has(path.resolve(values.project))) throw new Error('请先选择项目');
+    if (busy) throw new Error('当前保存尚未结束');
+    busy = true;
+    try {
+      const perProject = values.scope !== 'user' || values.host === 'claude-code' && values.request.operation === 'toggle';
+      const answer = await dialog.showMessageBox(window, { type: 'question', buttons: ['取消', '确认保存'], defaultId: 0, cancelId: 0,
+        message: `${values.request.operation === 'remove' ? '移除' : '修改'} MCP：${values.request.name}？`,
+        detail: `Agent：${values.host}\n范围：${perProject ? values.project : '当前用户的所有项目'}\n仅修改此条目，保留其他配置及一份修改前备份。不启动服务，不代替原生登录。` });
+      if (answer.response !== 1) return { canceled: true };
+      return await runCore('mcpSave', values, options);
+    } finally { busy = false; }
   });
   handle("asl:source-document", async (source) => {
     if (typeof source !== "string" || !selected.has(path.resolve(source))) throw new Error("请先发现或选择这个技能目录");
@@ -178,64 +229,12 @@ if(primary) app.whenReady().then(() => {
     if (relative.startsWith("..") || path.isAbsolute(relative) || (await fs.stat(file)).size > 1024 * 1024) throw new Error("原文越界或过大，请在原位置查看");
     return fs.readFile(file, "utf8");
   });
-  handle("asl:github-skills", async (url) => {
-    const repo = await githubSnapshot(url, (...args) => net.fetch(...args));
-    const response = await net.fetch(repo.archive, { signal: AbortSignal.timeout(90000) });
-    if (!response.ok) throw new Error(`下载失败（${response.status}），请稍后重试`);
-    const chunks = []; let bytes = 0;
-    for await (const chunk of response.body) {
-      bytes += chunk.length;
-      if (bytes > 64 * 1024 * 1024) throw new Error("仓库超过 64 MB，请在本机下载后选择具体技能目录");
-      chunks.push(chunk);
-    }
-    // Keep downloaded repositories out of deeply nested project/profile paths on Windows.
-    const folder = path.join(app.getPath("temp"), "asl-github", randomUUID());
-    await fs.mkdir(folder, { recursive: true });
-    const archive = path.join(folder, "source.zip");
-    await fs.writeFile(archive, Buffer.concat(chunks));
-    const output = path.join(folder, "content");
-    const report = await runCore("unpack", { source: archive, output }, options);
-    const repositoryRoot = output;
-    // ASL repositories explicitly separate active skills from archived packages.
-    const requestedPath = path.resolve(repositoryRoot, repo.subpath || "");
-    const environment = await isLibrary(requestedPath) ? requestedPath : await isLibrary(repositoryRoot) ? repositoryRoot : null;
-    const requested = environment === requestedPath ? path.join(environment, "skills") : requestedPath;
-    report.skills = report.skills.filter(s => {
-      const relative = path.relative(requested, s.source);
-      return relative === "" || !relative.startsWith("..") && !path.isAbsolute(relative);
-    });
-    for (const skill of report.skills) {
-      skill.origin = `${repo.url}/tree/${repo.commit}/${path.relative(repositoryRoot, skill.source).split(path.sep).map(encodeURIComponent).join("/")}`;
-      const ancestors = report.repositoryDependencies.filter(d => {
-        const file = path.join(output, d.file);
-        return file.startsWith(repositoryRoot + path.sep) && path.dirname(file) !== skill.source && skill.source.startsWith(path.dirname(file) + path.sep);
-      });
-      if (ancestors.length) {
-        skill.inspection.status = "needs-review";
-        skill.inspection.reasons.push("仓库上层有共享配置，尚未确认能否单独取出：" + ancestors.map(d => path.relative(repositoryRoot, path.join(output, d.file))).join("、"));
-      }
-      // Preserve repository license notices when a self-contained subfolder is copied.
-      for (const file of report.repositoryFiles.filter(file => path.dirname(path.join(output, file)) === repositoryRoot && /^(license|copying|notice)(\.|$)/i.test(path.basename(file)))) {
-        const dest = path.join(skill.source, path.basename(file));
-        try {
-          await fs.copyFile(path.join(output, file), dest, 1);
-          skill.inspection.files.push(path.basename(file));
-        } catch (error) { if (error.code !== "EEXIST") throw error; }
-      }
-      selected.add(path.resolve(skill.source));
-    }
-    let modes = [], modeError = null;
-    if (environment) {
-      try {
-        const catalog = await runCore("catalog", { workspace: environment }, options);
-        modes = catalog.modes;
-        if (environment !== requestedPath && repo.subpath.startsWith("modes/"))
-          modes = modes.filter(m => path.resolve(m.path) === requestedPath);
-        repositories.set(output, { environment, repo, url: new URL(url).href, modes: new Set(modes.map(m => m.id)) });
-      } catch (error) { modeError = error.message; }
-    }
-    await updatePreferences(preferenceFile,p=>({...p,repositories:[url,...p.repositories.filter(value=>value!==url)].slice(0,12)}));
-    return { ...report, repository: repo.url, commit: repo.commit, snapshot: output, modes, modeError };
+  readHandle("githubSkills", "asl:github-skills", async ([url], signal) => {
+    return readRepository(url, { fetch: (...args) => net.fetch(...args),
+      core: (action, values, signal) => runCore(action, values, { ...options, signal }),
+      temp: app.getPath("temp"), selected, repositories,
+      remember: url => updatePreferences(preferenceFile, p => ({ ...p, repositories: [url, ...p.repositories.filter(v => v !== url)].slice(0, 12) })),
+    }, signal);
   });
   handle("asl:repository-mode", async (snapshot, mode) => {
     const entry = repositories.get(snapshot);
@@ -254,13 +253,14 @@ if(primary) app.whenReady().then(() => {
     selected.add(target);
     return target;
   });
-  handle("asl:repository-updates", async (workspace) => {
+  readHandle('repositoryUpdates', "asl:repository-updates", async ([workspace], signal) => {
     if (!selected.has(path.resolve(workspace))) throw new Error("请先选择工作环境");
-    const catalog = await runCore("catalog", { workspace }, options);
-    return checkUpstreams(catalog.modes, (...args) => net.fetch(...args));
+    const catalog = await runCore("catalog", { workspace }, { ...options, signal });
+    const request = (url, settings = {}) => net.fetch(url, { ...settings, signal: AbortSignal.any([signal, settings.signal].filter(Boolean)) });
+    return checkUpstreams(catalog.modes, request);
   });
-  handle("asl:discover", (provider, query) =>
-    discover(provider, query, (...args) => net.fetch(...args)),
+  readHandle('discover', "asl:discover", ([provider, query], signal) =>
+    discover(provider, query, (url, settings = {}) => net.fetch(url, { ...settings, signal: AbortSignal.any([signal, settings.signal].filter(Boolean)) })),
   );
   handle("asl:external", async (url) => {
     const safe = publicUrl(url);
@@ -329,8 +329,8 @@ if(primary) app.whenReady().then(() => {
     return result;
   });
 
-  handle("asl:run", async (action, values) => {
-    if (["scan", "unpack"].includes(action)) throw new Error("请使用技能发现入口");
+  readHandle('run', "asl:run", async ([action, values], signal) => {
+    if (["scan", "unpack", "mcp", "mcpSave", "localModes", "nativeMcp"].includes(action)) throw new Error("请使用对应管理入口");
     commandArgs(action, values);
     if ((action === "edit" && path.resolve(values.workspace) === example) ||
         (action === "import" && path.resolve(values.target) === example))
@@ -355,10 +355,10 @@ if(primary) app.whenReady().then(() => {
       !selected.has(path.resolve(values.request.source))
     )
       throw new Error("请先选择要导入的技能文件夹");
-    if (busy) throw new Error("当前操作尚未完成");
     const write =
       ["project", "preset"].includes(action) || values.apply === true;
-    busy = true;
+    if (write && busy) throw new Error("当前保存尚未完成");
+    if (write) busy = true;
     try {
       if (
         write &&
@@ -379,7 +379,7 @@ if(primary) app.whenReady().then(() => {
         });
         if (answer.response !== 1) return { canceled: true };
       }
-      const result = await runCore(action, values, options);
+      const result = await runCore(action, values, { ...options, ...(write ? {} : { signal }) });
       if (action === "preset") {
         const inventory = await nativeInventory();
         result.presetRegistered = inventory.presets.some(p => path.resolve(p.path) === path.resolve(values.output));
@@ -398,18 +398,18 @@ if(primary) app.whenReady().then(() => {
       }
       return result;
     } finally {
-      busy = false;
+      if (write) busy = false;
     }
   });
 
-  handle("asl:read-skill", async (workspace, skill) => {
+  readHandle('readSkill', "asl:read-skill", async ([workspace, skill], signal) => {
     if (
       !selected.has(path.resolve(workspace)) ||
       typeof skill !== "string" ||
       !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(skill)
     )
       throw new Error("未知能力位置");
-    const report = await runCore("describe", { workspace }, options);
+    const report = await runCore("describe", { workspace }, { ...options, signal });
     if (!report.skills.some((item) => item.id === skill))
       throw new Error("能力不在当前环境");
     const realRoot = await fs.realpath(workspace);

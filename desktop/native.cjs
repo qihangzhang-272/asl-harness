@@ -15,7 +15,7 @@ async function existingDirectory(paths) {
     try { if ((await fs.stat(location)).isDirectory()) return path.resolve(location); } catch {}
   }
 }
-async function nativeInventory(home = os.homedir(), env = process.env) {
+async function nativeInventory(home = os.homedir(), env = process.env, mcp = null) {
   const codex = path.resolve(env.CODEX_HOME || path.join(home, ".codex"));
   const claude = path.resolve(env.CLAUDE_CONFIG_DIR || path.join(home, ".claude"));
   const dsh = path.join(home, ".dsh");
@@ -61,17 +61,18 @@ async function nativeInventory(home = os.homedir(), env = process.env) {
       try { if ((await fs.stat(file)).isFile()) { record.configured = true; break; } } catch {}
     }
     delete record.evidence;
-    if (definition.file)
+    // Codex / Claude MCP parsing is shared with readiness through the Python core.
+    if (mcp && ['codex-app', 'claude-code'].includes(definition.id)) {
+      const sources = mcp.sources.filter(s => s.host === definition.id);
+      record.connections = [...new Set(sources.flatMap(s => s.servers.map(server => server.name)))];
+      record.mcpError = sources.find(s => s.error)?.error;
+    }
+    if (definition.id === 'workbuddy' && definition.file)
       try {
         const file = path.resolve(home, definition.file);
         if ((await fs.stat(file)).size < 2 * 1024 * 1024) {
           const text = await fs.readFile(file, "utf8");
-          record.connections =
-            definition.id === "codex-app"
-              ? [...text.matchAll(/^\s*\[mcp_servers\.([\w-]+)\]/gm)].map(
-                  (m) => m[1],
-                )
-              : Object.keys(JSON.parse(text).mcpServers || {});
+          record.connections = Object.keys(JSON.parse(text).mcpServers || {});
         }
       } catch {}
     if (record.scopes.includes("user")) {
@@ -97,9 +98,10 @@ async function nativeInventory(home = os.homedir(), env = process.env) {
         });
   } catch {}
   if (presets.length) hosts.find(h => h.id === "deepseek-harness").configured = true;
-  return { hosts, presets, presetRoot, home };
+  return { hosts, presets, presetRoot, home, projects: mcp?.projects || [],
+    mcpSources: mcp?.sources || [], mcpIssues: mcp?.issues || [], truncated: !!mcp?.truncated };
 }
-async function localSkillRoots(home = os.homedir(), env = process.env) {
+async function localSkillRoots(home = os.homedir(), env = process.env, projects = []) {
   const inventory = await nativeInventory(home, env);
   const roots = [
     { name: "通用技能", path: path.join(home, ".agents", "skills") },
@@ -107,7 +109,13 @@ async function localSkillRoots(home = os.homedir(), env = process.env) {
     { name: "Claude Code", path: path.join(env.CLAUDE_CONFIG_DIR || path.join(home, ".claude"), "skills") },
     ...[".workbuddy-ai", ".workbuddy", ".codebuddy"].map(dir => ({ name: "WorkBuddy / CodeBuddy", path: path.join(home, dir, "skills") })),
     ...inventory.presets.map(p => ({ name: `DeepSeek · ${p.name}`, path: path.join(p.path, "skills") })),
+    ...projects.flatMap(project => ['.agents/skills', '.codex/skills', '.claude/skills', '.workbuddy/skills', 'skills'].map(dir => ({ name: `项目 · ${path.basename(project)}`, path: path.join(project, dir) }))),
   ];
-  return roots.filter(r => path.isAbsolute(r.path));
+  const unique = new Map();
+  for (const item of roots) if (path.isAbsolute(item.path) && await existingDirectory([item.path])) {
+    const key = await fs.realpath(item.path);
+    if (!unique.has(key)) unique.set(key, item);
+  }
+  return [...unique.values()];
 }
 module.exports = { nativeInventory, existingDirectory, localSkillRoots };

@@ -23,6 +23,19 @@ const definitions = {
 };
 
 function commandArgs(action, values = {}) {
+  if (['localModes', 'nativeMcp', 'mcp', 'mcpSave'].includes(action)) {
+    const allowed = action === 'localModes' ? ['source', 'parent'] : action === 'nativeMcp' ? ['source'] : ['host', 'project', ...(action === 'mcpSave' ? ['scope', 'request'] : [])];
+    if (!values || typeof values !== 'object' || Array.isArray(values) || Object.keys(values).some(k => !allowed.includes(k))) throw new Error('无效的管理请求');
+    if (['localModes', 'nativeMcp'].includes(action)) {
+      if (!Array.isArray(values.source) || values.source.length > 64 || values.source.some(p => typeof p !== 'string' || !path.isAbsolute(p) || p.includes('\0'))) throw new Error('无效的本地目录');
+      if (values.parent && (typeof values.parent !== 'string' || !path.isAbsolute(values.parent) || values.parent.includes('\0'))) throw new Error('无效的扫描目录');
+      return [action === 'localModes' ? 'environment.discover' : 'mcp.discover', ...values.source.flatMap(p => ['--source', p]), ...(values.parent ? ['--parent', values.parent] : [])];
+    }
+    if (!['codex-app', 'claude-code'].includes(values.host)) throw new Error('不支持的 MCP 宿主');
+    if (values.project && (typeof values.project !== 'string' || !path.isAbsolute(values.project) || values.project.includes('\0'))) throw new Error('请先选择项目');
+    if (action === 'mcpSave' && (!['user', 'project', 'local'].includes(values.scope) || values.scope !== 'user' && !values.project || !values.request || typeof values.request !== 'object' || Array.isArray(values.request))) throw new Error('请选择范围并填写 MCP 配置');
+    return [action === 'mcp' ? 'mcp.inspect' : 'mcp.edit', '--host-id', values.host, ...(values.project ? ['--project', values.project] : []), ...(action === 'mcpSave' ? ['--scope', values.scope] : [])];
+  }
   const definition = definitions[action];
   if (
     !definition ||
@@ -124,6 +137,7 @@ function runCore(action, values, options = {}) {
         windowsHide: true,
         shell: false,
         timeout: 120000,
+        signal: options.signal,
         maxBuffer: 8 * 1024 * 1024,
         env: {
           ...process.env,
@@ -155,7 +169,7 @@ function runCore(action, values, options = {}) {
       },
     );
     child.stdin.on("error", () => {});
-    child.stdin.end(action === "edit" ? JSON.stringify(values.request) : "");
+    child.stdin.end(['edit', 'mcpSave'].includes(action) ? JSON.stringify(values.request) : "");
   });
 }
 
