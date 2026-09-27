@@ -305,6 +305,13 @@ def project_mode(
     instruction = _contained(project, layout["instructionFile"])
     block = _mode_instructions(workspace, mode_id)
     existing_instruction = instruction.read_bytes() if instruction.is_file() else None
+    if old_manifest is not None:
+        current_text = existing_instruction.decode('utf-8') if existing_instruction else ''
+        if current_text.count(MANAGED_START) != 1 or current_text.count(MANAGED_END) != 1:
+            raise HarnessError('HOST_PROJECTION_MODIFIED', 'ASL 配置说明已改变，请先保留并处理本地修改')
+        current_block = current_text.split(MANAGED_START, 1)[1].split(MANAGED_END, 1)[0]
+        if _instruction_fingerprint(current_block) != old_manifest.get('instructionFingerprint'):
+            raise HarnessError('HOST_PROJECTION_MODIFIED', 'ASL 配置说明已改变，请先保留并处理本地修改')
     _render_managed_block(
         existing_instruction.decode("utf-8") if existing_instruction is not None else "",
         block,

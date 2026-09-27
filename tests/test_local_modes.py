@@ -32,3 +32,11 @@ def test_imported_source_is_recognized_and_same_name_is_not_deduplicated(tmp_pat
     assert len(report['modes']) == 2
     assert report['modes'][0]['upstream']['commit'] == 'a' * 40
     assert report['modes'][1]['upstream'] is None
+
+
+def test_discovery_follows_project_projection_to_its_actual_library(tmp_path):
+    import json
+    root = _environment(tmp_path / 'library')
+    project = tmp_path / 'project'
+    _write(project / '.asl/host-projections/claude-code/current.json', json.dumps({'environment': str(root)}))
+    assert scan_modes([str(project)])['modes'][0]['workspace'] == str(root.resolve())

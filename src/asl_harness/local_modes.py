@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import configparser
+import json
 from itertools import islice
 from pathlib import Path
 
@@ -21,6 +22,18 @@ def scan_modes(roots: list[str], *, parent: Path | None = None) -> dict:
             locations.extend(p for p in islice(parent.iterdir(), 256) if p.is_dir() and not p.name.startswith('.'))
         except OSError:
             issues.append({'path': str(parent), 'message': '无法读取所选目录'})
+    # Follow explicit ASL project receipts, never recursively search the disk.
+    for location in tuple(locations):
+        for host in ('codex-app', 'claude-code', 'workbuddy'):
+            file = location / '.asl' / 'host-projections' / host / 'current.json'
+            try:
+                if file.stat().st_size > 256000:
+                    continue
+                source = json.loads(file.read_text(encoding='utf-8')).get('environment')
+                if isinstance(source, str) and Path(source).is_absolute() and len(locations) < 384:
+                    locations.append(Path(source))
+            except (OSError, ValueError, AttributeError):
+                pass
     for root in locations:
         try:
             root = root.resolve(strict=True)

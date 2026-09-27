@@ -272,8 +272,8 @@ def export_preset(
             f"refusing to overwrite a preset not managed by this Mode: {target}",
         )
 
-    temporary = target.with_name(f".{target.name}.asl-tmp-{uuid4().hex}")
-    backup = target.with_name(f".{target.name}.asl-backup-{uuid4().hex}")
+    temporary = target.with_name(f".asl-tmp-{uuid4().hex}")
+    backup = target.with_name(f".asl-backup-{uuid4().hex}")
     try:
         shutil.copytree(base, temporary, symlinks=False, ignore=_ignore_generated)
         skill_root = temporary / "skills"

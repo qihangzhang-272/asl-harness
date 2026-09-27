@@ -24,6 +24,7 @@ from .user_projection import sync_user
 from .readiness import inspect_mode, setup_brief
 from .local_modes import scan_modes
 from .native_mcp import inspect_mcp, edit_mcp, discover_mcp
+from .projection_lifecycle import disconnect
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -81,6 +82,15 @@ def _parser() -> argparse.ArgumentParser:
     verify.add_argument("--project", required=True)
     verify.add_argument("--mode", required=True)
     verify.add_argument("--host-id", choices=sorted(HOST_LAYOUTS), required=True)
+
+    detach = commands.add_parser('host.disconnect', help='Preview and archive an owned project or preset projection')
+    detach.add_argument('--workspace', required=True)
+    detach.add_argument('--mode', required=True)
+    detach.add_argument('--host-id', choices=sorted(HOST_LAYOUTS), required=True)
+    detach.add_argument('--scope', choices=['project', 'preset'], required=True)
+    detach.add_argument('--project', required=True)
+    detach.add_argument('--check', action='store_true')
+    detach.add_argument('--expected')
 
     user_sync = commands.add_parser("host.user.sync", help="Sync one Mode to native current-user locations")
     user_sync.add_argument("--workspace", required=True)
@@ -209,6 +219,9 @@ def _execute(args: argparse.Namespace) -> dict:
                 workspace, args.project, args.mode, host_id=args.host_id
             ),
         }
+    if args.command == 'host.disconnect':
+        return {'ok': True, **disconnect(workspace, args.mode, args.host_id, args.scope,
+                                        args.project, check=args.check, expected=args.expected)}
     if args.command == "host.user.sync":
         return {"ok": True, **sync_user(workspace, args.mode, args.host_id,
                                        check=args.check, expected=args.expected, remove=args.remove, skills_dir=args.skills_dir)}
