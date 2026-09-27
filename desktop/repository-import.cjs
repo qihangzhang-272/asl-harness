@@ -61,10 +61,10 @@ async function readRepository(url, { fetch, core, temp, selected, repositories, 
       }
       selected.add(path.resolve(skill.source));
     }
-    let modes = [], modeError = null;
+    let modes = [], modeError = null, catalog = null;
     if (environment) {
       try {
-        const catalog = await core("catalog", { workspace: environment }, signal);
+        catalog = await core("catalog", { workspace: environment }, signal);
         modes = catalog.modes;
         if (environment !== requestedPath && repo.subpath.startsWith("modes/"))
           modes = modes.filter(m => path.resolve(m.path) === requestedPath);
@@ -73,7 +73,7 @@ async function readRepository(url, { fetch, core, temp, selected, repositories, 
     }
     signal?.throwIfAborted();
     await remember(url);
-    const result = { ...report, repository: repo.url, commit: repo.commit, snapshot: output, modes, modeError };
+    const result = { ...report, repository: repo.url, commit: repo.commit, snapshot: output, modes, modeError, catalog };
     if (cache.size >= 4) cache.delete(cache.keys().next().value);
     cache.set(key, result);
     return result;

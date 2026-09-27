@@ -7,7 +7,7 @@ const vm = require("node:vm");
 const { createRequire } = require("node:module");
 
 // Exercise the actual IPC handlers. Native Windows dialogs are separately checked in the packaged App.
-async function desktop(t) {
+async function desktop(t, {missingDocuments=false}={}) {
   const home = await fs.mkdtemp(path.join(os.tmpdir(), "asl-ipc-"));
   t.after(() => fs.rm(home, { recursive: true, force: true }));
   const directory = path.resolve(__dirname, "..");
@@ -25,7 +25,7 @@ async function desktop(t) {
   const electron = {
     app: { isPackaged: false, whenReady: () => Promise.resolve(), on(name,fn) {events.set(name,fn);}, quit() {},
       commandLine:{hasSwitch:()=>true}, setName() {},setPath() {},getVersion:()=> '0.2.0',requestSingleInstanceLock:()=>true,
-      getPath: name => name === "documents" ? path.join(home, "missing", "Desktop") : home },
+      getPath: name => {if(name==='documents'&&missingDocuments)throw new Error("Failed to get 'documents' path");return name === "documents" ? path.join(home, "missing", "Desktop") : home;} },
     BrowserWindow: class { constructor() { this.webContents = webContents; } isMinimized(){return false;} show(){} focus(){focused++;} removeMenu() {} loadFile(file) { page = require("node:url").pathToFileURL(file).href; } },
     dialog, ipcMain: { handle: (key, fn) => handlers.set(key, fn) }, shell: {}, net: {},
   };
@@ -65,6 +65,15 @@ test("folder selection falls back to a real home and cancellation grants nothing
   const result = await app.invoke("run", "project", { workspace: app.home, project: app.home, mode: "writing", host: "codex-app" });
   assert.equal(result.ok, false);
   assert.equal(app.executed.length, 0);
+});
+
+test('missing Windows known-folder still allows project selection',async t=>{
+  const app=await desktop(t,{missingDocuments:true});
+  app.dialog.next={canceled:false,filePaths:[app.home]};
+  const result=await app.invoke('choose','project');
+  assert.equal(result.ok,true);
+  assert.equal(result.value,app.home);
+  assert.equal(app.calls[0].defaultPath,app.home);
 });
 
 test("built-in example cannot be edited or used as an import destination", async t => {

@@ -12,6 +12,8 @@ import SkillLibrary from './SkillLibrary.jsx';
 import Markdown from './Markdown.jsx';
 import {Placement} from './ParadigmEditor.jsx';
 import AgentPage from './AgentPage.jsx';
+import SourceLibrary, {SourceTree} from './SourceLibrary.jsx';
+import {navigate} from './motion.js';
 import { LocalModes, RepositoryModes } from './LocalModes.jsx';
 import { useReadTasks, ReadStatus } from './useReadTasks.jsx';
 import {ArchitectureMap, ArchitectureEditor, MapIcon} from './Architecture.jsx';
@@ -672,6 +674,12 @@ function ConnectDialog({
     const current = native?.hosts.find(h => h.id === host);
     setSkillsDir(current?.userMode?.skillsDir && current.userMode.skillsDir !== current.skillRoot ? current.userMode.skillsDir : "");
   }, [native, host]);
+  useEffect(()=>{
+    if(!native||preset)return;
+    const choices=native.presets.filter(p=>!native.connections?.some(c=>c.scope==='preset'&&c.project===p.path));
+    const base=choices.find(p=>/standard|default/i.test(p.name))||choices[0];
+    if(base)setPreset(base.path);
+  },[native]);
   useEffect(() => {
     api("native")
       .then(setNative)
@@ -679,7 +687,7 @@ function ConnectDialog({
   }, []);
   const selected = native?.hosts.find((h) => h.id === host);
   return (
-    <Dialog title="应用工作模式" onClose={onClose}>
+    <EditorPage title={selected ? `在 ${selected.name} 使用` : '选择 Agent'} onClose={onClose}>
       <Field label="工作模式">
         <select
           value={mode.id}
@@ -735,13 +743,13 @@ function ConnectDialog({
             <button type="button" className={`scope-option ${scope === "user" ? "selected" : ""}`} onClick={() => setScope("user")} aria-pressed={scope === "user"}>
               {scope === "user" ? <Check size={17} /> : <Circle size={17} />}
               <div>
-                <strong>我的所有项目</strong>
-                <small>设为当前用户的默认工作模式</small>
+                <strong>默认模式</strong>
+                <small>这台电脑上的项目都可使用</small>
               </div>
             </button>
           )}
           {host === "deepseek-harness" ? (
-            <Field label="基于哪个预设">
+            <details className="preset-options" open={!preset}><summary>{preset?'预设选项':'请选择一个本机预设'}</summary><Field label="基础预设">
               <select
                 value={preset}
                 onChange={(e) => setPreset(e.target.value)}
@@ -764,7 +772,7 @@ function ConnectDialog({
                 <FolderOpen size={15} />
                 选择其他预设
               </button>
-            </Field>
+            </Field></details>
           ) : scope === "project" ? (
             <Field label={project ? "已选择项目 · 可更换" : "选择项目文件夹后才能应用"}>
               <button
@@ -805,7 +813,7 @@ function ConnectDialog({
             {scope === "user" && native?.hosts.find(h => h.id === host)?.userMode?.mode === mode.id ? <button onClick={() => task(async () => {
               const plan = await api("run", "userSync", { workspace, mode: mode.id, host, remove: true, ...(skillsDir && { skillsDir }) });
               const result = await api("run", "userSync", { workspace, mode: mode.id, host, remove: true, expected: plan.fingerprint, apply: true, ...(skillsDir && { skillsDir }) });
-              if (!result.canceled) { onClose(); onApplied("已停用用户级默认模式，原技能源不变。"); }
+              if (!result.canceled) { onClose(); onApplied("已停用用户级默认模式，原技能源不变。",{host}); }
             })}>停用默认模式</button> : <button onClick={onClose}>取消</button>}
             <button
               className="primary"
@@ -846,11 +854,11 @@ function ConnectDialog({
                 })
               }
             >
-              {scope === "user" && !preview ? "查看同步预览" : "应用模式"}
+              {scope === "user" && !preview ? "继续" : `配置到 ${selected?.name || 'Agent'}`}
               <ArrowUpRight size={16} />
             </button>
           </div>
-    </Dialog>
+    </EditorPage>
   );
 }
 
@@ -875,11 +883,14 @@ export default function App() {
   const [resumeDiscovery,setResumeDiscovery]=useState(null);
   useEffect(() => setMessage(null), [modal?.kind]);
   const [native, setNative] = useState(null);
+  const [agentHost,setAgentHost]=useState('codex-app');
   const [provider, setProvider] = useState("github-import");
   const [localReport, setLocalReport] = useState(null);
   const [localModeReport, setLocalModeReport] = useState(null);
   const [extraSkillRoot, setExtraSkillRoot] = useState(null);
   const [githubUrl, setGithubUrl] = useState("");
+  const [cloud, setCloud] = useState(null);
+  const cloudRequest = useRef(0);
   const [githubReport, setGithubReport] = useState(null);
   const [updates, setUpdates] = useState(null);
   const [checkingUpdates, setCheckingUpdates] = useState(false);
@@ -990,6 +1001,7 @@ export default function App() {
       setInitial(data);
       if (data.workspace) await load(data.workspace, call);
       setReady(true);
+      if (data.activeSource) openCloud(data.activeSource.url,data.activeSource.mode);
     });
   }, []);
   useEffect(()=>{
@@ -1016,8 +1028,18 @@ export default function App() {
     if (page === "discover" && provider === "local" && !localReport) read('local', '发现本机技能', async call => setLocalReport(await call("localSkills")));
   }, [page, provider]);
   useEffect(() => {
-    if (page === 'discover' || page === 'updates') scanLocalModes();
-  }, [page, workspace, updateTick]);
+    if (!ready) return;
+    scanLocalModes();
+    let last = Date.now();
+    const refresh = () => {
+      if (document.hidden || gate.current || Date.now() - last < 30000) return;
+      last = Date.now(); scanLocalModes();
+      if (page === 'agents') read('native', '刷新 Agent 状态', async call=>setNative(await call('native')));
+    };
+    const timer = setInterval(refresh, 30000);
+    window.addEventListener('focus', refresh);
+    return ()=>{clearInterval(timer);window.removeEventListener('focus',refresh);};
+  }, [ready, page, workspace, updateTick]);
   const scanLocalModes = parent => read('local-modes', '识别本机工作模式', async call => setLocalModeReport(await call('localModes', parent)));
   const chooseModeDirectory = async () => {
     const parent = await api('choose', 'skillSearchRoot');
@@ -1025,8 +1047,12 @@ export default function App() {
   };
   const openLocalMode = async item => {
     if (busy) return;
+    setModal(null);setSelected(null);setCloud(null);cloudRequest.current++;
+    reads.cancel('cloud');api('selectSource',null);
+    if(item.workspace===workspace){navigate(()=>{setModeId(item.id);setPage('modes');});return;}
+    setModeId(null);
     if (!await openLibrary(item.workspace)) return;
-    setModal(null); setModeId(item.id); setPage('modes');
+    setModeId(item.id);setPage('modes');
   };
   const mode = catalog?.modes.find((m) => m.id === modeId);
   const readOnly = workspace === initial?.example || /[\\/]resources[\\/]example-environment[\\/]*$/i.test(workspace || '');
@@ -1041,7 +1067,7 @@ export default function App() {
     const root = await api("choose", "environment");
     if (root) await openLibrary(root);
   }
-  const openLibrary = root => read('environment', '打开工作环境', call => load(root, call));
+  const openLibrary = root => {setCloud(null);cloudRequest.current++;reads.cancel('cloud');api('selectSource',null);return read('environment', '打开模式库', call => load(root, call));};
   async function selectSkill(skill,root=workspace,call=api) {
     setSelected(skill);
     setTexts(null);
@@ -1119,7 +1145,22 @@ export default function App() {
       setGithubReport(await call('githubSkills', url));
     });
   }
-  function connectCloud() { setModal(null); setProvider("github-import"); setPage("discover"); }
+  async function openCloud(url, id, refresh=false) {
+    setSelected(null);setModal(null);setPage('modes');
+    if (!refresh && cloud?.url===url && cloud.report) {navigate(()=>setCloud({...cloud, mode:id||null}));return;}
+    const sequence=++cloudRequest.current;
+    setCloud({url,mode:id||null,loading:true});
+    return read('cloud','读取模式库',async call=>{try {
+      const report=await call('githubSkills',url);
+      if(sequence!==cloudRequest.current)return;
+      setCloud({url,mode:id||null,report});
+      setInitial(p=>({...p,repositories:[url,...(p.repositories||[]).filter(v=>v!==url)]}));
+    } catch(error){if(sequence===cloudRequest.current)setCloud({url,mode:id||null,error:error.message});}});
+  }
+  useEffect(()=>{
+    if(cloud?.report)api('selectSource',{url:cloud.url,mode:cloud.mode||null}).catch(error=>setMessage({error:true,text:error.message}));
+  },[cloud?.url,cloud?.mode,cloud?.report]);
+  function connectCloud() { setModal({kind:'connect-source'}); }
   async function openGuide(modeId) {
     const target=workspace&&!readOnly?workspace:initial.managedLibrary;
     const [guide,roots]=await Promise.all([api('run','guide',{workspace:target,...(modeId?{mode:modeId}:{})}),api('guideRoots')]);
@@ -1130,17 +1171,21 @@ export default function App() {
     if(target){await load(target);setModal(null);}
     else{const data=await api('initial');if(data.workspace)await load(data.workspace);}
   }
-  async function importRepositoryMode(item, chosenTarget) {
+  async function importRepositoryMode(item, chosenTarget, nextAgent=false, sourceReport=githubReport) {
     if (!chosenTarget) {
       const local = await api('localModes');
       setLocalModeReport(local);
-      const matches = matchLocalModes(local.modes, item.id, githubReport.repository);
-      if (matches.length) { setModal({ kind: 'repository-target', item, matches }); return; }
+      const matches = matchLocalModes(local.modes, item.id, sourceReport.repository).filter(m=>m.sameSource);
+      if (matches.length===1) chosenTarget=matches[0].workspace;
+      else if (matches.length>1) { setGithubReport(sourceReport);setModal({ kind: 'repository-target', item, matches, nextAgent }); return; }
     }
-    const pack = await api("repositoryMode", githubReport.snapshot, item.id);
-    const target = chosenTarget || (workspace && !readOnly ? workspace : initial.managedLibrary);
+    const pack = await api("repositoryMode", sourceReport.snapshot, item.id);
+    const target = chosenTarget || pack.target;
     const report = await api("run", "import", { source: pack.source, target });
-    setModal({ kind: "import-review", source: pack.source, target, report, title: item.title, replace: false });
+    if (!report.changed&&!report.conflicts.length&&nextAgent) {
+      await load(target);setCloud(null);setModeId(item.id);setModal({kind:'connect',modeId:item.id});return;
+    }
+    setModal({ kind: "import-review", source: pack.source, target, report, title: item.title, replace: false, nextAgent });
   }
   async function searchMarket() {
     setMarketError("");
@@ -1171,7 +1216,7 @@ export default function App() {
     const report = await api("run", "import", { source: modal.source, target });
     setModal({ kind: "import-review", source: modal.source, target, report, replace: false });
   }
-  const editorOpen=['mode-editor','skill-editor','skill-files','mode-skills','architecture','categories','import-review'].includes(modal?.kind);
+  const editorOpen=['mode-editor','skill-editor','skill-files','mode-skills','architecture','categories','import-review','connect','connect-source'].includes(modal?.kind);
 
   return (
     <NoticeContext.Provider value={{ ...message, busy, reads }}>
@@ -1186,7 +1231,7 @@ export default function App() {
           </div>
           <button
             className="library-switch"
-            onClick={() => setModal({ kind: "libraries" })}
+            onClick={connectCloud}
           >
             <span className="library-avatar">
               {workspace ? (
@@ -1196,11 +1241,9 @@ export default function App() {
               )}
             </span>
             <span>
-              <strong>{workspace === initial?.managedLibrary ? "我的工作环境" : workspace ? baseName(workspace) : "我的工作环境"}</strong>
+              <strong>连接模式库</strong>
               <small>
-                {catalog
-                  ? `${catalog.modes.length} 个模式 · ${catalog.skills.length} 个技能`
-                  : "连接你的工作能力"}
+                GitHub · 本地 · 分享包
               </small>
             </span>
             <ChevronDown size={15} />
@@ -1219,7 +1262,8 @@ export default function App() {
                 title={label}
                 className={page === id ? "active" : ""}
                 onClick={() => {
-                  setPage(id);
+                  setCloud(null);cloudRequest.current++;reads.cancel('cloud');api('selectSource',null);
+                  navigate(()=>setPage(id));
                   setSelected(null);
                   setQuery("");
                 }}
@@ -1233,34 +1277,10 @@ export default function App() {
               </button>
             ))}
           </nav>
-          <div className="sidebar-label">
-            我的模式
-            <IconButton
-              icon={Plus}
-              label="新建模式"
-              disabled={!catalog || readOnly}
-              onClick={() => setModal({ kind: "mode-editor" })}
-            />
-          </div>
-          <nav className="mode-nav">
-            {catalog?.modes.map((m, index) => (
-              <button
-                className={
-                  modeId === m.id && page === "modes" ? "selected" : ""
-                }
-                key={m.id}
-                onClick={() => {
-                  setModeId(m.id);
-                  setPage("modes");
-                  setSelected(null);
-                }}
-              >
-                <span className={`mode-dot color-${index % 4}`} />
-                <span>{m.title}</span>
-                <small>{m.skills.length}</small>
-              </button>
-            ))}
-          </nav>
+          <SourceTree local={[...(localModeReport?.modes||[]).filter(m=>m.workspace!==workspace),...(catalog?.modes||[]).map(m=>({...m,workspace}))]}
+            repositories={initial?.repositories||[]} workspace={workspace} mode={modeId} cloud={cloud}
+            onLocal={openLocalMode} onCloud={openCloud} onAdd={connectCloud}/>
+          {catalog&&!readOnly&&<button className="new-mode-button" onClick={()=>setModal({kind:'mode-editor'})}><Plus size={15}/>新建模式</button>}
           <div className="sidebar-footer">
             <button onClick={() => task(importPack)}>
               <Download size={16} />
@@ -1284,10 +1304,10 @@ export default function App() {
                   : page === "discover"
                     ? "发现"
                     : page === "updates" ? "来源与更新" : "Agent 配置"}
-              {page === "modes" && mode && (
+              {page === "modes" && (cloud || mode) && (
                 <>
                   <ChevronRight size={14} />
-                  <b>{mode.title}</b>
+                  <b>{cloud?cloud.report?.modes.find(m=>m.id===cloud.mode)?.title||baseName(cloud.url):mode.title}</b>
                 </>
               )}
             </span>
@@ -1317,7 +1337,12 @@ export default function App() {
                 <summary>本机工作模式 · {localModeReport?.modes.length ?? '读取中'}</summary>
                 <LocalModes report={localModeReport} onOpen={openLocalMode} onScan={()=>scanLocalModes()} onChoose={()=>task(chooseModeDirectory)}/>
               </details>}
-              {!catalog && !["discover", "agents", "updates"].includes(page) ? (
+              {cloud ? <SourceLibrary source={cloud} busy={busy} onSelect={id=>navigate(()=>setCloud({...cloud,mode:id}))}
+                onRefresh={()=>openCloud(cloud.url,cloud.mode,true)}
+                onUse={item=>task(()=>importRepositoryMode(item,null,true,cloud.report))}
+                onSave={item=>task(()=>importRepositoryMode(item,null,false,cloud.report))}
+                onSkills={()=>{setGithubReport(cloud.report);setGithubUrl(cloud.url);setProvider('github-import');setCloud(null);setPage('discover');}}/>
+              : !catalog && !["discover", "agents", "updates"].includes(page) ? (
                 <div className="welcome">
                   <div className="welcome-logo">
                     <Layers3 size={42} />
@@ -1436,7 +1461,7 @@ export default function App() {
                             className="primary"
                             onClick={() => setModal({ kind: "connect" })}
                           >
-                            使用此模式
+                            在 Agent 使用
                             <ArrowUpRight size={16} />
                           </button>
                         </div>
@@ -1489,7 +1514,6 @@ export default function App() {
                         </>
                       ) : view === 'categories' ? <CapabilityCards mode={mode} skills={modeSkills} onSkill={skill=>read('detail', '读取技能', call=>selectSkill(skill,workspace,call))} onManage={readOnly?null:()=>setModal({kind:'categories'})}/> : (
                         <div className="mode-skill-list">
-                          <p className="muted">来自 mode.yaml 的技能清单与技能声明的依赖，不做关键词分组。</p>
                           <div className="list-surface">
                                 {modeSkills.map((skill) => (
                                   <SkillRow
@@ -1693,8 +1717,9 @@ export default function App() {
                       ))}
                     </>
                   )}
-                  {page === "agents" && <AgentPage native={native} catalog={catalog} workspace={workspace} busy={busy} Tag={Tag}
+                  {page === "agents" && <AgentPage native={native} catalog={catalog} workspace={workspace} busy={busy} Tag={Tag} task={task} api={api} hostId={agentHost} setHostId={setAgentHost}
                     onConnect={values=>setModal({kind:"connect",...values})} onSetup={values=>setModal({kind:"setup",...values})}
+                    onOpen={item=>openLocalMode({...item,id:item.mode})}
                     refresh={()=>read("native", "读取 Agent 配置", async call=>setNative(await call("native")))}/>}
                 </>
               )}
@@ -1788,7 +1813,7 @@ export default function App() {
           <p>本机已有 {modal.item.title}。先打开已有内容，或选择要比较和更新的位置。</p>
           <div className="list-surface">{modal.matches.map(item=><div className="project-row" key={item.workspace}>
             <FolderOpen size={18}/><span><strong>{item.title} · {item.sameSource ? '同源模式' : '仅名称相同'}</strong><small>{item.workspace}</small></span>
-            <button onClick={()=>openLocalMode(item)}>打开</button><button className="primary" onClick={()=>task(()=>importRepositoryMode(modal.item,item.workspace))}>比较差异</button>
+            <button onClick={()=>openLocalMode(item)}>打开</button><button className="primary" onClick={()=>task(()=>importRepositoryMode(modal.item,item.workspace,modal.nextAgent))}>选择此库</button>
           </div>)}</div>
           <div className="dialog-actions"><button onClick={()=>setModal(null)}>取消</button>
             {workspace && !readOnly && !modal.matches.some(item=>item.workspace===workspace) && <button onClick={()=>task(()=>importRepositoryMode(modal.item,workspace))}>加入当前环境</button>}
@@ -1870,6 +1895,12 @@ export default function App() {
             </div>
           </Dialog>
         )}
+        {modal?.kind === 'connect-source' && <EditorPage title="连接模式库" onClose={()=>setModal(null)}>
+          <form className="connect-source-form" onSubmit={e=>{e.preventDefault();openCloud(githubUrl);}}>
+            <Field label="GitHub 仓库"><input type="url" required autoFocus placeholder="https://github.com/用户名/仓库" value={githubUrl} onChange={e=>setGithubUrl(e.target.value)}/></Field>
+            <button className="primary" type="submit"><Link2 size={16}/>连接</button>
+          </form><div className="source-connect-options"><button onClick={()=>{setModal(null);chooseLibrary();}}><FolderOpen size={20}/><span>打开本地模式库</span><ChevronRight size={16}/></button><button onClick={()=>task(importPack)}><Download size={20}/><span>打开分享包</span><ChevronRight size={16}/></button></div>
+        </EditorPage>}
         {modal?.kind === "connect" && (
           <ConnectDialog
             mode={catalog.modes.find(m => m.id === modal.modeId) || mode}
@@ -1880,7 +1911,7 @@ export default function App() {
             initialProject={modal.project}
             task={task}
             onClose={() => setModal(null)}
-            onApplied={(text, values) => { setMessage({ text }); api("native").then(setNative).catch(() => {}); if (values) setModal({ kind: "setup", values, resultMessage: text }); }}
+            onApplied={(text,values) => { setMessage({ text });setAgentHost(values.host);setPage('agents');api("native").then(setNative).catch(error=>setMessage({error:true,text:error.message})); }}
           />
         )}
         {modal?.kind === 'architecture' && <ArchitectureEditor mode={mode} skills={modeSkills} Dialog={EditorPage} Field={Field} onSave={request=>task(()=>saveContent(request))} onClose={()=>setModal(null)}/>}
@@ -1898,7 +1929,7 @@ export default function App() {
             <button className="primary" disabled={!catalog || readOnly} onClick={() => adoptSkill(modal.skill)}>添加到 Mode</button>
           </div>
         </Dialog>}
-        {modal?.kind === "setup" && <SetupDialog values={modal.values} resultMessage={modal.resultMessage} title={catalog.modes.find(m => m.id === modal.values.mode)?.title || modal.values.mode} task={task} onClose={() => setModal(null)} />}
+        {modal?.kind === "setup" && <SetupDialog values={modal.values} resultMessage={modal.resultMessage} title={catalog?.modes.find(m => m.id === modal.values.mode)?.title || modal.values.mode} task={task} onClose={() => setModal(null)} />}
         {modal?.kind === "add-to-mode" && (
           <Dialog title="加入工作模式" onClose={() => setModal(null)}>
             <div className="library-list">
@@ -2040,7 +2071,7 @@ export default function App() {
         )}
         {modal?.kind === "import-review" && (
           <EditorPage title="导入与更新" onClose={() => setModal(null)}>
-            <div className="import-target"><FolderOpen size={18}/><div><strong>保存到这个工作环境</strong><p>{modal.target}</p><small>“加入”仅指这个环境缺少内容，不代表电脑上没有同名技能。</small></div></div>
+            <div className="import-target"><FolderOpen size={18}/><div><strong>{baseName(modal.target)}</strong><details><summary>本地位置</summary><p>{modal.target}</p></details></div></div>
             <div className="apply-summary"><Layers3 size={20} /><span>{modal.title || modal.report.mode}<small>{modal.report.skills.length} 个完整技能 · {modal.report.profileAction === "preserved" ? "保留本地个人资料" : "不导入个人资料"}</small></span></div>
             {!modal.report.changed && !modal.report.conflicts.length && <p className="inline-note">所选 Mode 的内容已一致，无需更新。</p>}
             <div className="review-list import-changes">
@@ -2050,7 +2081,7 @@ export default function App() {
                   <Tag tone={action === "conflict" ? "amber" : ""}>
                     {
                       {
-                        add: "加入此环境",
+                        add: "本地保存",
                         unchanged: "已存在",
                         conflict: "与来源内容不同",
                         replace: "替换",
@@ -2084,16 +2115,17 @@ export default function App() {
                       apply: true,
                     });
                     if (!result.canceled) {
-                      const target = modal.target;
+                      const target = modal.target, nextAgent=modal.nextAgent;
                       setModal(null);
-                      await load(target);
+                      await load(target);setCloud(null);
                       showMode(result.mode);
-                      setMessage({ text: "模式已导入，可查看能力地图或应用到 Agent。已连接的 Agent 需重新应用更新。" });
+                      if(nextAgent)setModal({kind:'connect',modeId:result.mode});
+                      else setMessage({text:'已保存到本地'});
                     }
                   })
                 }
               >
-                确认导入
+                {modal.nextAgent?'保存并继续':'保存到本地'}
               </button>
             </div>
           </EditorPage>

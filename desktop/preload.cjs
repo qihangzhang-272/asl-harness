@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld("asl", {
   mcp: values => ipcRenderer.invoke('asl:mcp', values),
   mcpSave: values => ipcRenderer.invoke('asl:mcp-save', values),
   initial: () => ipcRenderer.invoke("asl:initial"),
+  selectSource: value => ipcRenderer.invoke('asl:select-source', value),
   remember: (workspace) => ipcRenderer.invoke("asl:remember", workspace),
   rememberView: (workspace,view) => ipcRenderer.invoke('asl:remember-view',workspace,view),
   guideRoots: () => ipcRenderer.invoke('asl:guide-roots'),

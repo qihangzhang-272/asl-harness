@@ -28,7 +28,8 @@ export function ArchitectureMap({mode,skills,onSkill,onEdit,onGuide}) {
   openSkill.current=onSkill;
   const diagram=useMemo(()=>diagramForMode(mode,skills,paradigmId),[mode,skills,paradigmId]);
   function fit() {
-    if(!pan.current)return;
+    const bounds=container.current?.getBoundingClientRect();
+    if(!pan.current||!bounds?.width||!bounds.height)return;
     pan.current.resize();pan.current.fit();
     const zoom=pan.current.getSizes().realZoom;
     if(zoom>1.15)pan.current.zoomBy(1.15/zoom);
@@ -79,9 +80,14 @@ export function ArchitectureMap({mode,skills,onSkill,onEdit,onGuide}) {
         });
         group.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setExpanded(false);openSkill.current(n.data.skill);}});
       });
-      pan.current=svgPanZoom(image,{fit:true,center:true,controlIconsEnabled:false,minZoom:.15,maxZoom:8,dblClickZoomEnabled:false});
-      fit();
-      observer=new ResizeObserver(fit);
+      const resize=()=>{
+        const bounds=element.getBoundingClientRect();
+        if(cancelled||!bounds.width||!bounds.height)return;
+        if(!pan.current)pan.current=svgPanZoom(image,{fit:true,center:true,controlIconsEnabled:false,minZoom:.15,maxZoom:8,dblClickZoomEnabled:false});
+        fit();
+      };
+      resize();
+      observer=new ResizeObserver(resize);
       observer.observe(element);
     })().catch(e=>{if(!cancelled)setError('架构图未能显示：'+e.message);});
     return ()=>{cancelled=true;observer?.disconnect();pan.current?.destroy();pan.current=null;};
@@ -90,8 +96,8 @@ export function ArchitectureMap({mode,skills,onSkill,onEdit,onGuide}) {
     <header className="architecture-toolbar">
       <div><strong>{expanded?mode.title:'工作架构'}</strong><span>{mode.architecture?.paradigms?`${mode.architecture.paradigms.length} 种工作范式`:'待定义工作范式'}</span></div>
       <div className="heading-actions">
-        <button className="text-button" onClick={()=>{setExpanded(false);onGuide();}}>交给 Agent <ArrowUpRight size={14}/></button>
-        <button disabled={!onEdit} onClick={()=>{setExpanded(false);onEdit();}}><Pencil size={14}/>编辑</button>
+        {onGuide&&<button className="text-button" onClick={()=>{setExpanded(false);onGuide();}}>交给 Agent <ArrowUpRight size={14}/></button>}
+        {onEdit&&<button onClick={()=>{setExpanded(false);onEdit();}}><Pencil size={14}/>编辑</button>}
         <button className="icon-button" aria-label={expanded?'收起架构图':'放大架构图'} title={expanded?'收起':'放大'} onClick={()=>setExpanded(!expanded)}>{expanded?<Minimize2 size={17}/>:<Maximize2 size={17}/>}</button>
       </div>
     </header>

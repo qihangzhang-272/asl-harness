@@ -1,108 +1,66 @@
-import React, { useState } from 'react';
-import { RotateCw, ChevronRight, FolderOpen, Plug, Search } from 'lucide-react';
+import React, {useState} from 'react';
+import {RotateCw, ChevronRight, Plug, Plus, Layers3, Check, CircleAlert, Power, ArrowUpRight} from 'lucide-react';
 import McpPanel from './McpPanel.jsx';
-const baseName = value => (value || '').split(/[\\/]/).filter(Boolean).pop();
 
-export default function AgentPage({ native, catalog, workspace, busy, Tag, onConnect, onSetup, refresh }) {
-  const [mcp, setMcp] = useState(null);
-  const [query, setQuery] = useState('');
-  if (mcp) return <McpPanel host={mcp.id} name={mcp.name} initialProject={mcp.project} initialScope={mcp.scope} projects={native?.projects} onClose={() => setMcp(null)} onChanged={refresh}/>;
-  return (<>
-                      <div className="page-heading">
-                        <div>
-                          <h1>Agent 配置</h1>
-                          <p>选择模式，明确应用的位置。</p>
-                        </div>
-                        <button disabled={busy} onClick={() => refresh()}><RotateCw size={16} />重新检测</button>
-                      </div>
-                      <div className="agent-grid">
-                        {native?.hosts.map((host) => (
-                          <article className="agent-card" key={host.id}>
-                            <div className="agent-card-title">
-                              <span className={`host-symbol ${host.id}`}>
-                                {host.name[0]}
-                              </span>
-                              <h2>{host.name}</h2>
-                              <Tag tone={host.configured ? "green" : ""}>
-                                {host.configured ? "已找到配置" : host.directoryFound ? "只有目录" : "未找到配置"}
-                              </Tag>
-                            </div>
-                            <small className="native-location" title={host.directory}>{host.directory}</small>
-                            <div className="agent-meta">
-                              <span>可用范围</span>
-                              <b>
-                                {host.scopes.length
-                                  ? host.scopes
-                                      .map((s) =>
-                                        s === "project"
-                                          ? "所选项目"
-                                          : s === "user" ? "当前用户" : "独立预设",
-                                      )
-                                      .join("、")
-                                  : "尚未接入"}
-                              </b>
-                            </div>
-                            {host.userMode && <div className="agent-meta"><span>默认工作模式</span><b>{host.userMode.mode}</b></div>}
-                            <div className="agent-meta">
-                              <span>本机 MCP 声明</span>
-                              <b>{host.connections?.length ?? "未检测"}</b>
-                            </div>
-                            {host.connections?.length > 0 && (
-                              <div className="connection-tags">
-                                {host.connections.map((name) => (
-                                  <Tag key={name}>{name}</Tag>
-                                ))}
-                              </div>
-                            )}
-                            {['codex-app', 'claude-code'].includes(host.id) && <button onClick={() => setMcp(host)}><Plug size={15}/>管理 MCP<ChevronRight size={15}/></button>}
-                            {host.mcpError && <p className="error-text">{host.mcpError}</p>}
-                            <button
-                              disabled={!catalog?.modes.length || !host.scopes.length}
-                              onClick={() =>
-                                onConnect({ host: host.id })
-                              }
-                            >
-                              {host.scopes.length ? "配置工作模式" : "暂不支持应用模式"}
-                              <ChevronRight size={15} />
-                            </button>
-                            {host.userMode?.workspace === workspace && catalog.modes.some(m => m.id === host.userMode.mode) && <div className="agent-tools"><button onClick={() => onConnect({ host: host.id, scope: "user", modeId: host.userMode.mode })}>同步 / 停用</button><button onClick={() => onSetup({ values: { workspace, mode: host.userMode.mode, host: host.id, scope: "user", ...(host.userMode.skillsDir !== host.skillRoot && { skillsDir: host.userMode.skillsDir }) } })}>检查配置</button></div>}
-                          </article>
-                        ))}
-                      </div>
-                      <section className="configured-projects">
-                        <div className="field-heading"><h2>本机 MCP</h2><small className="muted">标准配置位置 + {native?.projects?.length || 0} 个已知项目</small></div>
-                        <label className="search-field"><Search size={16}/><input aria-label="搜索本机 MCP" placeholder="搜索名称、Agent 或项目" value={query} onChange={e => setQuery(e.target.value)}/></label>
-                        <div className="list-surface">{(native?.mcpSources || []).filter(source => `${source.host} ${source.project || ''} ${source.servers.map(s => s.name).join(' ')}`.toLowerCase().includes(query.toLowerCase())).map(source => {
-                          const host = native.hosts.find(h => h.id === source.host);
-                          return <div className="project-row" key={`${source.host}:${source.scope}:${source.project || ''}`}><Plug size={18}/><span><strong>{host.name} · {source.scope === 'user' ? '我的所有项目' : `${baseName(source.project)} · ${source.scope === 'local' ? '仅自己' : '可共享'}`}</strong><small title={source.file}>{source.file}</small><small>{source.error || source.servers.map(s => `${s.name}${s.enabled ? '' : '（已停用）'}`).join(' · ')}</small></span>
-                            <button onClick={() => setMcp({ ...host, project: source.project, scope: source.scope })}>管理<ChevronRight size={14}/></button></div>;
-                        })}</div>
-                        {!native?.mcpSources?.length && <p className="muted">尚未发现原生 MCP 声明。可从上方 Agent 卡片添加，或选择其他项目目录。</p>}
-                        <p className="muted">只读取配置，不启动服务。未登记的目录可在“管理 MCP”中选择；不会扫描聊天记录或整块硬盘。</p>
-                        {native?.truncated && <p className="inline-note">已检查前 64 个项目；其他项目可手动选择。</p>}
-                      </section>
-                      {native?.targets?.length > 0 && (
-                        <section className="configured-projects">
-                          <h2>配置过的项目</h2>
-                          <div className="list-surface">
-                            {native.targets.map((target) => (
-                              <div
-                                className="project-row"
-                                key={`${target.host}:${target.project}`}
-                              >
-                                <FolderOpen size={18} />
-                                <span>
-                                  <strong>{baseName(target.project)}</strong>
-                                  <small>{target.project}</small>
-                                </span>
-                                <Tag>
-                                  {native.hosts.find(h => h.id === target.host)?.name || target.host}{" "}
-                                  · 项目级
-                                </Tag>
-                              </div>
-                            ))}
-                          </div>
-                        </section>
-                      )}
-                    </>);
+const baseName=value=>(value||'').split(/[\\/]/).filter(Boolean).pop();
+const argsFor=item=>({workspace:item.workspace, mode:item.mode, host:item.host,
+  ...(item.scope==='user' ? (item.skillsDir?{skillsDir:item.skillsDir}:{}) : {project:item.project})});
+
+export default function AgentPage({native, catalog, busy, Tag, onConnect, onSetup, onOpen, refresh, task, api, hostId, setHostId}) {
+  const [mcp,setMcp]=useState(null);
+  const [pending,setPending]=useState(null);
+  const [notice,setNotice]=useState('');
+  if(mcp)return <McpPanel host={mcp.id} name={mcp.name} initialProject={mcp.project} initialScope={mcp.scope} projects={native?.projects} onClose={()=>setMcp(null)} onChanged={refresh}/>;
+  const host=native?.hosts.find(h=>h.id===hostId);
+  const installed=(native?.connections||[]).filter(c=>c.host===hostId);
+  async function update(item) {
+    let result;
+    const values=argsFor(item);
+    if(item.scope==='user') {
+      const plan=await api('run','userSync',values);
+      result=await api('run','userSync',{...values,expected:plan.fingerprint,apply:true});
+    } else if(item.scope==='preset') result=await api('run','preset',{workspace:item.workspace,mode:item.mode,basePreset:item.basePreset,output:item.project});
+    else result=await api('run','project',values);
+    if(!result.canceled){setNotice('已更新');await refresh();}
+  }
+  async function prepareStop(item) {
+    const action=item.scope==='user'?'userSync':'disconnect';
+    const values={...argsFor(item),...(item.scope==='user'?{remove:true}:{scope:item.scope})};
+    const plan=await api('run',action,values);
+    setPending({item,action,values,plan});
+  }
+  async function stop() {
+    const result=await api('run',pending.action,{...pending.values,expected:pending.plan.fingerprint,apply:true});
+    if(!result.canceled){setPending(null);setNotice('已停用，原技能库不变');await refresh();}
+  }
+  return <section className="agent-manager">
+    <div className="page-heading"><h1>Agent</h1><button disabled={busy} onClick={()=>refresh()} aria-label="刷新 Agent 状态"><RotateCw size={17}/></button></div>
+    <div className="agent-tabs" role="tablist" aria-label="Agent">
+      {native?.hosts.map(h=><button role="tab" aria-selected={h.id===hostId} className={h.id===hostId?'active':''} key={h.id} onClick={()=>{setHostId(h.id);setPending(null);setNotice('');}}><span className={'host-symbol '+h.id}>{h.name[0]}</span>{h.name}<small>{(native.connections||[]).filter(c=>c.host===h.id).length}</small></button>)}
+    </div>
+    {!host?<p role="status">正在读取本机配置…</p>:<>
+      <header className="host-heading"><div><h2>{host.name}</h2><span className="muted">{host.configured?'已检测到本机配置':host.directoryFound?'已检测到目录':'尚未检测到配置'}</span></div>
+        <button className="primary" disabled={busy||!catalog?.modes.length||!host.scopes.length} onClick={()=>onConnect({host:host.id})}><Plus size={16}/>添加工作模式</button></header>
+      {notice&&<p role="status" className="connection-notice"><Check size={16}/>{notice}</p>}
+      {installed.length?<div className="installed-modes">{installed.map(item=><article className="installed-mode" key={item.id}>
+        <div className="installed-mode-heading"><span className="installed-mode-icon"><Layers3 size={23}/></span><div><button className="plain-title" onClick={()=>onOpen(item)}>{item.title}<ChevronRight size={15}/></button><small>{item.scope==='user'?'默认模式':item.scope==='preset'?'DeepSeek 预设':baseName(item.project)} · {item.skills.length} 个技能</small></div>
+          <Tag tone={item.status==='configured'?'green':'warning'}>{({configured:'配置已核对',outdated:'可同步更新',attention:'需检查'})[item.status]}</Tag></div>
+        {!!item.issues.length&&<p className="error-text">{item.issues[0]}</p>}
+        {item.discovery==='requires-connection'&&<p className="inline-note">使用了自选目录，尚未确认 Agent 能发现它。</p>}
+        <div className="installed-mode-actions">
+          <button onClick={()=>onOpen(item)}>查看模式<ArrowUpRight size={14}/></button>
+          <button disabled={busy||item.status==='attention'} onClick={()=>task(()=>update(item))}><RotateCw size={14}/>更新</button>
+          <button onClick={()=>onSetup({values:{...argsFor(item),scope:item.scope}})}>检查依赖</button>
+          <button className="disconnect-button" disabled={busy||item.status==='attention'} onClick={()=>task(()=>prepareStop(item))}><Power size={14}/>停用</button>
+        </div>
+        <details className="connection-details"><summary>配置详情</summary><p>本地位置：{item.location}</p><p>模式库：{item.workspace}</p><div className="connection-tags">{item.skills.map(id=><Tag key={id}>{id}</Tag>)}</div><small>已核对配置文件；尚未通过真实 Agent 任务验证。</small></details>
+      </article>)}</div>:<div className="agent-empty"><Layers3 size={32}/><h3>还没有工作模式</h3>{!catalog?.modes.length&&<span className="muted">连接模式库后可在这里添加</span>}</div>}
+      {pending&&<section className="disconnect-preview" aria-label="停用确认"><div><CircleAlert size={21}/><h3>停用 {pending.item.title}？</h3></div><p>原技能库、账号和其他配置保持不变。</p><details><summary>涉及的文件</summary><pre>{(Array.isArray(pending.plan.paths)?pending.plan.paths:[...pending.plan.items.filter(i=>i.action==='remove').map(i=>i.path),pending.plan.paths.instructions]).join('\n')}</pre></details><div className="heading-actions"><button onClick={()=>setPending(null)}>取消</button><button disabled={busy} onClick={()=>task(stop)}>确认停用</button></div></section>}
+      <section className="host-mcp"><div className="field-heading"><h2>MCP</h2>{['codex-app','claude-code'].includes(host.id)&&<button onClick={()=>setMcp(host)}><Plug size={16}/>管理 MCP</button>}</div>
+        <div className="mcp-summary-list">{(native.mcpSources||[]).filter(s=>s.host===host.id).map(s=><button key={s.scope+':'+s.project} onClick={()=>setMcp({...host,scope:s.scope,project:s.project})}><Plug size={18}/><div><strong>{s.scope==='user'?'用户配置':baseName(s.project)}</strong><small>{s.error||s.servers.map(server=>server.name).join(' · ')}</small></div><ChevronRight size={16}/></button>)}</div>
+        {!['codex-app','claude-code'].includes(host.id)&&<><div className="connection-tags">{host.connections?.map(n=><Tag key={n}>{n}</Tag>)}</div><p className="muted">MCP 请在 {host.name} 内管理。</p></>}
+        {['codex-app','claude-code'].includes(host.id)&&!(native.mcpSources||[]).some(s=>s.host===host.id)&&<span className="muted">尚未检测到 MCP 配置</span>}
+      </section>
+    </>}
+  </section>;
 }

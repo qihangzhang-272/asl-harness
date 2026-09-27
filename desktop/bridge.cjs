@@ -14,6 +14,9 @@ const definitions = {
   inspect: ["mode.inspect", ["source"]],
   import: ["mode.import", ["source", "target"]],
   project: ["host.project", ["workspace", "mode", "project", "host"]],
+  verify: ['host.verify', ['workspace', 'mode', 'project', 'host']],
+  verifyPreset: ['deepseek.preset.verify', ['workspace', 'mode', 'output']],
+  disconnect: ['host.disconnect', ['workspace', 'mode', 'project', 'host', 'scope']],
   userSync: ["host.user.sync", ["workspace", "mode", "host"]],
   readiness: ["host.setup.inspect", ["workspace", "mode", "host", "scope"]],
   preset: [
@@ -48,7 +51,7 @@ function commandArgs(action, values = {}) {
   const optional =
     action === 'guide' ? ['mode'] : action === "readiness"
       ? ["project", "probe", "skillsDir"]
-      : action === "userSync"
+      : action === 'disconnect' ? ['apply', 'expected'] : action === "userSync"
       ? ["apply", "expected", "remove", "skillsDir"]
       : action === "edit"
       ? ["request", "apply"]
@@ -112,7 +115,7 @@ function commandArgs(action, values = {}) {
   if (values.replace) args.push("--replace");
   if (values.remove) args.push("--remove");
   if (values.expected) args.push("--expected", values.expected);
-  if (["export", "import", "edit", "userSync"].includes(action) && !values.apply)
+  if (["export", "import", "edit", "userSync", "disconnect"].includes(action) && !values.apply)
     args.push("--check");
   return args;
 }

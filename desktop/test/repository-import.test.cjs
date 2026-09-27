@@ -36,7 +36,7 @@ test('ASL repository inspection preserves skill bytes instead of injecting a roo
       ? { ok: true, body: (async function* () { yield Buffer.from('fixture'); })() }
       : { ok: true, text: async () => JSON.stringify(url.includes('/commits/') ? {sha: 'd'.repeat(40)} : {default_branch: 'main'}) },
     core: async (action, {output}) => {
-      if (action === 'catalog') return {modes: []};
+      if (action === 'catalog') return {modes: [{id:'writing',skills:['example'],architecture:{paradigms:[]}}],skills:[{id:'example',title:'Example'}]};
       await fs.mkdir(path.join(output, 'skills/example'), {recursive: true});
       await fs.mkdir(path.join(output, 'modes'));
       await fs.writeFile(path.join(output, 'WORKSPACE.md'), '# ASL');
@@ -47,6 +47,9 @@ test('ASL repository inspection preserves skill bytes instead of injecting a roo
     },
   };
   const report = await readRepository('https://github.com/qa/preserve-asl', context);
+  assert.equal(report.catalog.skills[0].title,'Example');
+  assert.equal(report.modes[0].id,'writing');
+  assert.equal(context.selected.has(report.snapshot),false); // Remote preview is not a writable local library.
   assert.equal(await fs.readFile(path.join(report.snapshot, 'skills/example/SKILL.md'), 'utf8'), 'original');
   assert.equal(await fs.stat(path.join(report.snapshot, 'skills/example/LICENSE')).then(()=>true).catch(()=>false), false);
 });

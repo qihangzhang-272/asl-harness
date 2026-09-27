@@ -1,7 +1,7 @@
 const { app, BrowserWindow, dialog, ipcMain, shell, net, clipboard } = require("electron");
 const fs = require("node:fs/promises");
 const path = require("node:path");
-const { randomUUID } = require("node:crypto");
+const { randomUUID, createHash } = require("node:crypto");
 const { pathToFileURL } = require("node:url");
 const { runCore, commandArgs } = require("./bridge.cjs");
 const {
@@ -15,6 +15,7 @@ const {
 const { nativeInventory, existingDirectory, localSkillRoots } = require("./native.cjs");
 const { discover, publicUrl } = require("./market.cjs");
 const { readRepository } = require('./repository-import.cjs');
+const { connections } = require('./connections.cjs');
 const { ReadRequests } = require('./read-requests.cjs');
 const { assistantInventory, launchAssistant, sessionStatus } = require("./assistant.cjs");
 const { upstreamDocument, presetDestination, checkUpstreams, watchEnvironment } = require("./repository.cjs");
@@ -126,7 +127,13 @@ if(primary) app.whenReady().then(() => {
     const libraries = [...preferences.libraries];
     for (const location of libraries) selected.add(location);
     return { workspace: initial, example, managedLibrary, libraries, views:preferences.views,
-      repositories: preferences.repositories, packaged: app.isPackaged, version:app.getVersion() };
+      repositories: preferences.repositories, activeSource: preferences.activeSource, packaged: app.isPackaged, version:app.getVersion() };
+  });
+  handle('asl:select-source', async value => {
+    const preferences=await readPreferences(preferenceFile);
+    if(value!==null && (!value || Object.keys(value).some(k=>!['url','mode'].includes(k)) || !preferences.repositories.includes(value.url) || value.mode!==null && !/^[\w.-]{1,100}$/.test(value.mode))) throw new Error('请先连接模式库');
+    await updatePreferences(preferenceFile,p=>({...p,activeSource:value}));
+    return {saved:true};
   });
 
   handle('asl:watch', async (workspace) => {
@@ -157,6 +164,12 @@ if(primary) app.whenReady().then(() => {
   });
   readHandle('native', "asl:native", async (_args, signal) => {
     const report = await nativeInventory(undefined, undefined, await machineInventory(signal));
+    report.connections = await connections(report, (action, values) => runCore(action, values, {...options, signal}));
+    for (const item of report.connections) {
+      selected.add(path.resolve(item.workspace));
+      if (item.project) selected.add(path.resolve(item.project));
+      if (item.basePreset) selected.add(path.resolve(item.basePreset));
+    }
     for (const preset of report.presets) selected.add(preset.path);
     for (const host of report.hosts)
       if (typeof host.userMode?.skillsDir === "string" && path.isAbsolute(host.userMode.skillsDir)) selected.add(path.resolve(host.userMode.skillsDir));
@@ -198,7 +211,15 @@ if(primary) app.whenReady().then(() => {
   });
   readHandle('localModes', 'asl:local-modes', async ([parent], signal) => {
     if (parent && !selected.has(path.resolve(parent))) throw new Error('请先选择扫描目录');
-    const source = (await machineInventory(signal)).projects;
+    const machine = await machineInventory(signal);
+    const inventory = await nativeInventory(undefined, undefined, machine);
+    const references = [
+      ...inventory.hosts.map(h => h.userMode?.workspace),
+      ...(await Promise.all(inventory.presets.map(async p => {
+        try { return JSON.parse(await fs.readFile(path.join(p.path, '.asl-preset-projection.json'), 'utf8')).environment; } catch { return null; }
+      }))),
+    ];
+    const source = [...new Set([...machine.projects, ...references].filter(p => typeof p === 'string' && path.isAbsolute(p)))].slice(0, 64);
     const report = await runCore('localModes', { source, ...(parent ? { parent } : {}) }, { ...options, signal });
     for (const mode of report.modes) selected.add(path.resolve(mode.workspace));
     return report;
@@ -247,7 +268,10 @@ if(primary) app.whenReady().then(() => {
     const output = path.join(path.dirname(snapshot), `${randomUUID()}.zip`);
     const report = await runCore("export", { workspace: entry.environment, mode, output, apply: true }, options);
     selected.add(output);
-    return { source: output, report: { ...report, skills: (await runCore("inspect", { source: output }, options)).skills } };
+    const key = createHash('sha256').update(entry.repo.url).digest('hex').slice(0, 12);
+    const target = path.join(app.getPath('userData'), 'libraries', `${new URL(entry.repo.url).pathname.split('/').pop()}-${key}`);
+    selected.add(target);
+    return { source: output, target, report: { ...report, skills: (await runCore("inspect", { source: output }, options)).skills } };
   });
   handle("asl:preset-target", async (mode) => {
     const target = presetDestination((await nativeInventory()).presetRoot, mode);
@@ -272,10 +296,12 @@ if(primary) app.whenReady().then(() => {
   handle("asl:choose", async (kind) => {
     let result;
     const home = app.getPath("home");
+    let documents;
+    try { documents = app.getPath("documents"); } catch { /* Windows known-folder may be absent. */ }
     const presetRoot = path.join(home, ".dsh", ".agent-presets");
     const directory = await existingDirectory([
       ["basePreset", "newPreset"].includes(kind) ? presetRoot : null,
-      app.getPath("documents"), home,
+      documents, home,
     ]);
     if (
       [
@@ -336,7 +362,7 @@ if(primary) app.whenReady().then(() => {
     if ((action === "edit" && (path.resolve(values.workspace) === example || bundledExample(values.workspace))) ||
         (action === "import" && (path.resolve(values.target) === example || bundledExample(values.target))))
       throw new Error("内置示例只供查看。请先分享模式，再导入为独立技能库后编辑。");
-    if (action === "userSync" && values.apply && !values.expected) throw new Error("请先查看同步预览");
+    if (["userSync", "disconnect"].includes(action) && values.apply && !values.expected) throw new Error("请先查看变更预览");
     if (action === "import" && values.apply && !values.expected) throw new Error("请先查看导入预览");
     for (const key of [
       "workspace",
@@ -369,12 +395,15 @@ if(primary) app.whenReady().then(() => {
       ) {
           const answer = await dialog.showMessageBox(window, {
           type: "question",
-          buttons: ["取消", "确认应用"],
+          buttons: ["取消", values.remove || action === 'disconnect' ? "停用模式" : action === 'export' ? '保存分享包' : action === 'import' ? '保存到本地' : "确认"],
           defaultId: 0,
           cancelId: 0,
           message:
-            action === "edit" ? "确认这次内容变更？" : "应用到所选位置？",
-          detail: action === "userSync"
+            action === "edit" ? "确认这次内容变更？" : action === 'import' ? '保存这个工作模式？' : action === 'export' ? '保存分享包？' :
+              `${values.remove || action === 'disconnect' ? '在' : '配置到'} ${({'codex-app':'Codex','claude-code':'Claude Code','deepseek-harness':'DeepSeek Harness',workbuddy:'WorkBuddy'})[values.host] || 'DeepSeek Harness'}${values.remove || action === 'disconnect' ? ' 中停用此模式？' : '？'}`,
+          detail: action === 'disconnect'
+            ? `模式：${values.mode}\n位置：${values.project}\n仅停用该位置的 ASL 模式，原技能库与其他配置不变；受管副本会保留到本地归档。`
+            : action === "userSync"
             ? `范围：当前用户的所有项目\nAgent：${values.host}\n模式：${values.mode}\n${values.skillsDir ? "自选技能目录：" + values.skillsDir + "\n" : ""}${values.remove ? "停用 ASL 默认模式并移除其受管副本，保留原技能源。" : "按预览同步所选模式，其他原生技能和模型账号保持不变。"}`
             : `${action === "import" && values.replace ? "将替换预览中冲突的同名内容。\n" : ""}${action === "project" ? "范围：仅所选项目\n" : ""}目标：${values.output || values.target || values.project || values.workspace}\n${action === "edit" ? values.request.id : "不更改其他项目或模型账号。"}`,
         });

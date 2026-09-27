@@ -40,6 +40,9 @@ async function readPreferences(file) {
     try { if(value.views?.[root]) views[root]=viewValue(value.views[root]); } catch {}
   }
   return {
+    activeSource: value.activeSource && typeof value.activeSource.url === 'string' &&
+      /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+(?:\/|$)/.test(value.activeSource.url) &&
+      (value.activeSource.mode === null || typeof value.activeSource.mode === 'string' && /^[\w.-]{1,100}$/.test(value.activeSource.mode)) ? value.activeSource : null,
     views,
     libraries: [...new Set(libraries)].slice(0, 12),
     lastLibrary: libraries.includes(value.lastLibrary)
