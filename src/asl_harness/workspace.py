@@ -11,7 +11,7 @@ import yaml
 from .map_schema import icon_value, architecture_value
 
 
-MODE_API_VERSION = "asl-wep/v0.3.0"
+MODE_API_VERSION = "asl-wep/v0.4.0"
 SAFE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*\Z")
 LIFECYCLE_AREAS = ("candidates", "trials", "feedback", "archive")
 GENERATED_DIRECTORIES = {
@@ -197,6 +197,7 @@ class Mode:
     skill_roots: tuple[str, ...]
     capabilities: tuple[dict, ...] | None = None
     architecture: dict | None = None
+    api_version: str = 'asl-wep/v0.3.0'
 
 
 def _read_skill(package: Path, skill_id: str, environment: Path, *, source_text: str | None = None) -> Skill:
@@ -300,7 +301,7 @@ def _read_mode(package: Path, mode_id: str) -> Mode:
     skills = spec.get("skills") if isinstance(spec, dict) else None
     if (
         set(authored) != {"apiVersion", "kind", "metadata", "spec"}
-        or authored.get("apiVersion") != MODE_API_VERSION
+        or authored.get("apiVersion") not in {MODE_API_VERSION, 'asl-wep/v0.3.0'}
         or authored.get("kind") != "ModeProjection"
         or not isinstance(metadata, dict)
         or set(metadata) != {"id"}
@@ -313,6 +314,8 @@ def _read_mode(package: Path, mode_id: str) -> Mode:
         or len(skills) != len(set(skills))
     ):
         raise HarnessError("MODE_INVALID", f"Mode {mode_id} has an invalid definition")
+    if authored['apiVersion'] == MODE_API_VERSION and (not isinstance(spec.get('architecture'), dict) or 'paradigms' not in spec['architecture']):
+        raise HarnessError('MODE_INVALID', f'Mode {mode_id} 的 v0.4 定义必须包含 spec.architecture.shared 与 paradigms')
     return Mode(
         id=mode_id,
         path=package,
@@ -320,6 +323,7 @@ def _read_mode(package: Path, mode_id: str) -> Mode:
         skill_roots=tuple(skills),
         capabilities=validate_capabilities(spec.get("capabilities")),
         architecture=validate_architecture(spec.get('architecture')),
+        api_version=authored['apiVersion'],
     )
 
 

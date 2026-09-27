@@ -1,4 +1,4 @@
-"""Optional visual vocabulary. This never schedules or authorizes business work."""
+"""Mode working paradigms and visual vocabulary, never an execution scheduler."""
 import re
 import xml.etree.ElementTree as ET
 
@@ -42,8 +42,8 @@ def icon_value(value):
 def architecture_value(value, allowed=None):
     if value is None:
         return None
-    if not isinstance(value, dict) or set(value) - {'nodes', 'edges'}:
-        raise ValueError('架构仅包含可选 nodes 与 edges')
+    if not isinstance(value, dict) or set(value) - {'nodes', 'edges', 'shared', 'paradigms'}:
+        raise ValueError('架构仅支持 nodes、shared、paradigms；旧版可读取 edges')
     nodes, links = value.get('nodes', []), value.get('edges', [])
     if not isinstance(nodes, list) or len(nodes) > 120 or not isinstance(links, list) or len(links) > 240:
         raise ValueError('单个架构最多 120 个节点、240 条关系')
@@ -74,11 +74,64 @@ def architecture_value(value, allowed=None):
         if pair in seen or pair[0] == pair[1] or allowed is not None and not set(pair) <= allowed:
             raise ValueError('架构关系必须连接当前 Mode 内的不同技能，且不能重复')
         seen.add(pair)
-    return {'nodes': [dict(node) for node in nodes], 'edges': [dict(link) for link in links]}
+    if 'paradigms' not in value and 'shared' not in value:
+        return {'nodes': [dict(node) for node in nodes], 'edges': [dict(link) for link in links]}
+    if links:
+        raise ValueError('新版架构的关系应放在具体 paradigm.edges 中，不保留全局 edges')
+    shared = value.get('shared', [])
+    paradigms = value.get('paradigms', [])
+    def members(ids, location):
+        if (not isinstance(ids, list) or any(not isinstance(s, str) or not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,79}', s) for s in ids)
+                or len(ids) != len(set(ids)) or allowed is not None and not set(ids) <= allowed):
+            raise ValueError(f'{location} 必须引用当前 Mode 中不重复的完整技能')
+        return set(ids)
+    covered = members(shared, 'architecture.shared')
+    if not isinstance(paradigms, list) or len(paradigms) > 24:
+        raise ValueError('architecture.paradigms 最多保存 24 个工作范式')
+    ids = set()
+    for index, paradigm in enumerate(paradigms):
+        location = f'architecture.paradigms[{index}]'
+        if not isinstance(paradigm, dict) or set(paradigm) != {'id', 'title', 'description', 'skills', 'edges'}:
+            raise ValueError(f'{location} 需要 id、title、description、skills、edges')
+        pid = paradigm['id']
+        if not isinstance(pid, str) or not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,79}', pid) or pid in ids or pid == 'shared':
+            raise ValueError(f'{location}.id 必须唯一，使用小写英文、数字和短横线')
+        ids.add(pid)
+        for field, limit in (('title', 80), ('description', 1200)):
+            if not isinstance(paradigm[field], str) or not paradigm[field].strip() or len(paradigm[field]) > limit:
+                raise ValueError(f'{location}.{field} 需为 1–{limit} 字，说明范式名称与工作方式')
+        assigned = members(paradigm['skills'], location + '.skills')
+        if not assigned or assigned.intersection(shared):
+            raise ValueError(f'{location}.skills 不能为空，通用技能只放 shared')
+        architecture_value({'edges': paradigm['edges']}, assigned)
+        if any(not edge.get('label', '').strip() for edge in paradigm['edges']):
+            raise ValueError(f'{location}.edges 每条关联都需要 label，说明传递、反馈或选择条件')
+        covered.update(assigned)
+    if allowed is not None and covered != allowed:
+        raise ValueError('架构尚未归属的技能：' + '、'.join(sorted(allowed - covered)) + '；请加入工作范式或明确列为通用能力')
+    return {'nodes': [dict(node) for node in nodes], 'shared': list(shared),
+            'paradigms': [{**p, 'skills': list(p['skills']), 'edges': [dict(e) for e in p['edges']]} for p in paradigms]}
 
 
 def prune_architecture(value, allowed):
     if value is None:
         return None
     nodes = [node for node in value.get('nodes', []) if node['skill'] in allowed]
+    if 'paradigms' in value:
+        return {'nodes': nodes, 'shared': [s for s in value.get('shared', []) if s in allowed],
+                'paradigms': [{**p, 'skills': [s for s in p['skills'] if s in allowed],
+                    'edges': [e for e in p['edges'] if {e['from'], e['to']} <= allowed]}
+                    for p in value['paradigms'] if set(p['skills']) & allowed]}
     return {'nodes': nodes, 'edges': [link for link in value.get('edges', []) if {link['from'], link['to']} <= allowed]}
+
+
+def place_skills(architecture, skills, placement):
+    """Explicit placement of new members; never infer business relations."""
+    if not skills or not architecture or 'paradigms' not in architecture:
+        return architecture
+    if placement == 'shared':
+        return {**architecture, 'shared': list(dict.fromkeys([*architecture['shared'], *skills]))}
+    if placement not in {p['id'] for p in architecture['paradigms']}:
+        raise ValueError('请为新加入的技能选择工作范式，或明确选择通用能力')
+    return {**architecture, 'paradigms': [{**p, 'skills': list(dict.fromkeys([*p['skills'], *skills]))}
+            if p['id'] == placement else p for p in architecture['paradigms']]}

@@ -117,15 +117,15 @@ This isolates **recall and context visibility**. It is not an operating-system s
 ### A Mode is neither a Domain nor a Workflow
 
 - a Domain groups knowledge; a Mode groups capabilities around a human working state;
-- a Workflow dictates how work proceeds; a Mode only defines what is available;
+- a Workflow dictates execution; a Mode describes available capabilities and recurring work patterns without enforcing a route;
 - a Mode can cover a broad surface and should not wrap a one-off task;
 - several Modes may explicitly select the same Skill without copying it;
-- a Mode stores no execution order, state tree, branch graph, or hidden scheduler.
+- a Mode may describe branching, convergence, and feedback between Skills, but stores no runtime state and adds no scheduler.
 
 The active configuration can therefore remain small:
 
 ```yaml
-apiVersion: asl-wep/v0.3.0
+apiVersion: asl-wep/v0.4.0
 kind: ModeProjection
 metadata:
   id: research-desk
@@ -134,9 +134,20 @@ spec:
     - web-research
     - source-verification
     - report-writing
+  architecture:
+    shared: [web-research]
+    paradigms:
+      - id: evidence-to-report
+        title: From evidence to report
+        description: Verify key evidence before writing; use shared research when material is missing.
+        skills: [source-verification, report-writing]
+        edges:
+          - from: source-verification
+            to: report-writing
+            label: Verified material
 ```
 
-The Agent may search before verification or begin with supplied material and search only when evidence is missing. The Mode does not hard-code that path.
+Every Skill has an explicit place. Shared research does not need an edge to every node. Humans and Agents edit the same `mode.yaml`; the App validates and renders it. See [Architecture View 6](docs/asl-architecture-views.md) for the contract and current implementation.
 
 ## From a Tool Collection to a Living Work Environment
 

@@ -1,7 +1,15 @@
-apiVersion: asl-wep/v0.3.0
+apiVersion: asl-wep/v0.4.0
 kind: ModeProjection
 metadata:
   id: creator-studio
 spec:
   skills:
     - product-analysis
+  architecture:
+    shared: [source-research]
+    paradigms:
+      - id: product-review
+        title: 产品分析示例
+        description: 根据用户提供的材料分析产品；需要补充公开依据时按需使用通用资料检索。这是示例，不是用户的正式技能库。
+        skills: [product-analysis]
+        edges: []

@@ -11,7 +11,7 @@ import stat
 import shutil
 import sys
 import tempfile
-from .map_schema import prune_architecture
+from .map_schema import prune_architecture, place_skills
 from uuid import uuid4
 
 import yaml
@@ -61,6 +61,8 @@ def catalog(root: str | Path) -> dict:
             path=str(mode.path),
             capabilities=list(mode.capabilities) if mode.capabilities is not None else None,
             architecture=mode.architecture,
+            apiVersion=mode.api_version,
+            architectureStatus='defined' if mode.architecture and 'paradigms' in mode.architecture else 'needs-definition',
         )
         item['upstream'] = mode_upstream(mode.path)
     for item in report["skills"]:
@@ -177,10 +179,19 @@ App 是本地文件的可视化管理界面；这是一份用户主动交给 AI 
 apiVersion: {MODE_API_VERSION}
 kind: ModeProjection
 metadata: {{id: <模式ID>}}
-spec: {{skills: [<技能ID>]}}
+spec:
+  skills: [<技能ID>]
+  architecture:
+    shared: []
+    paradigms:
+      - id: <范式ID>
+        title: <工作场景名称>
+        description: <何时使用以及技能怎样配合；不写虚构经历>
+        skills: [<技能ID>]
+        edges: []
 正式环境至少需要一个真实 Skill 和一个引用它的 Mode；不要通过虚构占位技能骗过校验。已有内容不要重置，只修改与本次工作目的相关的部分。
 
-这是沉淀的逻辑架构呈现，不是操作教程或执行调度。不要求操作步骤、触发条件、输入输出或解释每条关系“如何工作”。架构定义可选；连线只表达已有关系。
+v0.4 必须定义工作架构：完整技能分为工作范式成员与通用能力。每个范式写清场景和配合方式；通用能力（如网络检索）放 shared，各范式按需调用，不连满全图。一个技能可参与多个范式，但不能同时标为 shared。这份结构呈现常用工作经验，不强制 Host 按图执行。
 你可修改 modes/{mode_id or '<模式ID>'}/MODE.md（常用方式）、mode.yaml（能力与视图），以及完整 skills/<id>/ 包内的说明、脚本、资料和资产。保留来源与许可。其他 Mode 不隐式增加技能。
 不要修改 App 源码、界面偏好或运行记录、安装路径、账号、权限、版本指纹来绕过检查；业务内容没有独立数据库。
 
@@ -190,12 +201,13 @@ spec: {{skills: [<技能ID>]}}
   类别名唯一、每个技能只归一类；仅限本 Mode 闭包中的技能。未分类技能仍显示且可用。数组顺序就是显示顺序。
 - icon 可省略，可用 emoji、Box/Search/Send/Palette/PenLine/ChartNoAxesCombined/PanelsTopLeft/Layers3/Puzzle，或基础图形 SVG。
   SVG 仅允许 svg/g/path/rect/circle/ellipse/line/polyline/polygon 和数值属性、纯色/currentColor；不支持 script、事件、style、外链、foreignObject。
-- 可选 spec.architecture: {{nodes: [{{skill: 技能ID, title: 显示名}}], edges: [{{from: 技能ID, to: 技能ID, label: 关联名称}}]}}。
+- 必填 spec.architecture: {{shared: [通用技能ID], paradigms: [{{id: 范式ID, title: 名称, description: 工作方式, skills: [技能ID], edges: [{{from: 技能ID, to: 技能ID, label: 关联含义}}]}}], nodes: [{{skill: 技能ID, title: 显示名}}]}}。
   一个完整 Skill 一个节点，使用技能 ID 标识；不添加 Mode、类别、场景或模块节点，不重复同一技能，不拆分完整技能。
-  当前 Mode 的全部技能自动显示。nodes 仅用于可选的名称、note 简短备注、icon / color 外观覆盖；不填也不会遗漏技能。
-  edges 的 from / to 直接引用当前 Mode 中不同技能的 ID；label 可选。支持分支、汇合和回路；结构只呈现经验，不强制运行顺序。
+  Mode 中全部技能必须被 shared 或至少一个范式覆盖。nodes 仅用于可选的名称、note 简短备注、icon / color 外观覆盖。
+  每个范式的 edges 只引用自己的成员；label 必须说明传递、反馈或分支条件。支持分支、汇合和回路；不要求操作步骤，不强制运行顺序。
   不区分关系图 / 层次图，App 使用统一的有向图自动布局，不需要填写 layout 或 parent。
-- 根据已有内容和用户表达整理连线，不根据目录名、关键词或软件依赖假造业务关系；没有关系定义时只显示独立技能，不编造连线。用户无需先编辑才能使用 Mode。
+- 根据 Skill 原文和用户目的维护范式与连线，不用关键词猜业务关系。不存在顺序关系时允许 edges 为空，由 description 说明选择方式。旧 v0.3 Mode 可读取且标为待定义；保存新版架构后升级 v0.4，不可撤回为空地图。
+- mode.save 调整成员时，会清理被移出技能的分类、显示和所有范式引用；新增成员必须同时提供 architecture 或 placement（范式ID，或 shared）。skill.import 的 placement 同理。移出 Mode 不删除技能文件。删除技能前必须解除其全部引用。
 - App 用固定的安全组件投影以上字段。不要提供任意 CSS、HTML 或 JavaScript；不支持的字段应删除或改成合法字段。
 
 编辑路径：先运行 environment.catalog 读取当前字段和 fingerprint，再把 mode.save 或 skill.file.save JSON 交给 environment.edit --workspace <目录> --check（stdin）。
@@ -224,7 +236,7 @@ def edit(root: str | Path, request: dict, *, check: bool = False) -> dict:
         raise HarnessError("EDIT_INVALID", "修改请求必须是对象")
     operation = request.get("operation")
     fields = {
-        "mode.save": {"operation", "id", "expected", "document", "skills", "capabilities", "architecture"},
+        "mode.save": {"operation", "id", "expected", "document", "skills", "capabilities", "architecture", "placement"},
         "mode.archive": {"operation", "id", "expected"},
         "skill.save": {"operation", "id", "expected", "document", "sourceDocument"},
         'skill.file.save': {'operation', 'id', 'expected', 'file', 'document'},
@@ -238,6 +250,7 @@ def edit(root: str | Path, request: dict, *, check: bool = False) -> dict:
             "expectedSource",
             "sourceOrigin",
             "category",
+            "placement",
         },
     }
     if operation not in fields or set(request) - fields[operation]:
@@ -307,7 +320,7 @@ def edit(root: str | Path, request: dict, *, check: bool = False) -> dict:
             workspace, modes={**workspace.modes, identifier: mode}
         )._validate_graph()
         mode_data = {
-            "apiVersion": MODE_API_VERSION,
+            "apiVersion": existing.api_version if existing else MODE_API_VERSION,
             "kind": "ModeProjection",
             "metadata": {"id": identifier},
             "spec": {"skills": roots},
@@ -320,9 +333,18 @@ def edit(root: str | Path, request: dict, *, check: bool = False) -> dict:
         if categories is not None:
             mode_data["spec"]["capabilities"] = list(categories)
         architecture = request.get('architecture', prune_architecture(existing.architecture, allowed) if existing else None)
+        if 'architecture' not in request and existing and architecture and 'paradigms' in architecture:
+            try:
+                architecture = place_skills(architecture, sorted(allowed - set(workspace.mode_skill_ids(identifier))), request.get('placement'))
+            except ValueError as error:
+                raise HarnessError('MODE_INVALID', str(error)) from error
+        if mode_data['apiVersion'] == MODE_API_VERSION and (not architecture or 'paradigms' not in architecture):
+            raise HarnessError('MODE_INVALID', '新建或已升级的 Mode 必须定义 architecture：工作范式或通用能力，不能移除架构')
         architecture = validate_architecture(architecture, allowed)
         if architecture is not None:
             mode_data['spec']['architecture'] = architecture
+            if 'paradigms' in architecture:
+                mode_data['apiVersion'] = MODE_API_VERSION
     elif operation == 'skill.file.save':
         data = skill_files(root, identifier, request.get('file'))
         if data['document'] is None:
@@ -404,6 +426,18 @@ def edit(root: str | Path, request: dict, *, check: bool = False) -> dict:
             changed_paths.append(f"modes/{binding.id}/mode.yaml")
             if request.get("category") and not any(g["title"] == request["category"] for g in binding.capabilities or ()):
                 raise HarnessError("EDIT_INVALID", "目标类别已不存在，请刷新后选择")
+            binding_data = load_yaml(binding.path / 'mode.yaml')
+            if identifier not in binding.skill_roots:
+                binding_data['spec']['skills'].append(identifier)
+            future = replace(workspace, skills={**workspace.skills, identifier: skill},
+                             modes={**workspace.modes, binding.id: replace(binding, skill_roots=tuple(binding_data['spec']['skills']))})
+            allowed = set(future.mode_skill_ids(binding.id))
+            try:
+                architecture = place_skills(binding.architecture, sorted(allowed - set(workspace.mode_skill_ids(binding.id))), request.get('placement'))
+                if architecture is not None:
+                    binding_data['spec']['architecture'] = validate_architecture(architecture, allowed)
+            except ValueError as error:
+                raise HarnessError('MODE_INVALID', str(error)) from error
     else:
         if not existing:
             raise HarnessError("EDIT_INVALID", "对象不存在")
@@ -447,9 +481,6 @@ def edit(root: str | Path, request: dict, *, check: bool = False) -> dict:
             if source_document:
                 (target / "SOURCE.md").write_text(source_document, encoding="utf-8")
             if binding:
-                binding_data = load_yaml(binding.path / "mode.yaml")
-                if identifier not in binding.skill_roots:
-                    binding_data["spec"]["skills"].append(identifier)
                 if request.get("category"):
                     for group in binding_data["spec"]["capabilities"]:
                         group["skills"] = [s for s in group["skills"] if s != identifier]

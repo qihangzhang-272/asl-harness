@@ -209,6 +209,13 @@ def export_pack(source: str | Path, mode_id: str, output: str | Path, *, include
         files[f"{NAMESPACE}/modes/{mode_id}/{name}"] = path.read_bytes()
     if include_profile:
         files[f"{NAMESPACE}/PROFILE.md"] = (workspace.root / "PROFILE.md").read_bytes()
+    # Repository notices travel once with the snapshot, never mutate every Skill.
+    notices = workspace.modes[mode_id].path / 'notices'
+    for path in [*(notices.iterdir() if notices.is_dir() else []), *workspace.root.iterdir()]:
+        if path.is_file() and re.match(r'(?i)^(license|copying|notice)(\.|$)', path.name):
+            if path.is_symlink() or not path.resolve().is_relative_to(workspace.root):
+                _fail('repository notice cannot reference outside the environment')
+            files.setdefault(f'{NAMESPACE}/notices/{path.name}', path.read_bytes())
     if len(files) > MAX_FILES or sum(map(len, files.values())) > MAX_BYTES:
         _fail("package exceeds 10000 files or 512 MiB")
     report = _review(files)
@@ -275,6 +282,8 @@ def _opened_pack(source: str | Path):
                 restored[name] = data
             elif name in {f"{NAMESPACE}/modes/{mode_id}/MODE.md", f"{NAMESPACE}/modes/{mode_id}/mode.yaml", f"{NAMESPACE}/modes/{mode_id}/SOURCE.md", f"{NAMESPACE}/PROFILE.md"}:
                 restored[name.removeprefix(f"{NAMESPACE}/")] = data
+            elif name.startswith(f'{NAMESPACE}/notices/') and re.fullmatch(r'(?i)(license|copying|notice)(\.[\w-]+)?', name.split('/')[-1]) and len(name.split('/')) == 3:
+                restored[f'modes/{mode_id}/notices/{name.split("/")[-1]}'] = data
             else:
                 _fail(f"unsupported ASL snapshot content: {name}")
         restored.setdefault("PROFILE.md", b"# Profile\n\nConfigure personal preferences locally.\n")
@@ -302,7 +311,7 @@ def _comparison_text(data: bytes | None) -> str | None:
     if data is None or b'\0' in data:
         return None
     try:
-        return data.decode('utf-8').replace('\r\n', '\n')
+        return data.decode('utf-8-sig').replace('\r\n', '\n')
     except UnicodeDecodeError:
         return None
 

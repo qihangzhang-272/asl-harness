@@ -1,76 +1,13 @@
-// Display groups help reading. They never route skills or invent dependencies.
-const GROUPS = [
-  [
-    "publish",
-    "发布与交付",
-    "Send",
-    /发布|post-to|发布准备|publish|compress-image/i,
-  ],
-  [
-    "layout",
-    "排版与文档",
-    "PanelsTopLeft",
-    /排版|markdown-to-html|format-markdown|layout/i,
-  ],
-  [
-    "visual",
-    "视觉表达",
-    "Palette",
-    /配图|插画|漫画|图表|视觉|信息图|illustrat|infographic|comic|image-gen|diagram|cover-image|chart/i,
-  ],
-  [
-    "writing",
-    "写作与表达",
-    "PenLine",
-    /写作|成稿|writing.style|memo|writer|文案/i,
-  ],
-  [
-    "analysis",
-    "分析与判断",
-    "ChartNoAxesCombined",
-    /估值|财务|投资判断|评分|尽调|产品分析|竞争格局|单位经济|valuation|financial|analy|scorecard|thesis|economics/i,
-  ],
-  [
-    "research",
-    "研究与资料",
-    "Search",
-    /研究|检索|搜索|语料|资料|归档|research|archive|agent-reach|deposition/i,
-  ],
-];
+// Categories come only from Mode content, never keyword inference in the renderer.
 export function capabilityGroups(skills, authored = null) {
-  if (Array.isArray(authored)) {
-    const assigned = new Set(authored.flatMap(g => g.skills));
-    const groups = authored.map((g, index) => ({ id: `custom-${index}`, title: g.title,
-      icon: typeof g.icon === 'string' ? g.icon : GROUPS.find(row => row[1] === g.title)?.[2] || "Box",
-      color: /^#[\da-f]{6}$/i.test(g.color || '') ? g.color : '#007AFF',
-      skills: g.skills.map(id => skills.find(s => s.id === id)).filter(Boolean) }));
-    const rest = skills.filter(s => !assigned.has(s.id));
-    if (rest.length) groups.push({ id: "unclassified", title: "未分类", icon: "Box", skills: rest });
-    return groups;
-  }
-  const groups = new Map();
-  for (const skill of skills) {
-    const name = `${skill.title} ${skill.id}`;
-    const group = GROUPS.find((row) => row[3].test(name)) ||
-      GROUPS.find((row) => row[3].test(skill.description || "")) || [
-        "other",
-        "其他能力",
-        "Box",
-      ];
-    if (!groups.has(group[0]))
-      groups.set(group[0], {
-        id: group[0],
-        title: group[1],
-        icon: group[2],
-        skills: [],
-      });
-    groups.get(group[0]).skills.push(skill);
-  }
-  return [...groups.values()].sort(
-    (a, b) =>
-      ((GROUPS.findIndex((g) => g[0] === a.id) + 10) % 10) -
-      ((GROUPS.findIndex((g) => g[0] === b.id) + 10) % 10),
-  );
+  const groups=(authored||[]).map((g,index)=>({id:`custom-${index}`,title:g.title,
+    icon:typeof g.icon==='string'?g.icon:'Box',
+    color:/^#[\da-f]{6}$/i.test(g.color||'')?g.color:'#007AFF',
+    skills:g.skills.map(id=>skills.find(s=>s.id===id)).filter(Boolean)}));
+  const assigned=new Set((authored||[]).flatMap(g=>g.skills));
+  const rest=skills.filter(s=>!assigned.has(s.id));
+  if(rest.length)groups.push({id:'unclassified',title:'未分类',icon:'Box',skills:rest});
+  return groups;
 }
 export function shortText(text, limit = 90) {
   const plain = (text || "").replace(/[#*`]/g, "").replace(/\s+/g, " ").trim();
@@ -83,10 +20,12 @@ export function adoptionRequest(form, catalog) {
   if (existing && form.useExisting) {
     return { operation: "mode.save", id: mode.id, expected: mode.fingerprint,
       document: mode.document, skills: [...new Set([...mode.roots, form.id])],
+      ...(form.placement ? {placement:form.placement} : {}),
       ...(form.category ? { capabilities: mode.capabilities.map(g => ({ ...g,
         skills: [...g.skills.filter(id => id !== form.id), ...(g.title === form.category ? [form.id] : [])] })) } : {}) };
   }
   return { operation: "skill.import", source: form.source, id: form.id, mode: mode.id,
+    ...(form.placement ? {placement:form.placement} : {}),
     ...(form.origin ? { sourceOrigin: form.origin } : {}),
     ...(form.category ? { category: form.category } : {}),
     ...(existing ? { expected: existing.fingerprint } : {}) };
@@ -108,22 +47,24 @@ export function scopeLabel(scope, target = "") {
       : `仅项目 · ${target}`;
 }
 // ponytail: Mermaid owns layout and routing; this only projects validated local content.
-export function diagramForMode(mode, skills) {
+export function diagramForMode(mode, skills, paradigmId) {
   const escape = text => String(text).replace(/["<>#\x60\r\n\u2028\u2029]/g,ch=>`#${ch.codePointAt(0)};`);
-  const nodes=skills.map((skill,index)=>{
+  const paradigm=mode.architecture?.paradigms?.find(p=>p.id===paradigmId)||mode.architecture?.paradigms?.[0];
+  const visible=paradigm?skills.filter(s=>paradigm.skills.includes(s.id)):mode.architecture?.paradigms?[]:skills;
+  const nodes=visible.map((skill,index)=>{
     const entry=mode.architecture?.nodes?.find(n=>n.skill===skill.id)||{};
     return {id:skill.id,alias:`n${index}`,data:{...entry,skill,title:entry.title||skill.title}};
   });
   const aliases=new Map(nodes.map(n=>[n.id,n.alias]));
-  const edges=(mode.architecture?.edges||[]).filter(e=>aliases.has(e.from)&&aliases.has(e.to))
+  const edges=(paradigm?.edges||mode.architecture?.edges||[]).filter(e=>aliases.has(e.from)&&aliases.has(e.to))
     .map(e=>({source:e.from,target:e.to,label:e.label}));
-  const heading=edges.length?'flowchart TB':`block-beta\ncolumns ${Math.min(3,Math.max(1,Math.ceil(Math.sqrt(nodes.length))))}`;
+  const heading=edges.length?'flowchart LR':`block-beta\ncolumns ${Math.min(3,Math.max(1,Math.ceil(Math.sqrt(nodes.length))))}`;
   const lines=[heading,...nodes.map(n=>{
     const icon=n.data.icon||'';
     const prefix=icon.startsWith('<svg')?'◈ ':/[^\x00-\x7f]/.test(icon)?icon+' ':'';
     return `${n.alias}["${escape(prefix+n.data.title)}"]`;
   }),...edges.map(e=>`${aliases.get(e.source)} -->${e.label?`|"${escape(e.label)}"|`:''} ${aliases.get(e.target)}`)];
-  return {nodes,edges,source:lines.join('\n')};
+  return {nodes,edges,paradigm,source:lines.join('\n')};
 }
 
 export function restoreView(catalog, saved={}) {
@@ -136,8 +77,30 @@ export function restoreView(catalog, saved={}) {
 
 export function filterArchitecture(architecture, included) {
   if(!architecture)return architecture;
+  if(architecture.paradigms)return {nodes:(architecture.nodes||[]).filter(n=>included.has(n.skill)),
+    shared:(architecture.shared||[]).filter(s=>included.has(s)),
+    paradigms:architecture.paradigms.filter(p=>p.skills.some(s=>included.has(s))).map(p=>({...p,
+      skills:p.skills.filter(s=>included.has(s)),edges:p.edges.filter(e=>included.has(e.from)&&included.has(e.to))}))};
   return {nodes:(architecture.nodes||[]).filter(n=>included.has(n.skill)),
     edges:(architecture.edges||[]).filter(e=>included.has(e.from)&&included.has(e.to))};
+}
+
+export function skillSections(catalog, modeId='') {
+  const modes=modeId?catalog.modes.filter(m=>m.id===modeId):catalog.modes;
+  const groups=modes.flatMap(mode=>{
+    const architecture=mode.architecture;
+    const groups=architecture?.paradigms ? [
+      ...architecture.paradigms.map(p=>({id:p.id,title:p.title,skills:p.skills})),
+      {id:'shared',title:'通用能力',skills:architecture.shared||[]}]
+      : (mode.capabilities||[{title:'待定义工作范式',skills:mode.skills}]);
+    const assigned=new Set(groups.flatMap(g=>g.skills));
+    const remaining=mode.skills.filter(id=>!assigned.has(id));
+    if(remaining.length)groups.push({id:'unassigned',title:'待归类',skills:remaining});
+    return groups.filter(g=>g.skills.length).map((g,i)=>({...g,id:`${mode.id}/${g.id||i}`,mode:mode.id,modeTitle:mode.title}));
+  });
+  if(!modeId){const used=new Set(catalog.modes.flatMap(m=>m.skills));const rest=catalog.skills.filter(s=>!used.has(s.id));
+    if(rest.length)groups.push({id:'unused',title:'尚未加入工作模式',modeTitle:'本地库',skills:rest.map(s=>s.id)});}
+  return groups;
 }
 export function repositoryKey(value) {
   return (value || '').replace(/^git@github\.com:/i, 'https://github.com/')

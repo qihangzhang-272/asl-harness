@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { FileText, FolderOpen, Code, Save, Search, Puzzle } from 'lucide-react';
+import Markdown from './Markdown.jsx';
 
 // Files are returned by the core's skill-local allowlist, never arbitrary renderer paths.
 export default function SkillFiles({ item, Dialog, readFile, saveFile, onClose, readOnly }) {
@@ -13,7 +14,7 @@ export default function SkillFiles({ item, Dialog, readFile, saveFile, onClose, 
     readFile(file).then(result => { if (active) { setData(result); setDocument(result.document || ''); setEditing(false); } })
       .catch(e => { if (active) setError(e.message); }).finally(() => { if (active) setBusy(false); });
     return () => { active = false; };
-  }, [file]);
+  }, [file,item.id]);
   function leave(action) { if (!busy && (!dirty || window.confirm('当前文件有未保存的修改，放弃这些修改？'))) action(); }
   const groups = [...new Set((data?.files || []).map(f => f.group))];
   return <Dialog title={item.title} onClose={() => leave(onClose)} wide>
@@ -30,13 +31,18 @@ export default function SkillFiles({ item, Dialog, readFile, saveFile, onClose, 
         <header><span title={file}>{file}</span><div className="tabs"><button disabled={busy} className={!editing?'active':''} onClick={()=>setEditing(false)}>预览</button><button disabled={readOnly || data?.document == null || busy} className={editing?'active':''} onClick={()=>setEditing(true)}><Code size={14}/>编辑</button></div></header>
         {busy ? <p className="muted">正在读取文件…</p> : data?.document == null ? <p className="inline-note">此文件为二进制或超过 1 MB，保留在完整技能包中；请使用本地编辑器处理。</p> : editing ?
           <textarea aria-label="文件内容" className="package-code" spellCheck={false} value={document} onChange={e=>setDocument(e.target.value)}/> :
-          <pre className={`package-preview ${file.endsWith('.md')?'markdown-source':''}`}>{document}</pre>}
+          /\.md$/i.test(file) ? <div className="package-rendered"><Markdown text={document} onFile={relative=>{
+            const parts=file.split('/').slice(0,-1);
+            for(const part of relative.split('/')){if(part==='..')parts.pop();else if(part!=='.'&&part)parts.push(part);}
+            const target=parts.join('/');
+            if(data.files.some(f=>f.path===target))leave(()=>setFile(target));
+          }}/></div> : <pre className="package-preview">{document}</pre>}
       </section>
     </div>
     {error && <p role="alert" className="error-text">{error}</p>}
     <div className="dialog-actions"><span className="muted">{dirty ? '有未保存修改' : '直接对应本地文件'} · 保存不会执行脚本</span><button disabled={busy} onClick={()=>leave(onClose)}>关闭</button><button className="primary" disabled={!dirty || busy || readOnly} onClick={async()=>{
       setBusy(true); setError('');
-      try { await saveFile({operation:'skill.file.save',id:item.id,file,document,expected:data.fingerprint}); const result=await readFile(file); setData(result); setDocument(result.document || ''); }
+      try { await saveFile({operation:'skill.file.save',id:item.id,file,document,expected:data.fingerprint}); const result=await readFile(file); setData(result); setDocument(result.document || ''); setEditing(false); }
       catch(e){setError(e.message);} finally{setBusy(false);}
     }}><Save size={15}/>校验并保存</button></div>
   </Dialog>;

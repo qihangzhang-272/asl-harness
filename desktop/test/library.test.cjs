@@ -3,6 +3,22 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const os = require("node:os");
+
+test('a packaged example is not a personal library remembered across releases',async t=>{
+  const {readPreferences}=require('../library.cjs');
+  const root=await fs.mkdtemp(path.join(os.tmpdir(),'asl-example-reference-'));
+  t.after(()=>fs.rm(root,{recursive:true,force:true}));
+  const example=path.join(root,'old-app','resources','example-environment');
+  await fs.mkdir(path.join(example,'skills'),{recursive:true});
+  await fs.mkdir(path.join(example,'modes'));
+  await fs.writeFile(path.join(example,'WORKSPACE.md'),'# Packaged example');
+  const file=path.join(root,'preferences.json');
+  await fs.writeFile(file,JSON.stringify({lastLibrary:example,libraries:[example]}));
+  const read=await readPreferences(file);
+  assert.deepEqual(read.libraries,[]);
+  assert.equal(read.lastLibrary,null);
+  assert.ok(await fs.stat(example));
+});
 test('screen state survives reopen independently for each library', async t => {
   const {rememberLibrary,rememberView,readPreferences}=require('../library.cjs');
   const root=await fs.mkdtemp(path.join(os.tmpdir(),'asl-restore-'));

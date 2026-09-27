@@ -151,7 +151,7 @@ def test_cli_saves_utf8_input_even_when_host_stdio_is_ascii(tmp_path):
     result = subprocess.run(
         [sys.executable, "-m", "asl_harness.commands", "environment.edit", "--workspace", str(root)],
         input=json.dumps({"operation": "mode.save", "id": "unicode-mode", "document": document,
-                          "skills": ["foundation"]}, ensure_ascii=False).encode("utf-8"),
+                          "skills": ["foundation"], "architecture": {"shared": ["foundation"], "paradigms": []}}, ensure_ascii=False).encode("utf-8"),
         capture_output=True,
         env={**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1] / "src"),
              "PYTHONIOENCODING": "ascii:surrogateescape", "PYTHONUTF8": "0"},
@@ -177,6 +177,7 @@ def test_mode_edit_previews_then_updates_without_changing_skills(tmp_path):
         "id": "analysis",
         "document": "# 分析\n\n研究产品。\n",
         "skills": ["foundation"],
+        "architecture": {"shared": ["foundation"], "paradigms": []},
     }
     preview = management.edit(root, request, check=True)
     assert not (root / "modes/analysis").exists()

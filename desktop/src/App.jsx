@@ -7,6 +7,10 @@ import React, {
   useState,
 } from "react";
 import SkillFiles from './SkillFiles.jsx';
+import EditorPage from './EditorPage.jsx';
+import SkillLibrary from './SkillLibrary.jsx';
+import Markdown from './Markdown.jsx';
+import {Placement} from './ParadigmEditor.jsx';
 import AgentPage from './AgentPage.jsx';
 import { LocalModes, RepositoryModes } from './LocalModes.jsx';
 import { useReadTasks, ReadStatus } from './useReadTasks.jsx';
@@ -168,7 +172,7 @@ function CategoryEditor({ mode, skills, onSave, onClose }) {
     .map(g => ({ title: g.title, skills: g.skills.map(s => s.id) }))).map(g => ({ ...g, skills: [...g.skills] })));
   const [query, setQuery] = useState("");
   const duplicate = groups.some((g, i) => !g.title.trim() || groups.some((o, j) => i !== j && o.title.trim() === g.title.trim()));
-  return <Dialog title="编辑技能分类" onClose={onClose} wide>
+  return <EditorPage title="编辑技能分类" onClose={onClose} wide>
     <div className="category-editor">
       {groups.map((g, i) => <div className="category-name" key={i}>
         <input aria-label={`类别名称 ${i + 1}`} maxLength={80} value={g.title}
@@ -194,7 +198,7 @@ function CategoryEditor({ mode, skills, onSave, onClose }) {
     {duplicate && <p className="muted">请填写不重复的类别名称。</p>}
     <div className="dialog-actions"><button onClick={onClose}>取消</button><button className="primary" disabled={duplicate} onClick={() => onSave({ operation: "mode.save", id: mode.id,
       expected: mode.fingerprint, document: mode.document, skills: mode.roots, capabilities: groups.map(g=>{const value={...g};if(!value.icon)delete value.icon;return value;}) })}>保存分类</button></div>
-  </Dialog>;
+  </EditorPage>;
 }
 
 function DiscoveredSkills({ report, catalog, readOnly, onInspect, onAdd, onMode, empty = "尚未发现技能" }) {
@@ -229,6 +233,7 @@ function DiscoveredSkills({ report, catalog, readOnly, onInspect, onAdd, onMode,
 
 function ModeSkills({ mode, catalog, Dialog, onClose, onSave, onAdd, onInspect, onMode, task, read }) {
   const [tab, setTab] = useState('library'), [roots, setRoots] = useState(new Set(mode.roots));
+  const [placement,setPlacement]=useState('');
   const [query, setQuery] = useState(''), [url, setUrl] = useState(''), [report, setReport] = useState(null);
   const included = new Set(roots);
   for (const id of included) for (const dependency of catalog.skills.find(s=>s.id===id)?.requires || []) included.add(dependency);
@@ -236,7 +241,8 @@ function ModeSkills({ mode, catalog, Dialog, onClose, onSave, onAdd, onInspect, 
     <div className="mode-skill-tabs tabs">{[['library','本地库'],['github','GitHub'],['local','本机已安装']].map(([id,label])=><button key={id} className={tab===id?'active':''} onClick={()=>{setTab(id);setReport(null);}}>{label}</button>)}</div>
     {tab==='library' ? <><div className="field-heading"><span>{included.size} 个技能在当前 Mode 中</span><small>移出 Mode 不删除技能文件</small></div><div className="search"><Search size={16}/><input aria-label="筛选库内技能" placeholder="查找技能" value={query} onChange={e=>setQuery(e.target.value)}/></div>
       <div className="picker-list mode-member-list">{catalog.skills.filter(s=>`${s.title} ${s.id}`.toLowerCase().includes(query.toLowerCase())).map(s=><label className="skill-picker-item" key={s.id}><input type="checkbox" checked={included.has(s.id)} disabled={included.has(s.id)&&!roots.has(s.id)} onChange={e=>setRoots(old=>{const next=new Set(old);e.target.checked?next.add(s.id):next.delete(s.id);return next;})}/><span><strong>{s.title}</strong><small>{shortText(s.description,85)}</small></span>{included.has(s.id)&&!roots.has(s.id)&&<Tag>依赖带入</Tag>}</label>)}</div>
-      <div className="dialog-actions"><button onClick={onClose}>关闭</button><button className="primary" disabled={!roots.size} onClick={()=>onSave({operation:'mode.save',id:mode.id,expected:mode.fingerprint,document:mode.document,skills:[...roots]})}>保存所选技能</button></div></> : <>
+      {[...included].some(id=>!mode.skills.includes(id))&&<Placement mode={mode} value={placement} onChange={setPlacement}/>}
+      <div className="dialog-actions"><button onClick={onClose}>关闭</button><button className="primary" disabled={!roots.size||(!!mode.architecture?.paradigms&&[...included].some(id=>!mode.skills.includes(id))&&!placement)} onClick={()=>onSave({operation:'mode.save',id:mode.id,expected:mode.fingerprint,document:mode.document,skills:[...roots],...(placement?{placement}:{})})}>保存所选技能</button></div></> : <>
       {tab==='github' ? <form className="search large" onSubmit={e=>{e.preventDefault();read('mode-discovery', '解析技能', async call=>setReport(await call('githubSkills',url)));}}><Link2 size={16}/><input type="url" required aria-label="添加技能的 GitHub 地址" placeholder="粘贴仓库或技能目录地址" value={url} onChange={e=>setUrl(e.target.value)}/><button className="primary">解析技能</button></form> : <div className="heading-actions"><button className="primary" onClick={()=>read('mode-discovery', '发现本机技能', async call=>setReport(await call('localSkills')))}>扫描本机技能</button><button onClick={()=>read('mode-discovery', '读取技能目录', async call=>{const folder=await call('choose','skillFolder');if(folder)setReport(await call('localSkills',folder));})}><FolderOpen size={15}/>选择目录</button></div>}
       <p className="map-note">添加目标：{mode.title}。支持 ASL 库与普通 SKILL.md 技能包；不会执行仓库里的安装脚本。</p>
       {report ? <DiscoveredSkills report={report} catalog={catalog} onAdd={onAdd} onInspect={onInspect} onMode={onMode}/> : <Empty title="选择想加入的技能" icon={Puzzle}><p>解析结果会列出技能与配套内容，由你决定添加哪些。</p></Empty>}
@@ -256,8 +262,9 @@ function ModeEditor({ item, allSkills, onSave, onClose }) {
   );
   const [roots, setRoots] = useState(new Set(item?.roots || []));
   const [query, setQuery] = useState("");
+  const [placement,setPlacement]=useState('');
   return (
-    <Dialog
+    <EditorPage
       title={item?.fingerprint ? "编辑工作模式" : "新建工作模式"}
       onClose={onClose}
       wide
@@ -275,7 +282,8 @@ function ModeEditor({ item, allSkills, onSave, onClose }) {
             document: `# ${name.trim()}\n\n${body}`,
             skills: [...roots],
             ...(item?.fingerprint ? { expected: item.fingerprint } : {}),
-            ...(!item?.fingerprint ? {architecture:filterArchitecture(item?.architecture,included)} : {}),
+            ...(placement?{placement}:{}),
+            ...(!item?.fingerprint ? {architecture:item?.architecture?.paradigms?filterArchitecture(item.architecture,included):{nodes:[],shared:[],paradigms:[{id:'main',title:name.trim(),description:body.trim(),skills:[...included],edges:[]}]}} : {}),
             ...(!item?.fingerprint && item?.capabilities ? {
               capabilities: item.capabilities.map(group => ({ ...group, skills: group.skills.filter(id => included.has(id)) })),
             } : {}),
@@ -293,6 +301,7 @@ function ModeEditor({ item, allSkills, onSave, onClose }) {
         <Field label="用途与约定">
           <textarea
             rows={4}
+            required
             value={body}
             onChange={(e) => setBody(e.target.value)}
             placeholder="在什么场景使用这个模式"
@@ -352,6 +361,7 @@ function ModeEditor({ item, allSkills, onSave, onClose }) {
               </label>
             ))}
         </div>
+        {item?.fingerprint&&[...roots].some(id=>!item.skills.includes(id))&&<Placement mode={item} value={placement} onChange={setPlacement}/>}
         <div className="dialog-actions">
           <button type="button" onClick={onClose}>
             取消
@@ -361,7 +371,7 @@ function ModeEditor({ item, allSkills, onSave, onClose }) {
           </button>
         </div>
       </form>
-    </Dialog>
+    </EditorPage>
   );
 }
 
@@ -376,7 +386,7 @@ function SkillEditor({ item, texts, onSave, onClose }) {
     texts?.["SOURCE.md"] || "# Source\n\n- Origin: local://authored\n",
   );
   return (
-    <Dialog title={item ? "编辑技能" : "创建技能"} onClose={onClose} wide>
+    <EditorPage title={item ? "编辑技能" : "创建技能"} onClose={onClose} wide>
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -436,7 +446,7 @@ function SkillEditor({ item, texts, onSave, onClose }) {
           <button className="primary">保存技能</button>
         </div>
       </form>
-    </Dialog>
+    </EditorPage>
   );
 }
 
@@ -701,19 +711,23 @@ function ConnectDialog({
           </button>
         ))}
       </div>
+      {!native && <p role="status" className="muted">正在识别本机 Agent…</p>}
           <div className="field-heading">
             <b>在哪里使用</b>
           </div>
-          <button type="button" className={`scope-option ${scope === "project" ? "selected" : ""}`} onClick={() => setScope("project")} aria-pressed={scope === "project"}>
+          <button type="button" className={`scope-option ${scope === "project" ? "selected" : ""}`} onClick={() => {
+            if(host==="deepseek-harness"||project)setScope("project");
+            else task(async()=>{const folder=await api("choose","project");if(folder){setProject(folder);setScope("project");}});
+          }} aria-pressed={scope === "project"}>
             {scope === "project" ? <Check size={17} /> : <Circle size={17} />}
             <div>
               <strong>
-                {host === "deepseek-harness" ? "一个独立预设" : "仅这个项目"}
+                {host === "deepseek-harness" ? "一个独立预设" : project ? `项目 · ${baseName(project)}` : "选择项目文件夹"}
               </strong>
               <small>
                 {host === "deepseek-harness"
                   ? "在 DeepSeek 新会话中选择"
-                  : "其他项目保持不变"}
+                  : project ? "仅应用于这个项目；完整位置见下方" : "选择后只在该文件夹内使用，其他项目不变"}
               </small>
             </div>
           </button>
@@ -752,7 +766,7 @@ function ConnectDialog({
               </button>
             </Field>
           ) : scope === "project" ? (
-            <Field label="项目文件夹">
+            <Field label={project ? "已选择项目 · 可更换" : "选择项目文件夹后才能应用"}>
               <button
                 className="folder-field"
                 onClick={() =>
@@ -763,7 +777,7 @@ function ConnectDialog({
                 }
               >
                 <FolderOpen size={18} />
-                <span>{project || "选择项目"}</span>
+                <span>{project || "选择项目文件夹"}</span>
                 <ChevronRight size={16} />
               </button>
             </Field>
@@ -795,7 +809,7 @@ function ConnectDialog({
             })}>停用默认模式</button> : <button onClick={onClose}>取消</button>}
             <button
               className="primary"
-              disabled={host === "deepseek-harness" ? !preset : scope === "project" ? !project : !!preview?.conflicts.length}
+              disabled={!selected || (host === "deepseek-harness" ? !preset : scope === "project" ? !project : !!preview?.conflicts.length)}
               onClick={() =>
                 task(async () => {
                   let result;
@@ -1015,7 +1029,7 @@ export default function App() {
     setModal(null); setModeId(item.id); setPage('modes');
   };
   const mode = catalog?.modes.find((m) => m.id === modeId);
-  const readOnly = workspace === initial?.example;
+  const readOnly = workspace === initial?.example || /[\\/]resources[\\/]example-environment[\\/]*$/i.test(workspace || '');
   const modeSkills = useMemo(
     () =>
       mode
@@ -1045,6 +1059,14 @@ export default function App() {
       preview,
       addedTo,
     });
+  }
+  async function saveContent(request) {
+    await api("run", "edit", {workspace, request});
+    const result=await api("run", "edit", {workspace, request, apply:true});
+    if(result.canceled)return;
+    await load(workspace);
+    setModal(null);
+    setMessage({text:"已保存到本地；Agent 可读取同一份内容。"});
   }
   async function applyEdit() {
     const result = await api("run", "edit", {
@@ -1149,16 +1171,12 @@ export default function App() {
     const report = await api("run", "import", { source: modal.source, target });
     setModal({ kind: "import-review", source: modal.source, target, report, replace: false });
   }
-  const filteredSkills = (catalog?.skills || []).filter((s) =>
-    `${s.title} ${s.description} ${s.id}`
-      .toLowerCase()
-      .includes(query.toLowerCase()),
-  );
+  const editorOpen=['mode-editor','skill-editor','skill-files','mode-skills','architecture','categories','import-review'].includes(modal?.kind);
 
   return (
     <NoticeContext.Provider value={{ ...message, busy, reads }}>
       <div className="app" aria-busy={busy}>
-        <aside className="sidebar">
+        <aside className="sidebar" inert={editorOpen}>
           <div className="brand">
             <span className="brand-symbol">
               <Layers3 size={22} />
@@ -1197,6 +1215,8 @@ export default function App() {
             ].map(([id, label, Icon]) => (
               <button
                 key={id}
+                aria-label={label}
+                title={label}
                 className={page === id ? "active" : ""}
                 onClick={() => {
                   setPage(id);
@@ -1255,7 +1275,7 @@ export default function App() {
           <small className="app-version">{initial?.version && `v${initial.version}${initial.packaged?'':' · 开发版'}`}</small>
         </aside>
         <div className="app-main">
-          <header className="topbar">
+          <header className="topbar" inert={editorOpen}>
             <span>
               {page === "modes"
                 ? "工作模式"
@@ -1289,7 +1309,8 @@ export default function App() {
               )}
             </div>
           </header>
-          <div className="content-with-detail">
+          <div id="editor-page" hidden={!editorOpen} inert={busy}/>
+          <div className="content-with-detail" style={editorOpen?{display:'none'}:undefined}>
             <main className="content" ref={contentRef}>
               {!modal && <ReadStatus tasks={reads}/>}
               {['discover', 'updates'].includes(page) && <details className="local-mode-disclosure" open={provider === 'local'}>
@@ -1426,7 +1447,7 @@ export default function App() {
                       </div>
                       <details className="mode-method" key={mode.id}>
                         <summary>模式说明</summary>
-                        <pre>{mode.document.replace(/^#\s+.+\r?\n?/, '').trim()}</pre>
+                        <Markdown text={mode.document.replace(/^#\s+.+\r?\n?/, '').trim()}/>
                       </details>
                       <div className="mode-toolbar">
                         <div className="tabs">
@@ -1524,24 +1545,8 @@ export default function App() {
                           />
                         )}
                       </div>
-                      <div className="list-surface">
-                        {filteredSkills.map((skill) => (
-                          <SkillRow
-                            key={skill.id}
-                            skill={skill}
-                            selected={selected?.id === skill.id}
-                            onClick={() => read('detail', '读取技能', call=>selectSkill(skill,workspace,call))}
-                            trailing={
-                              <Tag>
-                                {skill.usedBy.length
-                                  ? `${skill.usedBy.length} 个模式`
-                                  : "未使用"}
-                              </Tag>
-                            }
-                          />
-                        ))}
-                      </div>
-                      {!filteredSkills.length && <Empty title="没有找到技能" />}
+                      <SkillLibrary catalog={catalog} query={query} onSkill={item=>setModal({kind:'skill-files',item})}
+                        onEditMode={readOnly?undefined:id=>{setModeId(id);setModal({kind:'architecture'});}}/>
                     </>
                   )}
                   {page === "discover" && (
@@ -1794,7 +1799,7 @@ export default function App() {
           <ModeEditor
             item={modal.item}
             allSkills={catalog.skills}
-            onSave={(request) => task(() => editContent(request))}
+            onSave={(request) => task(() => saveContent(request))}
             onClose={() => setModal(null)}
           />
         )}
@@ -1802,16 +1807,16 @@ export default function App() {
           <SkillEditor
             item={modal.item}
             texts={modal.texts}
-            onSave={(request) => task(() => editContent(request))}
+            onSave={(request) => task(() => saveContent(request))}
             onClose={() => setModal(null)}
           />
         )}
-        {modal?.kind === 'skill-files' && <SkillFiles item={modal.item} Dialog={Dialog} readOnly={readOnly} onClose={()=>setModal(null)}
+        {modal?.kind === 'skill-files' && <SkillFiles item={modal.item} Dialog={EditorPage} readOnly={readOnly} onClose={()=>setModal(null)}
           readFile={file=>api('run','files',{workspace,skill:modal.item.id,file})}
-          saveFile={async request=>{await api('run','edit',{workspace,request});await api('run','edit',{workspace,request,apply:true});await load(workspace);}}/>}
+          saveFile={async request=>{await api('run','edit',{workspace,request});const result=await api('run','edit',{workspace,request,apply:true});if(result.canceled)throw new Error('未保存更改');await load(workspace);}}/>}
         {modal?.kind === 'agent-guide' && <EnvironmentGuide {...modal} onClose={()=>setModal(null)} onRefresh={()=>task(refreshLocal)}/>}
-        {modal?.kind === 'mode-skills' && <ModeSkills mode={modal.mode} catalog={catalog} Dialog={Dialog} onClose={()=>setModal(null)} onMode={id=>{setModal(null);showMode(id);}} task={task} read={read}
-          onSave={request=>task(()=>editContent(request))} onAdd={skill=>adoptSkill(skill,modal.mode.id)} onInspect={skill=>task(()=>inspectDiscovered(skill))}/>}
+        {modal?.kind === 'mode-skills' && <ModeSkills mode={modal.mode} catalog={catalog} Dialog={EditorPage} onClose={()=>setModal(null)} onMode={id=>{setModal(null);showMode(id);}} task={task} read={read}
+          onSave={request=>task(()=>saveContent(request))} onAdd={skill=>adoptSkill(skill,modal.mode.id)} onInspect={skill=>task(()=>inspectDiscovered(skill))}/>}
         {modal?.kind === "review" && (
           <Dialog
             title={
@@ -1878,8 +1883,8 @@ export default function App() {
             onApplied={(text, values) => { setMessage({ text }); api("native").then(setNative).catch(() => {}); if (values) setModal({ kind: "setup", values, resultMessage: text }); }}
           />
         )}
-        {modal?.kind === 'architecture' && <ArchitectureEditor mode={mode} skills={modeSkills} Dialog={Dialog} Field={Field} onSave={request=>task(()=>editContent(request))} onClose={()=>setModal(null)}/>}
-        {modal?.kind === "categories" && <CategoryEditor mode={mode} skills={modeSkills} onClose={() => setModal(null)} onSave={request => task(() => editContent(request))} />}
+        {modal?.kind === 'architecture' && <ArchitectureEditor mode={mode} skills={modeSkills} Dialog={EditorPage} Field={Field} onSave={request=>task(()=>saveContent(request))} onClose={()=>setModal(null)}/>}
+        {modal?.kind === "categories" && <CategoryEditor mode={mode} skills={modeSkills} onClose={() => setModal(null)} onSave={request => task(() => saveContent(request))} />}
         {modal?.kind === "discovered-detail" && <Dialog title={modal.skill.title} onClose={() => setModal(null)} wide>
           <p>{modal.skill.description}</p>
           <p className="muted">文件解析结果，未执行技能，也未验证实际效果。</p>
@@ -1901,17 +1906,7 @@ export default function App() {
                 <button
                   key={m.id}
                   disabled={m.skills.includes(selected.id)}
-                  onClick={() =>
-                    task(() =>
-                      editContent({
-                        operation: "mode.save",
-                        id: m.id,
-                        expected: m.fingerprint,
-                        document: m.document,
-                        skills: [...m.roots, selected.id],
-                      }),
-                    )
-                  }
+                  onClick={() => adoptSkill(selected,m.id)}
                 >
                   <Layers3 size={18} />
                   <span>{m.title}</span>
@@ -1939,7 +1934,7 @@ export default function App() {
                   aria-label="选择 Mode"
                   required
                   value={modal.mode}
-                  onChange={(e) => setModal({ ...modal, mode: e.target.value, category: "" })}
+                  onChange={(e) => setModal({ ...modal, mode: e.target.value, category: "", placement:"" })}
                 >
                   <option value="">请选择工作模式</option>
                   {catalog.modes.map((m) => (
@@ -1950,6 +1945,7 @@ export default function App() {
                 </select>
               </Field>
               {!catalog.modes.length && <p>还没有 Mode。<button type="button" onClick={() => setModal({ kind: "mode-editor" })}><Plus size={14} />新建工作模式</button></p>}
+              {!catalog.modes.find(m=>m.id===modal.mode)?.skills.includes(modal.id)&&<Placement mode={catalog.modes.find(m=>m.id===modal.mode)} value={modal.placement} onChange={placement=>setModal({...modal,placement})}/>}
               {!!catalog.modes.find(m => m.id === modal.mode)?.capabilities?.length && <Field label="能力类别">
                 <select aria-label="能力类别" value={modal.category} onChange={e => setModal({ ...modal, category: e.target.value })}>
                   <option value="">未分类</option>{catalog.modes.find(m => m.id === modal.mode).capabilities.map(g => <option key={g.title} value={g.title}>{g.title}</option>)}
@@ -2043,7 +2039,8 @@ export default function App() {
           </Dialog>
         )}
         {modal?.kind === "import-review" && (
-          <Dialog title="确认导入" onClose={() => setModal(null)}>
+          <EditorPage title="导入与更新" onClose={() => setModal(null)}>
+            <div className="import-target"><FolderOpen size={18}/><div><strong>保存到这个工作环境</strong><p>{modal.target}</p><small>“加入”仅指这个环境缺少内容，不代表电脑上没有同名技能。</small></div></div>
             <div className="apply-summary"><Layers3 size={20} /><span>{modal.title || modal.report.mode}<small>{modal.report.skills.length} 个完整技能 · {modal.report.profileAction === "preserved" ? "保留本地个人资料" : "不导入个人资料"}</small></span></div>
             {!modal.report.changed && !modal.report.conflicts.length && <p className="inline-note">所选 Mode 的内容已一致，无需更新。</p>}
             <div className="review-list import-changes">
@@ -2053,9 +2050,9 @@ export default function App() {
                   <Tag tone={action === "conflict" ? "amber" : ""}>
                     {
                       {
-                        add: "新增",
+                        add: "加入此环境",
                         unchanged: "已存在",
-                        conflict: "有本地差异",
+                        conflict: "与来源内容不同",
                         replace: "替换",
                         'source-update': '登记云端来源',
                       }[action]
@@ -2068,7 +2065,7 @@ export default function App() {
             {Object.values(modal.report.actions).includes("unchanged") && <p className="muted">{Object.values(modal.report.actions).filter(action => action === "unchanged").length} 项内容已一致，保持不变。</p>}
             {Object.values(modal.report.differences || {}).some(changes=>changes.some(c=>c.kind==='line-endings')) && <p className="muted">已忽略 {Object.values(modal.report.differences).flat().filter(c=>c.kind==='line-endings').length} 个文件的换行差别，不会因此覆盖本地文件。</p>}
             {modal.report.conflicts.length > 0 && (
-              <><p className="inline-note">同名内容存在差异，默认保留本地版本。</p><label className="check-line"><input type="checkbox" checked={modal.replace} onChange={e => setModal({ ...modal, replace: e.target.checked })} />我确认替换以上差异内容</label></>
+              <><p className="inline-note">以下比较的是所选环境与导入来源。仅凭不同，不能判断是谁修改过；减号为当前内容，加号为来源内容。</p><label className="check-line"><input type="checkbox" checked={modal.replace} onChange={e => setModal({ ...modal, replace: e.target.checked })} />用来源版本替换以上差异内容</label></>
             )}
             {!!modal.report.affectedModes?.length && <p className="inline-note">共享技能变更可能影响：{modal.report.affectedModes.join("、")}</p>}
             {!!modal.report.dependencyFiles?.length && <details><summary>配套环境（{modal.report.dependencyFiles.length} 项声明）</summary><ul>{modal.report.dependencyFiles.map(file => <li key={file}>{file}</li>)}</ul><p>只导入内容；安装工具、连接服务和登录请在应用 Mode 后检查配置。</p></details>}
@@ -2099,7 +2096,7 @@ export default function App() {
                 确认导入
               </button>
             </div>
-          </Dialog>
+          </EditorPage>
         )}
       </div>
     </NoticeContext.Provider>

@@ -2,6 +2,10 @@ const fs = require("node:fs/promises");
 const path = require("node:path");
 let pending = Promise.resolve();
 
+function bundledExample(root) {
+  return typeof root === 'string' && /[\\/]resources[\\/]example-environment[\\/]*$/i.test(root);
+}
+
 function viewValue(value) {
   const allowed=['mode','page','view','skill','query','provider','githubUrl'];
   if (!value || typeof value!=='object' || Array.isArray(value) || Object.keys(value).some(k=>!allowed.includes(k)) ||
@@ -30,7 +34,7 @@ async function readPreferences(file) {
   } catch {}
   const libraries = [];
   for (const root of Array.isArray(value.libraries) ? value.libraries : [])
-    if (await isLibrary(root)) libraries.push(path.resolve(root));
+    if (!bundledExample(root) && await isLibrary(root)) libraries.push(path.resolve(root));
   const views = {};
   for(const root of libraries) {
     try { if(value.views?.[root]) views[root]=viewValue(value.views[root]); } catch {}
@@ -83,6 +87,7 @@ async function rememberView(file,root,state) {
   });
 }
 module.exports = {
+  bundledExample,
   readPreferences,
   writePreferences,
   rememberLibrary,

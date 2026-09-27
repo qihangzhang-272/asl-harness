@@ -10,6 +10,7 @@ const {
   updatePreferences,
   rememberView,
   isLibrary,
+  bundledExample,
 } = require("./library.cjs");
 const { nativeInventory, existingDirectory, localSkillRoots } = require("./native.cjs");
 const { discover, publicUrl } = require("./market.cjs");
@@ -332,8 +333,8 @@ if(primary) app.whenReady().then(() => {
   readHandle('run', "asl:run", async ([action, values], signal) => {
     if (["scan", "unpack", "mcp", "mcpSave", "localModes", "nativeMcp"].includes(action)) throw new Error("请使用对应管理入口");
     commandArgs(action, values);
-    if ((action === "edit" && path.resolve(values.workspace) === example) ||
-        (action === "import" && path.resolve(values.target) === example))
+    if ((action === "edit" && (path.resolve(values.workspace) === example || bundledExample(values.workspace))) ||
+        (action === "import" && (path.resolve(values.target) === example || bundledExample(values.target))))
       throw new Error("内置示例只供查看。请先分享模式，再导入为独立技能库后编辑。");
     if (action === "userSync" && values.apply && !values.expected) throw new Error("请先查看同步预览");
     if (action === "import" && values.apply && !values.expected) throw new Error("请先查看导入预览");

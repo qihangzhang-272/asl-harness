@@ -52,7 +52,7 @@ async function readRepository(url, { fetch, core, temp, selected, repositories, 
         skill.inspection.reasons.push("仓库上层有共享配置，尚未确认能否单独取出：" + ancestors.map(d => path.relative(repositoryRoot, path.join(output, d.file))).join("、"));
       }
       // Preserve repository license notices when a self-contained subfolder is copied.
-      for (const file of report.repositoryFiles.filter(file => path.dirname(path.join(output, file)) === repositoryRoot && /^(license|copying|notice)(\.|$)/i.test(path.basename(file)))) {
+      for (const file of (environment ? [] : report.repositoryFiles).filter(file => path.dirname(path.join(output, file)) === repositoryRoot && /^(license|copying|notice)(\.|$)/i.test(path.basename(file)))) {
         const dest = path.join(skill.source, path.basename(file));
         try {
           await fs.copyFile(path.join(output, file), dest, 1);

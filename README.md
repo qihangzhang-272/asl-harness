@@ -117,15 +117,15 @@ Mode 之间共享同一份 Skill 真源，但不会互相继承或互相调用�
 ### Mode 不是 Domain，也不是 Workflow
 
 - Domain 按知识分类，Mode 按人的工作状态组织能力；
-- Workflow 规定任务怎样走，Mode 只决定当前有哪些能力可用；
+- Workflow 规定任务怎样走，Mode 描述可用能力与常用工作范式，不强制执行路径；
 - Mode 可以覆盖很宽的工作面，而不是包装一次任务；
 - 多个 Mode 可以显式选择同一个 Skill，但不复制它；
-- Mode 不保存顺序、状态树、条件分支或另一个调度器。
+- Mode 可保存分支、汇合与反馈的技能关系，但不保存运行状态，也不充当调度器。
 
 一个 Mode 的活动配置因此可以保持很短：
 
 ```yaml
-apiVersion: asl-wep/v0.3.0
+apiVersion: asl-wep/v0.4.0
 kind: ModeProjection
 metadata:
   id: research-desk
@@ -134,9 +134,20 @@ spec:
     - web-research
     - source-verification
     - report-writing
+  architecture:
+    shared: [web-research]
+    paradigms:
+      - id: evidence-to-report
+        title: 从材料到报告
+        description: 核对关键依据后组织报告；材料不足时按需调用通用检索。
+        skills: [source-verification, report-writing]
+        edges:
+          - from: source-verification
+            to: report-writing
+            label: 已核对的材料
 ```
 
-当前 Agent 可以先搜索再验证，也可以先阅读材料再决定是否搜索。Mode 不替它写死路径。
+每个技能都有明确归属。通用检索无需给所有节点连线；当前 Agent 可以先读材料再决定是否搜索。人和 Agent 编辑同一个 `mode.yaml`，App 校验后呈现，具体协议与当前实现见[总架构 View 6](docs/asl-architecture-views.md)。
 
 ## 从工具集合到长期成长的工作环境
 

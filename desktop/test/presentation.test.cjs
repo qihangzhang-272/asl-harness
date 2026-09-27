@@ -83,7 +83,7 @@ test("scope labels never confuse current user with a selected project", async ()
   assert.equal(scopeLabel("user"), "我的所有项目");
   assert.equal(scopeLabel("preset", "创作"), "仅预设 · 创作");
 });
-test("names take precedence over incidental description words when grouping", async () => {
+test("unclassified skills never receive keyword-inferred business categories", async () => {
   const { capabilityGroups } = await import("../src/presentation.mjs");
   const groups = capabilityGroups([
     {
@@ -93,7 +93,7 @@ test("names take precedence over incidental description words when grouping", as
       requires: [],
     },
   ]);
-  assert.equal(groups[0].id, "research");
+  assert.equal(groups[0].id, "unclassified");
 });
 
 test("skill format errors explain what to fix without hiding other errors", async () => {
@@ -104,6 +104,24 @@ test("skill format errors explain what to fix without hiding other errors", asyn
   );
   assert.equal(errorText("文件已被修改，请刷新"), "文件已被修改，请刷新");
   assert.match(errorText("Skill qa-skill must declare matching name and description"), /请保留技能顶部的 name/);
+});
+
+test('paradigm selection renders only that skill subgraph with shared capability separate',async()=>{
+  const {diagramForMode,skillSections,filterArchitecture}=await import('../src/presentation.mjs');
+  const skills=['search','a','b','c'].map(id=>({id,title:id}));
+  const mode={id:'work',title:'Work',skills:skills.map(s=>s.id),architecture:{nodes:[],shared:['search'],paradigms:[
+    {id:'one',title:'Research',description:'Research then analyze',skills:['a','b'],edges:[{from:'a',to:'b',label:'evidence'},{from:'b',to:'a',label:'question'}]},
+    {id:'two',title:'Visual',description:'Explain an analysis',skills:['b','c'],edges:[{from:'b',to:'c',label:'brief'}]}]}};
+  assert.deepEqual(diagramForMode(mode,skills,'two').nodes.map(n=>n.id),['b','c']);
+  assert.equal(diagramForMode(mode,skills,'one').edges.length,2);
+  assert.ok(!diagramForMode(mode,skills,'one').source.includes('search'));
+  const sections=skillSections({modes:[mode],skills});
+  assert.equal(sections.length,3);
+  assert.deepEqual(sections.flatMap(s=>s.skills),['a','b','b','c','search']);
+  const pruned=filterArchitecture(mode.architecture,new Set(['search','a']));
+  assert.equal(pruned.paradigms.length,1);
+  assert.deepEqual(pruned.paradigms[0].edges,[]);
+  assert.equal(mode.architecture.paradigms.length,2);
 });
 
 test("manual categories override suggestions and deletion leaves unclassified skills", async () => {

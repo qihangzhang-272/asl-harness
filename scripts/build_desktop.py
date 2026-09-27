@@ -52,7 +52,7 @@ def build(output: Path) -> Path:
     check = subprocess.run([
         str(app / "resources/core/asl-harness.exe"), "environment.edit", "--workspace", str(smoke),
     ], input=json.dumps({"operation": "mode.save", "id": "unicode-smoke", "document": document,
-                        "skills": ["source-research"]}, ensure_ascii=False).encode("utf-8"), capture_output=True)
+                        "skills": ["source-research"], "architecture": {"shared": ["source-research"], "paradigms": []}}, ensure_ascii=False).encode("utf-8"), capture_output=True)
     if check.returncode or not json.loads(check.stdout.decode("utf-8")).get("ok"):
         raise ValueError(f"Packaged Chinese input failed: {check.stdout.decode('utf-8', errors='replace')}")
     if (smoke / "modes/unicode-smoke/MODE.md").read_text(encoding="utf-8") != document:

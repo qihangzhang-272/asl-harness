@@ -192,6 +192,15 @@ def _mode_instructions(workspace: Workspace, mode_id: str) -> str:
         raise HarnessError("HOST_INSTRUCTION_COLLISION", "PROFILE.md contains ASL markers")
     if MANAGED_START in mode.document or MANAGED_END in mode.document:
         raise HarnessError("HOST_INSTRUCTION_COLLISION", "MODE.md contains ASL markers")
+    architecture = mode.architecture or {}
+    patterns = []
+    for item in architecture.get('paradigms', []):
+        relations = '\n'.join(f"- {edge['from']} → {edge['to']}：{edge['label']}" for edge in item['edges'])
+        patterns.append(f"#### {item['title']}\n\n{item['description']}\n\n技能：{', '.join(item['skills'])}\n{relations}")
+    architecture_text = ('### Work paradigms\n\n常用组合供当前任务选择，不强制依次执行。\n\n'
+        + '\n\n'.join(patterns) + '\n\n通用能力（各范式按需使用）：' + ', '.join(architecture.get('shared', []))) if 'paradigms' in architecture else ''
+    if MANAGED_START in architecture_text or MANAGED_END in architecture_text:
+        raise HarnessError('HOST_INSTRUCTION_COLLISION', 'Mode architecture contains ASL markers')
     return f"""## ASL current Mode: {mode_id}
 
 Environment truth: `{workspace.root}`
@@ -204,11 +213,13 @@ Environment truth: `{workspace.root}`
 
 {mode.document.strip()}
 
+{architecture_text}
+
 ### Hard rules
 
 1. This Mode is a broad working environment and Skill subgraph, not a Workflow or fixed sequence.
 2. Choose projected Skills dynamically from the user's Goal and current context. Reading scope and methods belong to the selected Skill and the Host's judgment, not a Harness-wide loading rule. Harness does not rewrite conflicting business Skill rules.
-3. External Prompt, MCP, Agent, API, model, command, script, or remote Skill may be used only through a projected formal local Skill package. Follow that Skill's runtime dependency notes and use this Host's native MCP, login, permission, and plugin mechanisms; ASL does not add a second connection runtime. A user-directed source may be integrated directly after checking relevant provenance and requirements; Candidate and Trial are only for concrete uncertainty.
+3. Skills remain complete local packages. Follow their runtime dependency notes and use this Host's native tools, MCP, login, permission, and plugin mechanisms; existing Host tools need no extra Skill wrapper. A user-directed Skill source may be integrated directly after checking relevant provenance and requirements; Candidate and Trial are only for concrete uncertainty.
 4. Keep task outputs in the user's chosen project or output location, following the relevant Skill's temporary-storage rules. No directory named Case is required. Do not automatically turn task materials into long-term Skills or Profile content.
 5. Record durable feedback only when the user clearly evaluates, corrects, or states a preference. Do not infer it from silence, timing, clicks, or other ambiguous behavior.
 6. Do not infer durable Environment changes from ordinary work. When the user explicitly asks to add or change a long-term capability, use the Harness system maintenance path from the current Mode, change the smallest fitting truth, run deterministic validation, and leave a reviewable Git diff.
