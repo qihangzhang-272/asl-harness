@@ -4,7 +4,7 @@
 
 本文件用多种标准架构图解释 ASL。先看 Master 理解独立 App、可迁移环境和宿主的关系，再看 View 2D / 2E / 2F 理解使用、导入与模型配置，最后看 View 7C 的培养机制及 View 9 的真实状态。其余专项图展开已有底座，不把方案当成已发布功能。
 
-> 更新：2026-09-26。当前验证数字、部署差异和后续执行路线集中在 View 9。v0.4 工作范式与桌面 0.3.0 已完成本轮本机验收；不等于真实宿主会话或跨电脑迁移全部验收，旧版本发布与当前源码状态分开记录。
+> 更新：2026-09-26。当前验证数字、部署差异和后续执行路线集中在 View 9。v0.4 工作范式保留；本轮补入模式库层级、云端直接浏览与 Agent 配置生命周期。实现、窗口验收、打包与真实宿主会话分开记录，不以界面可用代替实际运行成功。
 
 ## 颜色约定
 
@@ -114,7 +114,7 @@ flowchart TB
 
     subgraph MANAGE["Harness 管理机制 · 不是第二个 Agent"]
         INTAKE["导入与安装协调 · 部分实现<br/>本机 / GitHub 发现 → 添加到 Mode<br/>配套内容提示；不自动安装或拆分"]
-        UPSTREAM["云端 Mode 与更新 · 已实现<br/>读取真实 Mode → 本地完整副本<br/>定时检查上游 → 差异确认 → 更新"]
+        UPSTREAM["云端 Mode 与更新 · 已实现<br/>连接即浏览模式库及子模式，不先导入<br/>保存时建立完整本地副本；上游检查与差异更新"]
         PORTABLE["可迁移包 · 内容往返已实现<br/>Mode + 完整 Skill + 指纹清单<br/>运行依赖安装与连接待补"]
         CORE["已有 CLI 与保护<br/>扫描 / 校验 / 闭包 / 视图 / 单 Skill 同步<br/>路径、秘密、用户修改冲突、文件回滚与指纹"]
         EDIT["内容管理 · 代码已测<br/>Mode 创建 / 修改 / 复制 / 归档<br/>完整技能包浏览与文件编辑 / 影响预览"]
@@ -122,6 +122,7 @@ flowchart TB
         SETUP["本机配置交接 · 代码已有<br/>Mode + 原始 Skill + 本机缺项<br/>启动原生 Claude / Codex，结束后复查"]
         LOCAL["本机发现 · 已验证<br/>标准技能 / MCP 位置 + 已登记项目<br/>Mode 同名与同源分开；不扫描硬盘"]
         MCPEDIT["原生 MCP 管理 · 已验证<br/>Claude / Codex 用户与项目范围<br/>逐条编辑 / 停用 / 版本检查 / 备份"]
+        CONNECTIONS["Agent 中的模式 · 配置级管理<br/>读取原生回执并核对实际文件<br/>查看 / 更新 / 停用；不影响非受管内容"]
         LEARN["培养与推荐 · 待开发<br/>相关经验召回、合并、更正与撤回<br/>没有积分或随机变异调度器"]
     end
 
@@ -175,6 +176,11 @@ flowchart TB
     APP -->|选定范围并确认| MCPEDIT
     MCPEDIT -->|仅改原生声明，登录仍归宿主| RUNTIME
     APP -->|来源与更新窗口| UPSTREAM
+    UPSTREAM -->|完整目录直接呈现；缓存不是工作区| APP
+    APP -->|按 Agent 查看真实配置| CONNECTIONS
+    PROJECTION -->|用户 / 项目 / Preset 回执| CONNECTIONS
+    CONNECTIONS -->|复用验证与受管修改| CORE
+    CONNECTIONS -.配置核对不等于真实任务成功.-> APP
     SOURCES -->|云端版本基准，不在 App 硬编码 Mode| UPSTREAM
     UPSTREAM -->|用户确认后，复用完整 Mode 包导入| PORTABLE
     MODES -->|SOURCE 中的仓库、链接与提交| UPSTREAM
@@ -215,7 +221,7 @@ flowchart TB
     classDef generated fill:#f3f4f6,stroke:#6b7280,color:#1f2937,stroke-dasharray:4 3;
     classDef external fill:#f5f3ff,stroke:#7c3aed,color:#4c1d95;
     class USER,HOST,ROOT,MODES locked;
-    class SKILLS,CORE,EDIT,STEWARD,CASE,SETUP,UPSTREAM,LOCAL,MCPEDIT done;
+    class SKILLS,CORE,EDIT,STEWARD,CASE,SETUP,UPSTREAM,LOCAL,MCPEDIT,CONNECTIONS done;
     class APP,INTAKE,PORTABLE,LEARN,CONTEXT,MODEL,ADAPTER,DSH,CC,CX,WB,FUTURE,HOOK,DSH_UI pending;
     class PROJECTION,MAP generated;
     class SOURCES,RUNTIME external;
@@ -596,6 +602,30 @@ Hook 不单独保存运行记录。Codex、Claude Code、Cordis 使用自己的 
 
 **用户不需要理解配置目录。** 打开 App 应先看到自己的工作场，以及每个工作场能做什么、有哪些资料和经验、哪个 Agent 能用、还缺什么连接。可以从空白环境开始，也可以导入已经培养过的 Mode；两者进入同一界面。
 
+### 层级、浏览与使用是不同关系
+
+侧栏以模式库为父层、真实 Mode 为子项；进入 Mode 后查看范式和完整技能。范式是对工作方式的整理，同一技能可以参加多个范式，不为显示层级复制 Skill 文件；通用技能独立列出。Agent 是使用目的地，不是技能类别或新的 Mode 所属层。
+
+```mermaid
+flowchart LR
+    LIB["模式库：本地 / 已连接 GitHub"] --> MODE["工作模式：按工作目的组织"]
+    MODE --> PAR["工作范式：已有经验与协作关系"]
+    PAR --> SKILL["完整 Skill 节点"]
+    MODE --> SHARED["通用 Skill：按需使用，不强制连线"]
+    MODE -.选择使用目的地.-> AGENT["Codex / Claude / DeepSeek / WorkBuddy"]
+    AGENT --> STATE["实际配置记录：查看 / 更新 / 停用"]
+    classDef content fill:#dcfce7,stroke:#16a34a,color:#14532d;
+    classDef boundary fill:#dbeafe,stroke:#2563eb,color:#1e3a8a;
+    class LIB,MODE,PAR,SKILL,SHARED content;
+    class AGENT,STATE boundary;
+```
+
+连接公开仓库后直接显示其中的 Mode、技能关系与原文；仅浏览不创建业务副本。用户选择“保存到本地”或“在 Agent 使用”时才保存：同源本地 Mode 优先复用，多份同源副本让用户选择；没有同源副本则采用按仓库隔离的本地目录。只同名不当作同源。App 偏好仅记住所连接的仓库与上次浏览位置，缓存快照不成为可编辑真源。普通 Skill 仓库仍显示技能添加入口，不伪造 Mode。
+
+本机发现复用宿主标准目录、已登记项目和现有投影回执中的 Environment 引用。活动窗口定时有限刷新，不做全盘遍历；“发现文件”“核对配置”“真实任务成功”分别表达。Agent 页面按宿主列出配置及作用范围，可回到原 Mode 查看、更新，或明确确认后停用。项目与 Preset 停用走 `host.disconnect --check` 及指纹确认：仅归档已验证的 ASL 副本，去除对应指令区块，保留原库和其他原生配置；用户级停用复用 `host.user.sync --remove`。修改过的受管文件提示检查，不直接覆盖或移除。
+
+界面保持固定导航与对齐的目录行；选中、悬停不改变缩进。复杂编辑和 Agent 配置进入独立页面。页面过渡仅作用于内容区，可立即继续操作；减少动态效果设置停用位移动效。参考 [Apple Design](https://github.com/emilkowalski/skills/tree/main/skills/apple-design) 的空间一致性与即时反馈，及 [OneTake](https://github.com/feitangyuan/onetake) 的连续性思路；不引入后者的非商业授权代码或电影式长转场。具体设计推导不作为产品内文案展示。
+
 **当前定义：一个 Skill 就是一个节点。** v0.4 用工作范式描述用途与协作方式；每个范式有名称、说明、技能成员及带含义的关系。图呈现已沉淀的组织逻辑，不是强制工作流。范式内一个完整技能只出现一次，多个关联连接同一节点；同一技能可参加不同范式，通用能力独立列在图外。名称和说明也放在图外，不制造类别节点或虚拟执行步骤。
 
 **使用 Mermaid 原生绘图，只有一个架构视图。** App 从当前 Mode 的真实技能及可选关系生成图，支持分支、汇合与回路；箭头表达已定义的关系，不触发执行。没有关系时，Mermaid 将独立技能紧凑排列，不伪造连线。取消“关系图 / 层次图”切换和展开目录；技能分类仍是独立的辅助清单，不再冒充逻辑架构。浅色画布、紧凑圆角节点、细线和少量强调色由 App 固定；提供平移、缩放、适应画布、放大及点选技能。布局由 Mermaid 负责，不维护第二套排线引擎。
@@ -622,7 +652,7 @@ Hook 不单独保存运行记录。Codex、Claude Code、Cordis 使用自己的 
 
 **在工作模式里增减技能。** “添加技能”内提供本地库成员管理、GitHub 解析与本机技能扫描；从此入口发现的技能预选当前 Mode。移出 Mode 只解除引用，保留 Skill 文件。技能详情的“文件与结构”显示包内说明、脚本、参考资料和资产；可以查看及编辑不超过 1 MB 的 UTF-8 文本，二进制 / 大文件只显示文件信息并保留。保存经过完整包结构检查与过期指纹保护，不执行脚本，也不在此新增文件删除入口。Windows 纯 CRLF 文件编辑时保留其换行格式。
 
-**入口与本地维护：**首屏主入口“从这台电脑开始”提供上述整理提示词；“导入别人分享的工作模式”为第二入口，先支持 Agent Skill Library 和现有 ASL 包，不扩建市场。不预装个人模式，也不注入开发者电脑的技能库路径。粘贴符合 ASL 结构的公开仓库地址（或仓库内 Environment 目录地址），固定一个提交后读取真实 Mode、能力类别和完整技能闭包；选择 Mode 才导入。没有现有环境时自动使用 App 用户数据目录下的 `workspace/`，不要求先挑本地仓库。取得空环境提示词本身不创建业务文件。已有环境则导入其中；本地库和 ZIP 入口保留。普通 Skill 仓库仍走选择技能、添加到现有 Mode 的入口，不把任意仓库猜成工作模式。
+**入口与本地维护：**首屏主入口“从这台电脑开始”提供上述整理提示词；连接模式库支持 GitHub、本地目录与分享包，先支持 Agent Skill Library 和现有 ASL 包，不扩建市场。不预装个人模式，也不注入开发者电脑的技能库路径。公开仓库固定一个提交后直接浏览真实 Mode、能力类别和完整技能闭包；选择保存或使用才导入。云端保存按仓库分开本地目录；已有同源 Mode 可复用。普通包仍可导入现有环境，空环境使用 App 用户目录下的 `workspace/`。取得整理提示词本身不创建业务文件。普通 Skill 仓库仍走选择技能、添加到现有 Mode 的入口，不把任意仓库猜成工作模式。
 
 **来源与更新窗口：**每个从云端导入的 Mode 在可选 `modes/<id>/SOURCE.md` 内保存一个受管区块：仓库、原始链接、已导入 commit。保留文件已有来源与许可文字；不增加数据库或每技能附属配置。该记录随 Mode 分享包一起迁移；`MODE.md` / `mode.yaml` 的业务语义不变。启动、运行期间每 15 分钟及从休眠恢复后检查上游；同链接的 Mode 合并请求，也可手动刷新。检查仅查询提交，不每次下载整库；界面区分没有新提交、上游新提交、网络失败，失败不影响本地使用。固定 commit 链接继续固定该版本，不擅自改跟默认分支。App 关闭后不启动额外常驻服务。
 
@@ -630,7 +660,7 @@ Hook 不单独保存运行记录。Codex、Claude Code、Cordis 使用自己的 
 
 比较时区分正文变更、增加文件、本地独有文件、纯换行差异与仅 Mode 上游记录更新。CRLF / LF 差异不再触发替换冲突，也不重写本地文件；其他文本显示文件级差异，长差异明确截断，二进制 / 大文件提示本地核对。用于拒绝过期编辑的指纹仍按原始字节计算，不因为比较忽略换行而放松覆盖保护。
 
-**默认安装体验：**Codex / Claude Code 默认选择当前用户范围，自动显示宿主标准目录，无需选项目；自定义目录收进高级设置。用户选择项目范围时才打开项目文件夹选择器。DeepSeek 仍选择已有基础 Preset，但新预设自动写入本机 `.dsh/.agent-presets/asl-<mode>/`，不要求用户选导出目录；同名非受管预设不会覆盖。WorkBuddy 当前只支持项目范围。
+**默认安装体验：**Codex / Claude Code 默认选择当前用户范围，自动定位宿主标准目录；项目配置入口直接选择文件夹，自定义用户目录收进高级设置。配置完成后进入对应 Agent 页核对记录，不自动弹出安装助手。DeepSeek 优先使用本机非 ASL 的标准基础 Preset，可展开更换；未发现时明确要求选择。新预设写入 `.dsh/.agent-presets/asl-<mode>/`，同名非受管预设不会覆盖。WorkBuddy 只支持项目范围。用户级安装不保证隔离宿主其他已有技能。
 
 **当前桌面版实际可以做：**连接现有技能库或内置示例，显示真实 Mode、完整技能与引用关系；创建、编辑、复制、归档 Mode，编辑 Skill、添加完整 Skill 并加入 Mode。能力类别可新增、改名、删除、重新归类，删除类别不删除技能。保存前显示涉及的模式，过期编辑拒绝覆盖，归档保留完整目录。还可预览并导入 / 导出 ASL 环境包；浏览 DeepSeek 社区插件目录、GitHub 搜索结果；扫描本机技能目录；粘贴 GitHub 链接后读取文件、原文与依赖声明，从卡片直接选择 Mode 添加。配套内容保留提醒，同名默认复用库内版本。选择项目可生成 Codex / Claude / WorkBuddy 文件投影，或基于已有 DeepSeek Preset 导出新 Preset。未检测的连接不显示为零，文件配置不等于会话生效。标准 Skill 不必具有 ASL 专用的“完成标准”标题；仅在导入副本补充来源，不改上游方法正文。复杂仓库的自主拆分、安装和对话式融合尚未实现。
 
@@ -675,6 +705,7 @@ flowchart LR
     SCAN --> CHOICE["卡片直接添加到 Mode<br/>选择模式与类别 → 预览保存<br/>同名默认复用；配套内容提示"]
     CHOICE --> CORE
     SCAN --> REMOTE["符合协议的真实 Mode<br/>完整 Skill 闭包 + 可携带来源"]
+    REMOTE -->|连接即浏览；不写业务库| UI
     REMOTE --> PACK
     ENV --> ORIGIN["Mode SOURCE<br/>仓库 / 链接 / 已导入提交"]
     ORIGIN --> POLL["App 启动及定时查上游<br/>同链接合并请求；失败不影响本地"]
@@ -1409,6 +1440,18 @@ MCP 的可移植性高于宿主 Plugin，因此当前架构优先让 Skill 声�
 ## View 9 · 当前项目状态
 
 <!-- ASL:PROJECT STATUS START -->
+
+### 2026-09-26 模式库与 Agent 管理修订（Harness 0.4.1 / App 0.4.0）
+
+- **已实现：**模式库父层与 Mode 子项；连接 GitHub 即可浏览真实 Mode、范式图和技能原文，不先导入。保存或配置时复用同源副本，否则按仓库分开保存。重新打开恢复云端浏览位置。本机发现沿用已登记目录与原生投影引用，不全盘扫描。
+- **Agent 管理：**按宿主查看用户、项目、Preset 配置记录，核对实际文件后提供查看、更新和停用。配置完成进入对应 Agent 页。项目 / Preset 停用保留受管副本到归档；用户级复用既有同步接口，原库和非受管配置不变。DeepSeek / WorkBuddy MCP 仍在宿主原生界面管理，本轮没有新增对应的 MCP 编辑器。
+- **交互修复：**侧栏同层的图标列、文字起点与行高固定，长标题省略；选中不改变位置。模式切换不再无谓重读整库，避免迟到读取关掉刚打开的配置页。隐藏 SVG 不执行零尺寸缩放，修复离开配置页后空白。缺失 Windows Documents 已知目录回退到有效 home；DeepSeek 临时目录不重复长预设名，避免合法输出路径在复制中超过 Windows 路径限制。云端卡片说明在卡内换行。
+- **确定性验证：**Python（UTF-8 环境）141 passed / 4 skipped，无警告；桌面 Node 62 passed；协议校验 21 Markdown / 0 YAML；总架构文档的 22 个 Mermaid 图均经实际打包渲染器语法解析。4 个跳过项仍为平台或符号链接权限限制，不记作通过。
+- **实际窗口验证：**开发版和冻结核心的 EXE 分别使用真实库副本、隔离 home / App 配置测试。通过侧栏几何对齐、选中与折叠展开、Claude 用户及项目配置 / 更新 / 项目停用、DeepSeek Preset 配置与停用、公开 Agent Skill Library 的 4 Mode 直接浏览、云端选择重开恢复、900px 窗口、卡片文字边界与减少动态效果。无 renderer 异常。文件夹选择和确认框在自动测试中返回隔离目标，未修改真实账号配置，也未执行模型业务任务。
+- **本地交付：**`deliverables/ASL-Workspace-0.4.0-Windows-x64.zip`，166.4 MiB，SHA-256 `900227AC3685303F403BA31CDC2098B08935D283ABCBBEDB3CCE9BF8CF7BD70F`。ZIP 387 项，包含 Electron、冻结核心与明确标记的内置示例，不包含真实技能库、账号、App 偏好或测试目录。未代码签名，未上传 GitHub Release，未替换用户正在运行的版本。复验脚本与截图保存在工作区 `.local/validation/asl-product-20260926/`。
+- **仍需验证 / 尚未实现：**真实宿主会话是否加载并完成任务、不同电脑迁移、规模化性能和用户体验评分。来源缺失或受管文件被手改时先显示问题，不宣称可安全一键移除所有异常配置。未新增模型调度器、自动依赖安装、任意嵌套 Mode 协议或学习型分类系统。本轮不改业务 Skill 与现有 Mode 内容。构建仍有 Mermaid 大分块提示。
+
+以下 0.3.0 为前一版本的验收记录；其中导入措辞和入口状态已由上面的 0.4.0 替代。
 
 ### 2026-09-26 工作范式与内容管理修订（Harness 0.4.0 / App 0.3.0，本机验收通过）
 
