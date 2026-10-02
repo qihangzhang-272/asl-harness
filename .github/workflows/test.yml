@@ -10,6 +10,7 @@ permissions:
 jobs:
   pytest:
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
@@ -32,6 +33,9 @@ jobs:
         working-directory: desktop
       - run: node node_modules/electron/install.js
         working-directory: desktop
+      - name: Check Linux renderer startup
+        if: runner.os == 'Linux'
+        run: xvfb-run -a desktop/node_modules/electron/dist/electron --version
       # Write-gate tests need the real offline renderer on both operating systems.
       - run: ${{ runner.os == 'Linux' && 'xvfb-run -a ' || '' }}python -m pytest
       - run: ${{ runner.os == 'Linux' && 'xvfb-run -a ' || '' }}npm test
