@@ -14,14 +14,15 @@ test('README can be read before archive download and returns clear missing/rate-
   await assert.rejects(readOverview('https://github.com/qa/overview',async()=>({ok:false,status:403})),/请求频率/);
 });
 
-test('repository preview includes its actual README with a commit-pinned base, not dependency guesses', async t => {
+for(const aliased of [false,true])test(`repository preview includes its actual README with a commit-pinned base (${aliased?'aliased':'direct'} temp)`, async t => {
   const temp=await fs.mkdtemp(path.join(os.tmpdir(),'asl-readme-'));
   t.after(()=>fs.rm(temp,{recursive:true,force:true}));
-  const context={temp,selected:new Set(),repositories:new Map(),remember:async()=>{},
+  if(aliased){await fs.mkdir(path.join(temp,'real'));await fs.symlink(path.join(temp,'real'),path.join(temp,'alias'),'junction');}
+  const context={temp:aliased?path.join(temp,'alias'):temp,selected:new Set(),repositories:new Map(),remember:async()=>{},
     fetch:async url=>url.includes('codeload')?{ok:true,body:(async function*(){yield Buffer.from('fixture');})()}
       :{ok:true,text:async()=>JSON.stringify(url.includes('/commits/')?{sha:'e'.repeat(40)}:{default_branch:'main'})},
     core:async(_,{output})=>{await fs.mkdir(output);await fs.writeFile(path.join(output,'README.md'),'# 实际仓库\n\n[用法](docs/use.md)');return{skills:[],repositoryFiles:['README.md'],repositoryDependencies:[]};}};
-  const result=await readRepository('https://github.com/qa/readme-preview',context);
+  const result=await readRepository(`https://github.com/qa/readme-preview-${aliased}`,context);
   assert.equal(result.readme.text,'# 实际仓库\n\n[用法](docs/use.md)');
   assert.equal(result.readme.file,'README.md');
   assert.match(result.readme.url,/blob\/e{40}\/README.md$/);

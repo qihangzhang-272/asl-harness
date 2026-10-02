@@ -42,8 +42,9 @@ async function readRepository(url, { fetch, core, temp, selected, repositories, 
       chunks.push(chunk);
     }
     // Keep downloaded repositories out of deeply nested project/profile paths on Windows.
-    const folder = path.join(temp, "asl-github", randomUUID());
+    let folder = path.join(temp, "asl-github", randomUUID());
     await fs.mkdir(folder, { recursive: true });
+    folder = await fs.realpath(folder);
     const archive = path.join(folder, "source.zip");
     await fs.writeFile(archive, Buffer.concat(chunks));
     const output = path.join(folder, "content");
@@ -84,7 +85,6 @@ async function readRepository(url, { fetch, core, temp, selected, repositories, 
         modes = catalog.modes;
         if (environment !== requestedPath && repo.subpath.startsWith("modes/"))
           modes = modes.filter(m => path.resolve(m.path) === requestedPath);
-        repositories.set(output, { environment, repo, url: new URL(url).href, modes: new Set(modes.map(m => m.id)) });
       } catch (error) { modeError = error.message; }
     }
     signal?.throwIfAborted();
