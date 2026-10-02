@@ -22,8 +22,8 @@ flowchart LR
     end
 
     subgraph ENVS["Independent Git Environments"]
-        SOURCE["Source Environment<br/>例如 Agent Skill Library"]
-        TARGET["Target Environment<br/>例如 Personal Environment"]
+        SOURCE["Source Environment<br/>例如他人分享的内容库"]
+        TARGET["本地工作 Environment<br/>本机 Agent Skill Library"]
         MODE["Target Mode<br/>可选显式绑定"]
     end
 
@@ -68,8 +68,8 @@ flowchart LR
 
 ```bash
 asl-harness environment.sync \
-  --source ./agent-skill-library \
-  --target ./personal-harness \
+  --source ./upstream-environment \
+  --target ./agent-skill-library \
   --skill x-post-card-studio \
   --mode creator-studio
 ```
@@ -86,7 +86,7 @@ asl-harness environment.sync \
 | 完成后 | 校验目标 Environment、刷新人机共读视图并输出来源/目标 HEAD、package SHA-256、受影响路径与 Git 状态；不自动 commit、push 或刷新所有宿主投影 |
 | 失败 | Skill、Mode 引用与 `WORKSPACE.md` 作为一次事务回滚，不留下只复制一半的 Environment |
 
-同步结束后，两份 Environment 仍是两个独立 Git 真源。再次运行命令可以显式吸收上游更新，但不会形成实时链接、共享 Skill 目录、后台 watcher 或自动升级关系。宿主投影仍由现有 `host.project` / `deepseek.preset.export` 单独负责。
+这条接口用于从他人或上游内容库采用完整技能，不要求一个用户维护 Personal Harness 与公开库两份日常副本。本机活动内容只保留 Agent Skill Library；上游仍独立维护，采用后的内容以本地为准。再次运行命令可以显式吸收上游更新，但不会形成实时链接、共享 Skill 目录、后台 watcher 或自动升级关系。宿主投影仍由现有 `host.project` / `deepseek.preset.export` 单独负责。
 
 ### Skill 运行依赖与跨 Agent 接入
 

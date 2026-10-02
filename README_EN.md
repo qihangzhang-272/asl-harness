@@ -185,7 +185,7 @@ Over time, the Environment becomes more like its owner: it retains useful judgme
 
 ### Desktop preview
 
-[Download for Windows](https://github.com/qihangzhang-272/asl-harness/releases/download/app-v0.5.5/ASL-Workspace-0.5.5-Windows-x64.zip) · [Release notes and checksums](https://github.com/qihangzhang-272/asl-harness/releases/tag/app-v0.5.5)
+[Download for Windows](https://github.com/qihangzhang-272/asl-harness/releases/download/app-v0.5.7/ASL-Workspace-0.5.7-Windows-x64.zip) · [Release notes and checksums](https://github.com/qihangzhang-272/asl-harness/releases/tag/app-v0.5.7)
 
 No Python or Node.js installation is needed. Right-click the downloaded ZIP → **Extract All** → open the `ASL Workspace` folder → double-click **`ASL Workspace.exe`**. Keep the complete folder together. GitHub's automatically generated `Source code` archives are not the desktop App.
 
@@ -211,7 +211,7 @@ Windows developers can build a portable folder with the Python core included. Ke
 
 ```powershell
 python -m venv desktop/out/build-venv
-desktop/out/build-venv/Scripts/python -m pip install pyinstaller==6.22.2 PyYAML==6.0.3
+desktop/out/build-venv/Scripts/python -m pip install pyinstaller==6.22.2 .
 desktop/out/build-venv/Scripts/python scripts/build_desktop.py --output desktop/out/windows-preview
 ```
 

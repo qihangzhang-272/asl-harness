@@ -4,6 +4,8 @@
 
 > **产品目标：切换的不是一组提示词，而是一套工作环境。** App 是用户入口；Environment 是可编辑、可带走的内容；Harness 是管理与适配底座；Codex、Claude Code、DeepSeek Harness 仍负责实际工作。下图的连线是所有权、数据与反馈关系，不是业务执行顺序。绿色为现有能力，橙色为本次补齐的设计、尚未实现的产品能力。
 
+本机日常内容收敛到 `libraries/agent-skill-library`，直接保留原 GitHub 历史；Personal Harness 与旧写作检出不再是第二套活动真源。公共 GitHub 版本与本地未发布修改仍有边界，不自动上传。Mode 的多种 Mermaid 图型共用原生渲染、视觉规则与画布；语法表达不同视角，不新增业务对象或调度层。迁移及可读性验收事实见 View 9。
+
 ```mermaid
 %%{init: {"theme":"base","themeVariables":{"fontFamily":"Microsoft YaHei","fontSize":"16px","clusterBkg":"#f8fafc","clusterBorder":"#cbd5e1"},"flowchart":{"nodeSpacing":35,"rankSpacing":55,"curve":"basis"}}}%%
 flowchart TB
@@ -33,7 +35,7 @@ flowchart TB
         MODES["Mode · 工作目的与场景环境<br/>不是个人 / 职业；同一人有多个 Mode<br/>选择完整 Skill 子图，不保存固定执行顺序"]
         SKILLS["完整 Skill 包 · 已有<br/>方法 / scripts / assets / references<br/>SOURCE / 必要原生依赖说明"]
         CONTEXT["个人边界、资料与明确反馈<br/>PROFILE / Mode 说明 / 培养区<br/>经验关联与管理界面待完善"]
-        MAP["Mode 技能架构 · 验收见 View 9<br/>v0.4 范式成员；完整 Skill 是节点<br/>Mermaid 原文 → 官方渲染 → 点击节点原位改字<br/>选中节点 → 真实技能文件侧栏 / 双击编辑<br/>App / Agent 共编 → 渲染门控 → 失败反馈；旧文件保留"]
+        MAP["Mode 技能架构 · 验收见 View 9<br/>v0.4 范式成员；完整 Skill 是节点<br/>Mermaid 原文 → 官方画板；右键添加 / 拖动连线<br/>点击节点 → 主区域技能文件 + 右上悬浮原图<br/>双击原位修改 → 共用渲染门控；失败保留旧文件"]
         ROOT --> MODES
         MODES -->|范式或通用能力归属覆盖全部成员| MAP
         MODES -->|显式选择能力| SKILLS

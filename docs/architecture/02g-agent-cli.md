@@ -37,8 +37,8 @@ flowchart LR
 ## 框架、内容版与发布
 
 - `platform/asl-harness`：CLI、App 和校验实现的唯一开发真源。
-- `libraries/agent-skill-library`：可分享的内容 Environment，共用 Harness，不内嵌第二份核心代码。
-- `environment/personal-harness`：个人工作内容独立演进；与公开内容版的差异必须按实际字段和文件核对，不能整体覆盖。
+- `libraries/agent-skill-library`：本机唯一活动内容 Environment，合入原个人库与旧写作检出的有效差异，保留原 GitHub 历史；共用 Harness，不内嵌第二份核心代码。
+- 原 Personal Harness 与旧写作检出：只保留迁移恢复证据，不再作为日常使用或发布的第二套真源；物理清理另遵守删除门禁。
 - `C:\Users\Administrator\Desktop\AI\codex\asl-harness`：框架的机械发布检出，不独立设计。
 - 公共 GitHub 来源以云端为准；采用后的本地 Mode 本地优先，上游更新不直接替换培养过的工作模式。
 
