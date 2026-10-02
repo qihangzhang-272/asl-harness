@@ -128,10 +128,10 @@
 
 ### 2026-10-02 桌面替换与限定范围发布
 
-- **本机安装：**0.5.5 已安装到 `%LOCALAPPDATA%\Programs\ASL Workspace\0.5.5\`，桌面 `ASL Workspace.lnk` 已改指该目录中的 EXE。安装目录、candidate2 与发行 ZIP 的 411 个文件逐项 SHA-256 一致。旧 0.5.4 保留；原入口及偏好备份在工作区 `.local/backups/asl-desktop-entry-0.5.5-20261002-040517/`。切换时没有运行中的旧窗口，没有强杀或改动真实技能、宿主配置。
+- **本机安装：**0.5.5 已安装到 `%LOCALAPPDATA%\Programs\ASL Workspace\0.5.5\`，桌面 `ASL Workspace.lnk` 已改指该目录中的 EXE，并正常打开新版窗口。安装目录、candidate2 与发行 ZIP 的 411 个文件逐项 SHA-256 一致。旧 0.5.4 保留；原入口及偏好备份在工作区 `.local/backups/asl-desktop-entry-0.5.5-20261002-040517/`。切换时没有运行中的旧窗口，没有强杀或改动真实技能、宿主配置。
 - **本轮复验：**核心全量 **228 passed / 5 skipped**，桌面 **179 passed / 0 failed**。已安装 EXE 的冻结 CLI 坏图拒写、修复反馈、修正后实际渲染、原文回读及参数错误 JSON 通过；隔离 GUI 三组通过，无 renderer 错误，实际版本 0.5.5。证据在 `.local/validation/asl-library-20261001/frozen-cli-1790928214499/`、`app-cli-1790928243597/result.json`。
 - **发布范围：**用户确认只发布 App、CLI 与入口文档。Harness 发布检出与开发真源的 170 个受管源文件逐项一致；Agent Skill Library 只发布 `README.md`、`README_EN.md` 的 CLI 入口。公开库 12 项既有业务修改保留本地，Personal Environment 不上传；当前内容版 ZIP 含这些未授权发布的业务修改，本轮不上传它。
-- **远端状态：**桌面入口已替换；Git 提交、正常推送和 App 预览版 Release 正在进行，完成后在本段记录可核对链接。未签名；真实宿主会话、跨电脑和任意 Mermaid 全语法可视编辑仍未完成。
+- **远端状态：**正常推送并核对远端 main：Harness 功能提交 `eea1d707`，架构与入口提交 `fdd1d20f`；内容库入口提交 `ee94ff77`，只含两份 README。开发与机械发布检出的提交树、170 个源文件一致，探针和备份未提交。[App 0.5.5 预览版下载](https://github.com/qihangzhang-272/asl-harness/releases/tag/app-v0.5.5) 已发布，唯一资产为通用 App ZIP，175,354,629 字节；GitHub 资产 SHA-256 与本地 `7AD4556D7298C305BC265EE6DA72EB0A230BC29AB68478155E329EA5F4C4F682` 一致。未签名；真实宿主会话、跨电脑和任意 Mermaid 全语法可视编辑仍未完成。
 
 ### 2026-10-01 Agent / App 同源 CLI 与架构分块（核心 0.4.4，App 0.5.5）
 
