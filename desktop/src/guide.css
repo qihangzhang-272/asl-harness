@@ -1,0 +1,142 @@
+/* Prompt hand-off page: the scene on the left, the editable prompt on the right.
+   Thin dividers and small radii; the prompt is the only large surface. */
+.environment-guide {
+  display: grid;
+  grid-template-columns: minmax(250px, 330px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+  padding: 2px;
+}
+.guide-side,
+.guide-prompt {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  min-width: 0;
+}
+.environment-guide .field {
+  margin: 0;
+  gap: 6px;
+}
+.guide-location {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 9px 11px;
+  border: 1px solid var(--line, #dbe4f2);
+  border-radius: var(--radius, 10px);
+  background: var(--surface-muted, #f7f9fd);
+  color: var(--ink-soft, #506782);
+}
+.guide-location strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+.guide-location span,
+.guide-root span {
+  min-width: 0;
+}
+.guide-location small,
+.guide-root small {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  margin-top: 3px;
+  color: var(--faint, #586f8d);
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.guide-roots {
+  display: grid;
+  gap: 2px;
+  max-height: 34vh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #ccd5e4 transparent;
+}
+.guide-root {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background-color 180ms ease-out;
+}
+.guide-root:hover {
+  background: var(--brand-tint, #f4f8ff);
+}
+.guide-root input {
+  margin-top: 2px;
+}
+.guide-reference {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--line-soft, #edf2fc);
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--ink-soft, #506782);
+}
+.guide-reference span {
+  flex: 1;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+.environment-guide .field-heading {
+  margin: 4px 0 0;
+}
+.environment-guide .inline-note {
+  align-items: center;
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 9px;
+  font-size: 12px;
+  line-height: 1.65;
+}
+.environment-guide .field-heading > button {
+  min-height: 30px;
+  padding: 5px 10px;
+  font-size: 13px;
+}
+.guide-prompt .field-heading {
+  margin: 0;
+}
+.guide-text {
+  width: 100%;
+  min-height: 54vh;
+  resize: vertical;
+}
+.guide-note {
+  margin: 0;
+  font-size: 12px;
+}
+.guide-confirm {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted, #5b7191);
+}
+@media (max-width: 980px) {
+  .environment-guide {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .guide-text {
+    min-height: 40vh;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .guide-root {
+    transition: none;
+  }
+}

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import zipfile
 from pathlib import Path
@@ -129,7 +130,8 @@ def test_pack_contains_complete_selected_mode_not_private_environment(tmp_path: 
         assert "skills/creator/scripts/main.py" in names
         assert "skills/creator/package.json" in names
         assert not any("other" in name or "cache.txt" in name for name in names)
-        assert not any("PROFILE" in name or "private-notes" in name for name in names)
+        assert not any("PROFILE" in name for name in names)
+        assert f'{NAMESPACE}/modes/creator-studio/private-notes.md' in names
         assert str(source) not in json.dumps(manifest)
         assert manifest["$schema"] == "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json"
         assert manifest["extensions"][NAMESPACE]["mode"] == "creator-studio"
@@ -192,6 +194,102 @@ def test_round_trip_to_new_environment_rebinds_paths_and_preserves_bytes(tmp_pat
     assert (target / "PROFILE.md").read_bytes() == (source / "PROFILE.md").read_bytes()
     assert (target / "skills/creator/assets/demo.svg").read_bytes() == (source / "skills/creator/assets/demo.svg").read_bytes()
     assert not import_pack(package, target)["changed"]
+
+
+@pytest.mark.parametrize('container', ['zip', 'directory'])
+def test_selected_mode_assets_round_trip_in_full(tmp_path, container):
+    source = _environment(tmp_path / 'source')
+    mode = source / 'modes/creator-studio'
+    assets = {
+        'architecture/overview.mmd': b'flowchart LR\n A --> B\n',
+        'references/notes.md': '# \u4f7f\u7528\u7ea6\u5b9a\n'.encode('utf-8'),
+        'scripts/run.sh': b'#!/bin/sh\nprintf example\n',
+        'assets/image.bin': bytes(range(256)),
+        'SOURCE.md': b'# Source\n\n- Origin: local://example\n',
+        'notes/decisions.txt': b'Keep complete authored material.\n',
+    }
+    for name, data in assets.items():
+        path = mode / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+    (mode / 'scripts/run.sh').chmod(0o755)
+    _write(mode / 'node_modules/cache.txt', 'generated')
+    package = tmp_path / ('shared.zip' if container == 'zip' else 'shared')
+    exported = export_pack(source, 'creator-studio', package)
+    assert all(f'{NAMESPACE}/modes/creator-studio/{name}' in exported['files'] for name in assets)
+    assert not any('cache.txt' in name for name in exported['files'])
+    target = tmp_path / 'received'
+    import_pack(package, target)
+    for name, data in assets.items():
+        assert (target / 'modes/creator-studio' / name).read_bytes() == data
+    if os.name != 'nt':
+        assert (target / 'modes/creator-studio/scripts/run.sh').stat().st_mode & 0o111
+    assert not import_pack(package, target)['changed']
+
+
+@pytest.mark.parametrize('filename,content', [('.env', 'PRIVATE=value'), ('references/config.json', '{"api_key":"not-a-placeholder"}')])
+def test_mode_assets_with_secrets_cannot_be_exported(tmp_path, filename, content):
+    source = _environment(tmp_path)
+    _write(source / 'modes/creator-studio' / filename, content)
+    output = tmp_path / 'unsafe.zip'
+    with pytest.raises(HarnessError):
+        export_pack(source, 'creator-studio', output)
+    assert not output.exists()
+
+
+def test_mode_namespace_rejects_other_modes_even_with_valid_manifest_hash(tmp_path):
+    source = _environment(tmp_path)
+    package = tmp_path / 'shared'
+    export_pack(source, 'creator-studio', package)
+    name = f'{NAMESPACE}/modes/other/notes.md'
+    data = b'other mode'
+    (package / name).parent.mkdir(parents=True)
+    (package / name).write_bytes(data)
+    manifest_path = package / 'plugin.json'
+    manifest = json.loads(manifest_path.read_text())
+    manifest['extensions'][NAMESPACE]['files'][name] = hashlib.sha256(data).hexdigest()
+    manifest_path.write_text(json.dumps(manifest), encoding='utf-8')
+    target = tmp_path / 'received'
+    with pytest.raises(HarnessError, match='unsupported ASL snapshot content'):
+        import_pack(package, target)
+    assert not target.exists()
+
+
+@pytest.mark.parametrize('name', ['LICENSE', 'license'])
+def test_mode_notice_cannot_be_overwritten_by_legacy_notice_alias(tmp_path, name):
+    source = _environment(tmp_path)
+    _write(source / 'modes/creator-studio/notices' / name, 'canonical notice')
+    package = tmp_path / 'shared.zip'
+    export_pack(source, 'creator-studio', package)
+    relative = f'{NAMESPACE}/notices/LICENSE'
+    data = b'different legacy notice'
+    with zipfile.ZipFile(package) as archive:
+        files = {entry: archive.read(entry) for entry in archive.namelist()}
+    for entry in list(files):
+        if entry.casefold() == relative.casefold():
+            files.pop(entry)
+    files[relative] = data
+    manifest = json.loads(files.pop('plugin.json'))
+    manifest['extensions'][NAMESPACE]['files'] = {entry: hashlib.sha256(value).hexdigest() for entry, value in files.items()}
+    files['plugin.json'] = json.dumps(manifest).encode('utf-8')
+    with zipfile.ZipFile(package, 'w') as archive:
+        for entry, value in files.items():
+            archive.writestr(entry, value)
+    target = tmp_path / 'received'
+    with pytest.raises(HarnessError, match='collision'):
+        import_pack(package, target)
+    assert not target.exists()
+
+
+def test_legacy_three_file_mode_package_is_still_supported(tmp_path):
+    source = _environment(tmp_path)
+    _write(source / 'LICENSE', 'repository license')
+    package = tmp_path / 'legacy'
+    export_pack(source, 'creator-studio', package)
+    target = tmp_path / 'received'
+    import_pack(package, target)
+    assert (target / 'modes/creator-studio/notices/LICENSE').read_bytes() == b'repository license'
+    assert Workspace.open(target).workspace_view_current()
 
 
 def test_import_conflict_is_previewed_and_never_silently_replaces(tmp_path: Path) -> None:

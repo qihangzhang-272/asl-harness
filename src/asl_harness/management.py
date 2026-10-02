@@ -13,11 +13,12 @@ import sys
 import tempfile
 from .map_schema import prune_architecture, place_skills
 from uuid import uuid4
+from contextlib import ExitStack
 
 import yaml
 
 from .dependencies import describe_dependencies
-from .sync import _rollback_paths
+from .sync import _rollback_paths, _replace_package, environment_write_lock, _environment_fingerprints, _require_unchanged
 from .sync import _ignore_generated
 from .workspace import (
     HarnessError,
@@ -25,12 +26,25 @@ from .workspace import (
     Workspace,
     MODE_API_VERSION,
     _read_skill,
+    _scan_authored_material,
     _safe_id,
     package_fingerprint,
     validate_capabilities,
     validate_architecture,
     load_yaml,
+    safe_write_path,
+    _package_files,
 )
+
+
+EDIT_FIELDS = {
+    "mode.save": {"operation", "id", "expected", "document", "skills", "capabilities", "architecture", "placement"},
+    "mode.archive": {"operation", "id", "expected"},
+    "skill.save": {"operation", "id", "expected", "document", "sourceDocument"},
+    'skill.file.save': {'operation', 'id', 'expected', 'file', 'document'},
+    "skill.archive": {"operation", "id", "expected"},
+    "skill.import": {"operation", "id", "expected", "source", "mode", "expectedSource", "sourceOrigin", "category", "placement"},
+}
 
 
 def _title(text: str, fallback: str) -> str:
@@ -117,15 +131,11 @@ def _linked(path: Path) -> bool:
     )
 
 
-def skill_files(root: str | Path, identifier: str, file: str = 'SKILL.md') -> dict:
-    workspace = Workspace.open(root)
-    skill = workspace.skills.get(_safe_id(identifier, '技能'))
-    if skill is None:
-        raise HarnessError('EDIT_INVALID', '技能不在当前环境')
+def _package_documents(package: Path, files, file: str) -> dict:
     entries, texts = [], {}
-    for path in skill.files:
-        relative = path.relative_to(skill.path).as_posix()
-        if not path.resolve().is_relative_to(skill.path.resolve()) or any(_linked(p) for p in [path, *path.parents] if p.is_relative_to(skill.path)):
+    for path in files:
+        relative = path.relative_to(package).as_posix()
+        if not path.resolve().is_relative_to(package.resolve()) or any(_linked(p) for p in [path, *path.parents] if p.is_relative_to(package)):
             continue
         size = path.stat().st_size
         text = None
@@ -141,22 +151,40 @@ def skill_files(root: str | Path, identifier: str, file: str = 'SKILL.md') -> di
         if relative == file:
             texts[file] = text
     if file not in texts:
-        raise HarnessError('EDIT_INVALID', '文件不在技能包内，或是外部链接')
-    return {'id': identifier, 'files': entries, 'file': file, 'document': texts[file],
-            'fingerprint': package_fingerprint(skill.path), 'requires': list(skill.requires)}
+        raise HarnessError('EDIT_INVALID', '文件不在当前包内，或是外部链接')
+    return {'files': entries, 'file': file, 'document': texts[file], 'fingerprint': package_fingerprint(package)}
+
+
+def skill_files(root: str | Path, identifier: str, file: str = 'SKILL.md') -> dict:
+    workspace = Workspace.open(root)
+    skill = workspace.skills.get(_safe_id(identifier, '技能'))
+    if skill is None:
+        raise HarnessError('EDIT_INVALID', '技能不在当前环境')
+    return {'id': identifier, **_package_documents(skill.path, skill.files, file), 'requires': list(skill.requires)}
+
+
+def mode_files(root: str | Path, identifier: str, file: str = 'MODE.md') -> dict:
+    workspace = Workspace.open(root)
+    mode = workspace.modes.get(_safe_id(identifier, '模式'))
+    if mode is None:
+        raise HarnessError('EDIT_INVALID', '模式不在当前环境')
+    return {'id': identifier, **_package_documents(mode.path, _package_files(mode.path, workspace.root), file),
+            'skills': list(mode.skill_roots)}
 
 
 def editing_guide(root: str | Path, mode_id: str | None = None) -> dict:
     root = Path(root).resolve()
+    if mode_id:
+        mode_id = _safe_id(mode_id, '模式名称')
     workspace, issue = None, ''
     try:
         workspace = Workspace.open(root)
     except HarnessError as error:
-        if mode_id:
-            raise
         issue = f'本地内容需要修正：{error}' if root.exists() else '目标目录尚未建立。按下面的最小结构创建；不要复制示例模式充数。'
+        if mode_id:
+            issue += f'\n先核对模式文件：{root / "modes" / mode_id / "mode.yaml"}'
     mode = workspace.modes.get(mode_id) if workspace and mode_id else None
-    if mode_id and mode is None:
+    if workspace and mode_id and mode is None:
         raise HarnessError('EDIT_INVALID', '请先选择工作模式')
     ids = workspace.mode_skill_ids(mode_id) if mode else workspace.skills if workspace else []
     skills = '\n'.join(f'- {sid}: {workspace.skills[sid].path / "SKILL.md"}' for sid in ids)
@@ -204,19 +232,23 @@ v0.4 必须定义工作架构：完整技能分为工作范式成员与通用能
 - 必填 spec.architecture: {{shared: [通用技能ID], paradigms: [{{id: 范式ID, title: 名称, description: 工作方式, skills: [技能ID], edges: [{{from: 技能ID, to: 技能ID, label: 关联含义}}]}}], nodes: [{{skill: 技能ID, title: 显示名}}]}}。
   一个完整 Skill 一个节点，使用技能 ID 标识；不添加 Mode、类别、场景或模块节点，不重复同一技能，不拆分完整技能。
   Mode 中全部技能必须被 shared 或至少一个范式覆盖。nodes 仅用于可选的名称、note 简短备注、icon / color 外观覆盖。
-  每个范式的 edges 只引用自己的成员；label 必须说明传递、反馈或分支条件。支持分支、汇合和回路；不要求操作步骤，不强制运行顺序。
-  不区分关系图 / 层次图，App 使用统一的有向图自动布局，不需要填写 layout 或 parent。
+  每个范式的 edges 只引用自己的成员；label 必须说明传递、反馈或分支条件。支持分支、汇合和回路；不要求操作步骤，不强制运行顺序；回路只是常用经验的图示，不被执行。
+  每条 edges 还可选 condition（1–160 字，说明什么时候走这条关系）、sourceHandle / targetHandle（只能取 top、right、bottom、left，表示连线端点）。除 from、to、label、condition、sourceHandle、targetHandle 外的字段一律拒绝。
+  可选 spec.architecture.layout: {{范式ID 或 shared: {{技能ID: {{x: 数字, y: 数字}}}}}}，只记录 App 图上的坐标，不参与执行。键必须是当前范式的 id 或 shared，成员必须是该范围的技能；坐标需为有限数字（不接受 true/false、NaN、inf），绝对值不超过 100000。新增技能不强制补坐标，缺省由 App 自动布局。
+  layout 只供可视编辑，不定义图的语义。阅读视图使用 Mermaid 原生渲染。
 - 根据 Skill 原文和用户目的维护范式与连线，不用关键词猜业务关系。不存在顺序关系时允许 edges 为空，由 description 说明选择方式。旧 v0.3 Mode 可读取且标为待定义；保存新版架构后升级 v0.4，不可撤回为空地图。
 - mode.save 调整成员时，会清理被移出技能的分类、显示和所有范式引用；新增成员必须同时提供 architecture 或 placement（范式ID，或 shared）。skill.import 的 placement 同理。移出 Mode 不删除技能文件。删除技能前必须解除其全部引用。
 - App 用固定的安全组件投影以上字段。不要提供任意 CSS、HTML 或 JavaScript；不支持的字段应删除或改成合法字段。
 
 编辑路径：先运行 environment.catalog 读取当前字段和 fingerprint，再把 mode.save 或 skill.file.save JSON 交给 environment.edit --workspace <目录> --check（stdin）。
 校验失败时按错误路径自行修正并重试；成功后再执行不带 --check 的同一请求。更新既有对象要传 expected 指纹，过期后重新读取，不可绕过。
-你也可直接用本地文件编辑器修改内容，然后运行 workspace.validate 与 workspace.view.sync；App 会发现变更。结构不合法时保留错误供修正，不伪装已通过。
+Mermaid 图写在 MODE.md 或 Skill 包内 Markdown 的 mermaid 代码块，也可用 .mmd 文件；按场景用标题分段。Mode 图呈现实际完整技能的工作关系，Skill 内的图呈现有原文依据的核心问题、思路和范式；支持 Mermaid 原生时序、思维导图、流程等图型，不自造图协议。Mode 图的技能节点可用 skill_<技能ID中短横线改下划线> 作为原生节点 ID，App 据此打开原技能；不要引用别的 Mode 的隐含技能。已有 MODE.md 图为图示真源，不再同时编辑旧 edges 形成两份矛盾图。
+包含图的新增、替换和导入必须经 environment.edit 或 mode.import 的真实离线渲染验收，不接受你自己填写的“已通过”。失败返回非零退出码与 error.details（文件、图序号、行、原始错误、修正动作），旧文件不覆盖。你必须读反馈、修正同一草稿并重新提交，直到通过；不擅自删除图、改成图片或绕开接口以骗过门禁。若渲染器不可用，应报告环境问题，不伪称已验收。
+可在库外草稿中使用本地编辑器，但正式写入须走上述接口。App 会发现直接改文件后的变更；直接写入绕过了事务，App 无法保证自动唤回任意宿主里的对话，不能把此路径说成已完成验收。
 CLI：{launcher} environment.catalog --workspace "{root}"
 CLI：{launcher} skill.files --workspace "{root}" --skill <ID> --file <相对文件>
 CLI：{launcher} workspace.validate --workspace "{root}"
-空目录首次建立请直接写本地文件，结构完整后再调用校验和编辑命令。最后说明创建或调整了哪些工作场景、技能与关系；App 刷新后应能读出相同内容。未运行的能力不要写成已经验证。
+空环境先在库外草稿目录组装完整结构，运行 workspace.validate，通过后 mode.export 并经 mode.import 采用到正式目标；不要把未验收的草稿当作正式库。最后说明创建或调整了哪些工作场景、技能与关系；App 刷新后应能读出相同内容。未运行的能力不要写成已经验证。
 
 发现新能力时：可通过用户指定链接、GitHub、可信推荐寻找；先静态读取包结构、SKILL.md、来源及配套声明，不执行未知安装脚本。
 普通技能包可用 skill.scan --source <本地下载目录> 识别，再以 skill.import 加入本 Mode。ASL Mode 包则走 mode.inspect / mode.import --check。复杂包缺少目录外依赖时列明缺口，不假装可独立运行。
@@ -232,31 +264,21 @@ CLI：{launcher} workspace.validate --workspace "{root}"
 
 
 def edit(root: str | Path, request: dict, *, check: bool = False) -> dict:
+    with ExitStack() as drafts:
+        if not check:
+            drafts.enter_context(environment_write_lock(root))
+        return _edit(root, request, check=check, drafts=drafts)
+
+
+def _edit(root: str | Path, request: dict, *, check: bool = False, drafts: ExitStack) -> dict:
     if not isinstance(request, dict):
         raise HarnessError("EDIT_INVALID", "修改请求必须是对象")
     operation = request.get("operation")
-    fields = {
-        "mode.save": {"operation", "id", "expected", "document", "skills", "capabilities", "architecture", "placement"},
-        "mode.archive": {"operation", "id", "expected"},
-        "skill.save": {"operation", "id", "expected", "document", "sourceDocument"},
-        'skill.file.save': {'operation', 'id', 'expected', 'file', 'document'},
-        "skill.archive": {"operation", "id", "expected"},
-        "skill.import": {
-            "operation",
-            "id",
-            "expected",
-            "source",
-            "mode",
-            "expectedSource",
-            "sourceOrigin",
-            "category",
-            "placement",
-        },
-    }
-    if operation not in fields or set(request) - fields[operation]:
+    if operation not in EDIT_FIELDS or set(request) - EDIT_FIELDS[operation]:
         raise HarnessError("EDIT_INVALID", "不支持的修改操作或字段")
     identifier = _safe_id(request.get("id"), "对象名称")
     workspace = Workspace.open(root)
+    observed = _environment_fingerprints(workspace)
     kind = "mode" if operation.startswith("mode.") else "skill"
     collection = workspace.modes if kind == "mode" else workspace.skills
     existing = collection.get(identifier)
@@ -266,20 +288,13 @@ def edit(root: str | Path, request: dict, *, check: bool = False) -> dict:
         raise HarnessError("EDIT_STALE", "内容已被移出，请刷新后重试")
     relative = f"{kind}s/{identifier}"
     target = workspace.root / relative
-    # Never mutate a linked folder outside the selected library.
-    if target.exists() and (
-        _linked(target) or not target.resolve().is_relative_to(workspace.root)
-    ):
-        raise HarnessError("EDIT_LINKED", "此内容链接到外部目录，请在原位置编辑")
+    safe_write_path(workspace.root, target)
     if operation.endswith(".save"):
         for name in (
             ("MODE.md", "mode.yaml") if kind == "mode" else ("SKILL.md", "SOURCE.md")
         ):
             file = target / name
-            if file.exists() and _linked(file):
-                raise HarnessError(
-                    "EDIT_LINKED", "内容文件是链接，请在原位置编辑：" + name
-                )
+            safe_write_path(workspace.root, file)
     changed_paths = [relative, "WORKSPACE.md"]
     affected = (
         [identifier]
@@ -300,6 +315,8 @@ def edit(root: str | Path, request: dict, *, check: bool = False) -> dict:
     }
     archive = None
     source = None
+    adopted_source = None
+    adopted_fingerprint = None
     document = None
     source_document = None
     mode_data = None
@@ -375,8 +392,8 @@ def edit(root: str | Path, request: dict, *, check: bool = False) -> dict:
         with tempfile.TemporaryDirectory(prefix="asl-edit-check-") as temp:
             path = Path(temp) / identifier
             path.mkdir()
-            (path / "SKILL.md").write_text(document, encoding="utf-8")
-            (path / "SOURCE.md").write_text(source_document, encoding="utf-8")
+            (path / "SKILL.md").write_bytes(document.encode('utf-8'))
+            (path / "SOURCE.md").write_bytes(source_document.encode('utf-8'))
             skill = _read_skill(path, identifier, Path(temp))
             replace(
                 workspace, skills={**workspace.skills, identifier: skill}
@@ -397,25 +414,32 @@ def edit(root: str | Path, request: dict, *, check: bool = False) -> dict:
                     raise HarnessError(
                         "EDIT_LINKED", "请先将技能包中的链接展开为本地文件后再导入"
                     )
+        _scan_authored_material(source, [source])
+        report['source'] = str(source)
+        report['sourceFingerprint'] = package_fingerprint(source)
+        if request.get('expectedSource') and request['expectedSource'] != report['sourceFingerprint']:
+            raise HarnessError('EDIT_STALE', '导入来源已变化，请重新预览')
+        temporary = drafts.enter_context(tempfile.TemporaryDirectory(prefix='asl-adopt-skill-'))
+        adopted_source = Path(temporary) / identifier
+        shutil.copytree(source, adopted_source, symlinks=False, ignore=_ignore_generated)
+        if package_fingerprint(adopted_source) != report['sourceFingerprint']:
+            raise HarnessError('EDIT_STALE', '复制来源期间内容已改变，请重新预览；未写入正式库')
         origin = request.get("sourceOrigin") or source.as_uri()
         if not isinstance(origin, str) or "\n" in origin or "\r" in origin:
             raise HarnessError("EDIT_INVALID", "来源必须是单行地址")
-        original_source = (source / "SOURCE.md").read_text(encoding="utf-8") if (source / "SOURCE.md").exists() else ""
+        original_source = (adopted_source / "SOURCE.md").read_text(encoding="utf-8") if (adopted_source / "SOURCE.md").exists() else ""
         if not re.search(r"(?m)^#[ \t]+Source[ \t]*$", original_source) or not re.search(r"(?m)^-[ \t]+Origin:[ \t]*\S+", original_source):
             source_document = original_source.rstrip() + ("\n\n" if original_source else "") + f"# Source\n\n- Origin: {origin}\n- Imported: {datetime.now(timezone.utc):%Y-%m-%d}\n"
         elif request.get("sourceOrigin"):
             source_document = original_source.rstrip() + f"\n- Imported from: {origin}\n"
-        skill = _read_skill(source, identifier, source, source_text=source_document)
+        if source_document:
+            (adopted_source / 'SOURCE.md').write_bytes(source_document.encode('utf-8'))
+        adopted_fingerprint = package_fingerprint(adopted_source)
+        _scan_authored_material(adopted_source, [adopted_source])
+        skill = _read_skill(adopted_source, identifier, adopted_source)
         replace(
             workspace, skills={**workspace.skills, identifier: skill}
         )._validate_graph()
-        report["source"] = str(source)
-        report["sourceFingerprint"] = package_fingerprint(source)
-        if (
-            request.get("expectedSource")
-            and request["expectedSource"] != report["sourceFingerprint"]
-        ):
-            raise HarnessError("EDIT_STALE", "导入来源已变化，请重新预览")
         if request.get("mode"):
             binding = workspace.modes.get(request["mode"])
             if binding is None:
@@ -465,8 +489,29 @@ def edit(root: str | Path, request: dict, *, check: bool = False) -> dict:
         changed_paths.append(
             str(archive.relative_to(workspace.root)).replace("\\", "/")
         )
+    # App and Agent CLI share this gate; caller-supplied "validated" flags are not accepted.
+    from .mermaid import validate_documents, validate_packages
+    unchanged = {target: request.get('expected')}
+    if source:
+        unchanged[source] = report['sourceFingerprint']
+    if binding:
+        unchanged[binding.path] = package_fingerprint(binding.path)
+    if document is not None:
+        validation_file = content_file or target / ('MODE.md' if kind == 'mode' else 'SKILL.md')
+        if validation_file.suffix.lower() in {'.md', '.mmd', '.mermaid'}:
+            documents = [{'file': str(validation_file), 'text': document}]
+            if source_document is not None:
+                documents.append({'file': str(target / 'SOURCE.md'), 'text': source_document})
+            report['diagrams'] = validate_documents(documents)
+    elif source:
+        report['diagrams'] = validate_packages([adopted_source], file_roots={adopted_source: str(source)})
     if check:
         return report
+    # Rendering can take seconds. Do not overwrite edits made while it was running.
+    if any((package_fingerprint(path) if path.exists() else None) != fingerprint
+           for path, fingerprint in unchanged.items()):
+        raise HarnessError('EDIT_STALE', '渲染期间内容已改变，请重新读取当前版本后提交；未覆盖新内容')
+    _require_unchanged(observed, 'EDIT_STALE')
     with _rollback_paths(workspace.root, changed_paths):
         if archive:
             archive.parent.mkdir(exist_ok=True)
@@ -474,12 +519,7 @@ def edit(root: str | Path, request: dict, *, check: bool = False) -> dict:
         elif content_file:
             content_file.write_bytes(document.encode('utf-8'))
         elif source:
-            if target.exists():
-                # Backup is owned by this transaction; preserve the complete previous package on failure.
-                shutil.rmtree(target)
-            shutil.copytree(source, target, symlinks=False, ignore=_ignore_generated)
-            if source_document:
-                (target / "SOURCE.md").write_text(source_document, encoding="utf-8")
+            _replace_package(adopted_source, target, expected=adopted_fingerprint)
             if binding:
                 if request.get("category"):
                     for group in binding_data["spec"]["capabilities"]:
@@ -492,15 +532,13 @@ def edit(root: str | Path, request: dict, *, check: bool = False) -> dict:
                 )
         else:
             target.mkdir(parents=True, exist_ok=True)
-            (target / ("MODE.md" if kind == "mode" else "SKILL.md")).write_text(
-                document, encoding="utf-8"
-            )
+            (target / ("MODE.md" if kind == "mode" else "SKILL.md")).write_bytes(document.encode('utf-8'))
             if mode_data:
                 (target / "mode.yaml").write_text(
                     yaml.safe_dump(mode_data, allow_unicode=True, sort_keys=False),
                     encoding="utf-8",
                 )
             if source_document:
-                (target / "SOURCE.md").write_text(source_document, encoding="utf-8")
+                (target / "SOURCE.md").write_bytes(source_document.encode('utf-8'))
         Workspace.open(workspace.root).sync_workspace_view()
     return report

@@ -4,6 +4,8 @@ import hashlib
 import os
 import re
 import subprocess
+import sys
+import stat
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -81,6 +83,23 @@ def _safe_id(value: object, label: str) -> str:
     return value
 
 
+def safe_write_path(root: Path, path: Path) -> None:
+    """Managed writes never follow linked parents or mutate a shared hardlink."""
+    root = root.resolve()
+    if not path.is_relative_to(root) or not path.resolve().is_relative_to(root):
+        raise HarnessError('PATH_ESCAPE', f'写入路径超出所选工作环境：{path}')
+    for current in [path, *path.parents]:
+        if current == root:
+            break
+        try:
+            info = current.lstat()
+        except FileNotFoundError:
+            continue
+        if (current.is_symlink() or getattr(info, 'st_file_attributes', 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT
+                or current.is_file() and info.st_nlink > 1):
+            raise HarnessError('EDIT_LINKED', f'写入路径包含链接或共享文件，请先本地化：{current}')
+
+
 def _read_nonempty(path: Path, label: str) -> str:
     try:
         text = path.read_text(encoding="utf-8")
@@ -131,6 +150,22 @@ def _package_files(package: Path, environment: Path) -> tuple[Path, ...]:
     return tuple(sorted(files, key=lambda item: item.as_posix()))
 
 
+def filesystem_path(path: Path) -> Path:
+    """Return a Windows extended-length path for real filesystem calls.
+
+    Manifests, receipts, and display keep the normal path; only filesystem
+    boundaries use this helper so deep projects still work past MAX_PATH.
+    """
+    if sys.platform != "win32":
+        return path
+    text = os.fspath(path)
+    if not os.path.isabs(text) or text.startswith(("\\\\?\\", "\\\\.\\")):
+        return path
+    if text.startswith("\\\\"):
+        return Path("\\\\?\\UNC\\" + text[2:])
+    return Path("\\\\?\\" + text)
+
+
 def package_fingerprint(package: Path, *, ignored_names: frozenset[str] = frozenset()) -> str:
     digest = hashlib.sha256()
     for path in sorted(package.rglob("*"), key=lambda item: item.as_posix()):
@@ -140,10 +175,11 @@ def package_fingerprint(package: Path, *, ignored_names: frozenset[str] = frozen
             for part in relative.parts
         ):
             continue
-        if path.is_file():
+        actual = filesystem_path(path)
+        if actual.is_file():
             digest.update(relative.as_posix().encode("utf-8"))
             digest.update(b"\0")
-            digest.update(path.read_bytes())
+            digest.update(actual.read_bytes())
             digest.update(b"\0")
     return digest.hexdigest()
 
@@ -313,7 +349,19 @@ def _read_mode(package: Path, mode_id: str) -> Mode:
         or any(not isinstance(item, str) or not SAFE_ID.fullmatch(item) for item in skills)
         or len(skills) != len(set(skills))
     ):
-        raise HarnessError("MODE_INVALID", f"Mode {mode_id} has an invalid definition")
+        if authored.get('apiVersion') not in {MODE_API_VERSION, 'asl-wep/v0.3.0'}:
+            issue = f'apiVersion：当前支持 {MODE_API_VERSION} 与 asl-wep/v0.3.0；请核对文件或更新 App'
+        elif authored.get('kind') != 'ModeProjection':
+            issue = 'kind 必须是 ModeProjection'
+        elif not isinstance(metadata, dict) or set(metadata) != {'id'} or metadata.get('id') != mode_id:
+            issue = f'metadata.id 必须与目录名 {mode_id} 一致，且 metadata 不含其他字段'
+        elif not isinstance(spec, dict) or not {'skills'} <= set(spec) <= {'skills', 'capabilities', 'architecture'}:
+            issue = 'spec 只接受 skills、capabilities、architecture；skills 为必填项'
+        elif set(authored) != {'apiVersion', 'kind', 'metadata', 'spec'}:
+            issue = '顶层只接受 apiVersion、kind、metadata、spec'
+        else:
+            issue = 'spec.skills 必须是非空、无重复的有效技能 ID 列表'
+        raise HarnessError('MODE_INVALID', f'{package / "mode.yaml"}：{issue}。可交给 AI 修复后重新检查。')
     if authored['apiVersion'] == MODE_API_VERSION and (not isinstance(spec.get('architecture'), dict) or 'paradigms' not in spec['architecture']):
         raise HarnessError('MODE_INVALID', f'Mode {mode_id} 的 v0.4 定义必须包含 spec.architecture.shared 与 paradigms')
     return Mode(
@@ -644,7 +692,13 @@ class Workspace:
         return managed == self.render_workspace_view().strip()
 
     def sync_workspace_view(self) -> Path:
+        from .sync import environment_write_lock
+        with environment_write_lock(self.root):
+            return Workspace.open(self.root)._sync_workspace_view()
+
+    def _sync_workspace_view(self) -> Path:
         path = self.root / "WORKSPACE.md"
+        safe_write_path(self.root, path)
         text = path.read_text(encoding="utf-8")
         if text.count(VIEW_START) != text.count(VIEW_END) or text.count(VIEW_START) > 1:
             raise HarnessError(

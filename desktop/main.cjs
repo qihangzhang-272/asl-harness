@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, shell, net, clipboard } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, shell, net, clipboard, Menu } = require("electron");
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const { randomUUID, createHash } = require("node:crypto");
@@ -8,13 +8,16 @@ const {
   readPreferences,
   rememberLibrary,
   updatePreferences,
+  flushPreferences,
   rememberView,
   isLibrary,
   bundledExample,
+  forgetRepository,
 } = require("./library.cjs");
 const { nativeInventory, existingDirectory, localSkillRoots } = require("./native.cjs");
 const { discover, publicUrl } = require("./market.cjs");
-const { readRepository } = require('./repository-import.cjs');
+const { readRepository, readOverview } = require('./repository-import.cjs');
+const {localDiscovery}=require('./local-discovery.cjs');
 const { connections } = require('./connections.cjs');
 const { ReadRequests } = require('./read-requests.cjs');
 const { assistantInventory, launchAssistant, sessionStatus } = require("./assistant.cjs");
@@ -22,10 +25,19 @@ const { upstreamDocument, presetDestination, checkUpstreams, watchEnvironment } 
 
 const root = path.resolve(__dirname, "..");
 app.setName('ASL Workspace');
-if(!app.commandLine.hasSwitch('user-data-dir'))
+const checkingDiagrams = process.argv.includes('--validate-mermaid');
+if(!checkingDiagrams&&!app.commandLine.hasSwitch('user-data-dir'))
   app.setPath('userData',path.join(app.getPath('appData'),'ASL Workspace'));
-const primary = app.requestSingleInstanceLock();
-if(!primary) app.quit();
+const primary = !checkingDiagrams && app.requestSingleInstanceLock();
+if(checkingDiagrams){
+  const input=process.argv[process.argv.indexOf('--validate-mermaid')+1];
+  if(input&&path.isAbsolute(input)){
+    const profile=path.join(path.dirname(input),'renderer-profile');
+    app.setPath('userData',profile);app.setPath('sessionData',profile);
+  }
+  require('./mermaid-check.cjs').check({app,BrowserWindow},__dirname);
+}
+else if(!primary) app.quit();
 const page = pathToFileURL(path.join(__dirname, "dist/index.html")).href;
 let window;
 const selected = new Set();
@@ -59,7 +71,7 @@ function handle(channel, fn) {
     try {
       return { ok: true, value: await fn(...args) };
     } catch (error) {
-      return { ok: false, error: error.message };
+      return { ok: false, error: error.message, code: error.code, details: error.details };
     }
   });
 }
@@ -76,6 +88,15 @@ if(primary) app.whenReady().then(() => {
   const preferenceFile = path.join(app.getPath("userData"), "libraries.json");
   const sessionRoot = path.join(app.getPath("userData"), "setup-sessions");
   const managedLibrary = path.join(app.getPath("userData"), "workspace");
+  handle('asl:source-menu',async url=>{
+    if(!(await readPreferences(preferenceFile)).repositories.includes(url))throw new Error('这个仓库尚未连接');
+    return new Promise((resolve,reject)=>{
+      let chosen=false;
+      Menu.buildFromTemplate([{label:'移除连接',click:()=>{
+        chosen=true;forgetRepository(preferenceFile,url).then(preferences=>resolve({removed:true,repositories:preferences.repositories}),reject);
+      }}]).popup({window,callback:()=>{if(!chosen)resolve({removed:false});}});
+    });
+  });
   async function machineInventory(signal) {
     const preferences = await readPreferences(preferenceFile);
     const source = [...new Set([...preferences.libraries, ...preferences.targets.map(t => t.project), managedLibrary])]
@@ -91,7 +112,7 @@ if(primary) app.whenReady().then(() => {
     minWidth: 900,
     minHeight: 680,
     title: "ASL Workspace",
-    backgroundColor: "#f5f5f7",
+    backgroundColor: "#fbfcff",
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       nodeIntegration: false,
@@ -144,7 +165,12 @@ if(primary) app.whenReady().then(() => {
   });
   handle('asl:copy-text', async text => {
     if (typeof text !== 'string' || text.length > 256000) throw new Error('复制内容过大');
+    // ponytail: Electron 44 made the clipboard promise-based; awaiting the write is what lets the
+    // system readback mean anything. The old synchronous read compared a Promise and always failed.
+    const wanted = text.replace(/\r\n/g, '\n');
     await clipboard.writeText(text);
+    const kept = String(await clipboard.readText()).replace(/\r\n/g, '\n');
+    if (kept !== wanted) throw new Error(`复制失败：系统剪贴板读回 ${kept.length} 字，未保留 ${wanted.length} 字，请重试`);
     return { copied: true };
   });
   handle("asl:remember", async (workspace) => {
@@ -156,11 +182,22 @@ if(primary) app.whenReady().then(() => {
     if(!selected.has(path.resolve(workspace)))throw new Error('请先选择工作环境');
     return rememberView(preferenceFile,workspace,view);
   });
-  handle('asl:guide-roots',async()=>{
-    const roots=[];
-    for(const item of await localSkillRoots(undefined, undefined, (await machineInventory()).projects))
-      if(await existingDirectory([item.path]))roots.push(item);
-    return roots;
+  async function registeredSkillRoots(){
+    // Read-only roots come from registered libraries/targets plus the native standard skill folders.
+    const preferences=await readPreferences(preferenceFile);
+    const projects=[...new Set([...preferences.libraries,...preferences.targets.map(item=>item.project),managedLibrary])];
+    return localSkillRoots(undefined, undefined, projects);
+  }
+  handle('asl:guide-roots',registeredSkillRoots);
+  const skillDiscovery=localDiscovery({file:path.join(app.getPath('userData'),'local-skills-cache.json'),
+    scan:(source,signal)=>runCore('scan',{source},{...options,signal})});
+  // Location/scope selection needs filesystem evidence, not MCP checks or model CLIs.
+  handle('asl:native-locations', async () => {
+    const report = await nativeInventory();
+    for (const preset of report.presets) selected.add(preset.path);
+    for (const host of report.hosts)
+      if (host.userMode?.skillsDir && path.isAbsolute(host.userMode.skillsDir)) selected.add(path.resolve(host.userMode.skillsDir));
+    return report;
   });
   readHandle('native', "asl:native", async (_args, signal) => {
     const report = await nativeInventory(undefined, undefined, await machineInventory(signal));
@@ -201,11 +238,12 @@ if(primary) app.whenReady().then(() => {
     } finally { busy = false; }
   });
   handle("asl:setup-status", (id) => sessionStatus(sessionRoot, id));
-  readHandle('localSkills', "asl:local-skills", async ([extra], signal) => {
+  readHandle('localSkills', "asl:local-skills", async ([extra,refresh=false], signal) => {
+    if(typeof refresh!=='boolean')throw new Error('无效的刷新选项');
     if (extra && !selected.has(path.resolve(extra))) throw new Error("请先选择要扫描的目录");
-    const roots = extra ? [{ name: "自选目录", path: extra }] : await localSkillRoots(undefined, undefined, (await machineInventory(signal)).projects);
+    const roots = extra ? [{ name: "自选目录", path: extra }] : await registeredSkillRoots();
     if (!roots.length) return { skills: [], issues: [], roots };
-    const report = await runCore("scan", { source: roots.map(r => r.path) }, { ...options, signal });
+    const report = extra?await runCore("scan", { source: roots.map(r => r.path) }, { ...options, signal }):await skillDiscovery.read(roots,{refresh,signal});
     for (const skill of report.skills) selected.add(path.resolve(skill.source));
     return { ...report, roots };
   });
@@ -251,6 +289,7 @@ if(primary) app.whenReady().then(() => {
     if (relative.startsWith("..") || path.isAbsolute(relative) || (await fs.stat(file)).size > 1024 * 1024) throw new Error("原文越界或过大，请在原位置查看");
     return fs.readFile(file, "utf8");
   });
+  readHandle('repositoryOverview','asl:repository-overview',([url],signal)=>readOverview(url,(...args)=>net.fetch(...args),signal));
   readHandle("githubSkills", "asl:github-skills", async ([url], signal) => {
     return readRepository(url, { fetch: (...args) => net.fetch(...args),
       core: (action, values, signal) => runCore(action, values, { ...options, signal }),
@@ -319,7 +358,7 @@ if(primary) app.whenReady().then(() => {
         title: {
           environment: "选择工作环境",
           project: "选择要交给 Agent 的项目",
-          basePreset: "选择一个已有的 DeepSeek Preset",
+          basePreset: "选择已有的 DeepSeek 工作模式",
           packageFolder: "选择环境包目录",
           skillFolder: "选择包含 SKILL.md 的完整技能文件夹",
           userSkills: "选择所选 Agent 的用户技能目录（直接存放各技能文件夹的位置）",
@@ -343,7 +382,7 @@ if(primary) app.whenReady().then(() => {
         title: {
           export: "保存 Mode 环境包",
           newEnvironment: "选择新环境的位置和名称",
-          newPreset: "选择新 Preset 的位置和名称",
+          newPreset: "保存 DeepSeek 工作模式",
         }[kind],
         defaultPath: path.join(directory || home, kind === "export" ? "my-mode.zip" : kind === "newPreset" ? "asl-mode" : "my-environment"),
         ...(kind === "export"
@@ -461,3 +500,10 @@ if(primary) app.whenReady().then(() => {
 });
 
 app.on("window-all-closed", () => app.quit());
+let preferencesFlushed=false;
+app.on('before-quit',event=>{
+  if(preferencesFlushed)return;
+  event.preventDefault();
+  flushPreferences().catch(error=>dialog.showErrorBox?.('浏览位置未保存',error.message))
+    .finally(()=>{preferencesFlushed=true;app.quit();});
+});

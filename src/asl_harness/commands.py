@@ -3,6 +3,8 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import tomllib
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from collections.abc import Sequence
 
@@ -17,8 +19,8 @@ from .adapters import (
 from .deepseek import export_preset, verify_preset
 from .sync import sync_environment
 from .portable import export_pack, inspect_pack, import_pack
-from .workspace import HarnessError, Workspace
-from .management import catalog, edit, skill_files, editing_guide
+from .workspace import HarnessError, Workspace, MODE_API_VERSION
+from .management import catalog, edit, skill_files, mode_files, editing_guide, EDIT_FIELDS
 from .discovery import scan_skills, unpack_skills
 from .user_projection import sync_user
 from .readiness import inspect_mode, setup_brief
@@ -27,12 +29,18 @@ from .native_mcp import inspect_mcp, edit_mcp, discover_mcp
 from .projection_lifecycle import disconnect
 
 
+class _JsonParser(argparse.ArgumentParser):
+    def error(self, message: str) -> None:
+        raise HarnessError('INPUT_INVALID', message)
+
+
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
+    parser = _JsonParser(
         prog="asl-harness",
         description="Validate ASL Environments, sync complete Skills, and project one Mode to a native Host.",
     )
     commands = parser.add_subparsers(dest="command", required=True)
+    commands.add_parser('cli.describe', help='Describe the current Agent CLI contract without reading or writing a library')
     local = commands.add_parser('environment.discover')
     local.add_argument('--source', action='append', default=[])
     local.add_argument('--parent', type=Path)
@@ -55,6 +63,10 @@ def _parser() -> argparse.ArgumentParser:
     files_command.add_argument('--workspace', required=True)
     files_command.add_argument('--skill', required=True)
     files_command.add_argument('--file', default='SKILL.md')
+    mode_files_command = commands.add_parser('mode.files')
+    mode_files_command.add_argument('--workspace', required=True)
+    mode_files_command.add_argument('--mode', required=True)
+    mode_files_command.add_argument('--file', default='MODE.md')
     guide_command = commands.add_parser('environment.guide')
     guide_command.add_argument('--workspace', required=True)
     guide_command.add_argument('--mode')
@@ -147,7 +159,48 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _describe_cli() -> dict:
+    from .mermaid import renderer_command
+    project_file = Path(__file__).resolve().parents[2] / 'pyproject.toml'
+    if project_file.is_file():
+        with project_file.open('rb') as stream:
+            current_version = tomllib.load(stream)['project']['version']
+    else:
+        try:
+            current_version = version('asl-harness')
+        except PackageNotFoundError:
+            current_version = None
+    registered = next(action.choices for action in _parser()._actions if isinstance(action, argparse._SubParsersAction))
+    descriptions = []
+    for name, parser in registered.items():
+        arguments = []
+        for action in parser._actions:
+            if isinstance(action, argparse._HelpAction):
+                continue
+            arguments.append({'flags': action.option_strings, 'required': action.required,
+                              'type': 'boolean' if isinstance(action, (argparse._StoreTrueAction, argparse._StoreFalseAction)) else (action.type.__name__ if action.type else 'str'),
+                              'repeatable': isinstance(action, argparse._AppendAction),
+                              'default': action.default,
+                              **({'choices': list(action.choices)} if action.choices is not None else {})})
+        descriptions.append({'name': name, 'arguments': arguments})
+    command = renderer_command()
+    return {'version': current_version, 'protocol': MODE_API_VERSION, 'commands': descriptions,
+            'editOperations': {name: {'fields': sorted(fields)} for name, fields in EDIT_FIELDS.items()},
+            'transport': {'input': {'environment.edit': 'UTF-8 JSON object on stdin', 'mcp.edit': 'UTF-8 JSON object on stdin'},
+                          'output': 'UTF-8 JSON on stdout', 'exitCodes': {'0': 'success', '2': 'failure'}},
+            'renderer': {'available': Path(command[0]).is_file(), 'executable': command[0],
+                         'availabilityCheck': 'executable-file-only; actual render is checked on write',
+                         'requiredFor': 'Mermaid real-render validation'},
+            'writeBoundary': {'contentCommands': ['environment.edit', 'mode.import', 'environment.sync'],
+                              'workspaceSelection': 'explicit local path; each Environment remains independent',
+                              'expected': 'existing content must use fresh fingerprints; reread after a stale result',
+                              'validation': 'protocol, references, lifecycle, paths, secrets and real Mermaid rendering',
+                              'directFileWritesAreControlled': False, 'startsModelTasks': False, 'runsSkillScripts': False}}
+
+
 def _execute(args: argparse.Namespace) -> dict:
+    if args.command == 'cli.describe':
+        return {'ok': True, **_describe_cli()}
     if args.command == 'environment.discover':
         return {'ok': True, **scan_modes(args.source, parent=args.parent)}
     if args.command == 'mcp.inspect':
@@ -170,6 +223,8 @@ def _execute(args: argparse.Namespace) -> dict:
         return {"ok": True, **catalog(args.workspace)}
     if args.command == 'skill.files':
         return {'ok': True, **skill_files(args.workspace, args.skill, args.file)}
+    if args.command == 'mode.files':
+        return {'ok': True, **mode_files(args.workspace, args.mode, args.file)}
     if args.command == 'environment.guide':
         return {'ok': True, **editing_guide(args.workspace, args.mode)}
     if args.command == "environment.edit":
@@ -198,7 +253,9 @@ def _execute(args: argparse.Namespace) -> dict:
         }
     workspace = Workspace.open(args.workspace, mode_id=getattr(args, "mode", None))
     if args.command == "workspace.validate":
-        return {"ok": True, **workspace.summary()}
+        from .mermaid import validate_packages
+        diagrams = validate_packages([m.path for m in workspace.modes.values()] + [s.path for s in workspace.skills.values()])
+        return {"ok": True, **workspace.summary(), "diagrams": diagrams}
     if args.command == "state":
         return {"ok": True, **workspace.state()}
     if args.command == "workspace.view.sync":
@@ -227,7 +284,7 @@ def _execute(args: argparse.Namespace) -> dict:
                                        check=args.check, expected=args.expected, remove=args.remove, skills_dir=args.skills_dir)}
     if args.command == "host.setup.inspect":
         if args.scope in {"project", "preset"} and not args.project:
-            raise HarnessError("SETUP_SCOPE", "请先选择项目或预设位置")
+            raise HarnessError("SETUP_SCOPE", "请先选择项目或 DeepSeek 工作模式的位置")
         project = Path(args.project).resolve() if args.project else None
         if project and not project.is_dir():
             raise HarnessError("SETUP_SCOPE", "所选工作位置不存在")
@@ -263,7 +320,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         output = json.dumps(result, ensure_ascii=False, separators=(",", ":"))
     except HarnessError as error:
         output = json.dumps(
-            {"ok": False, "error": {"code": error.code, "message": str(error)}},
+            {"ok": False, "error": {"code": error.code, "message": str(error), **({'details': error.details} if hasattr(error, 'details') else {})}},
             ensure_ascii=False,
             separators=(",", ":"),
         )

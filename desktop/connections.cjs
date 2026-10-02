@@ -34,10 +34,11 @@ async function connections(inventory, core) {
   for (const row of rows) {
     if (typeof row.workspace !== 'string' || !path.isAbsolute(row.workspace) || !/^[\w.-]+$/.test(row.mode || '')) continue;
     const id = `${row.host}:${row.scope}:${row.location}`;
+    let mode;
     try {
       if (!catalogs.has(row.workspace)) catalogs.set(row.workspace, core('catalog', {workspace: row.workspace}));
       const catalog = await catalogs.get(row.workspace);
-      const mode = catalog.modes.find(m => m.id === row.mode);
+      mode = catalog.modes.find(m => m.id === row.mode);
       if (!mode) throw new Error('原模式已移走或归档');
       const values = {workspace: row.workspace, mode: row.mode};
       const report = row.scope === 'user'
@@ -48,7 +49,11 @@ async function connections(inventory, core) {
       const changed = report.needsSync || report.warnings?.length;
       results.push({...row, id, title: mode.title, skills: mode.skills, status: report.conflicts?.length ? 'attention' : changed ? 'outdated' : 'configured',
         issues: report.conflicts || [], discovery: report.discovery || 'native-directory'});
-    } catch (error) { results.push({...row, id, title: row.mode, skills: [], status: 'attention', issues: [error.message]}); }
+    } catch (error) {
+      const upgrade = row.scope === 'preset' && error.code === 'DEEPSEEK_PRESET_UPGRADE_REQUIRED';
+      results.push({...row, id, title: mode?.title || row.mode, skills: mode?.skills || [],
+        status: upgrade ? 'outdated' : 'attention', ...(upgrade && {repair:'upgrade'}), issues: [error.message]});
+    }
   }
   return results;
 }

@@ -4,6 +4,25 @@ const { commandArgs, runCore } = require("../bridge.cjs");
 const path = require("node:path");
 const fs = require("node:fs/promises");
 const os = require("node:os");
+const vm = require('node:vm');
+
+test('bridge preserves the complete structured CLI error', async () => {
+  const error={code:'MERMAID_RENDER_FAILED',message:'MODE.md 图无法渲染',details:[{file:'MODE.md',line:7,action:'重写后重试'}]};
+  const context={exports:{}};
+  vm.runInNewContext(require('node:fs').readFileSync(path.join(__dirname,'../bridge.cjs'),'utf8'),{
+    module:context,__dirname:path.join(__dirname,'..'),process,
+    require:name=>name==='node:child_process'?{execFile(_program,_args,_options,callback){
+      queueMicrotask(()=>callback({code:2},JSON.stringify({ok:false,error})));
+      return{stdin:{on(){},end(){}}};
+    }}:require(name),
+  });
+  await assert.rejects(()=>context.exports.runCore('catalog',{workspace:'library'}),failure=>{
+    assert.equal(failure.code,error.code);
+    assert.deepEqual(JSON.parse(JSON.stringify(failure.details)),error.details);
+    assert.equal(failure.message,error.message);
+    return true;
+  });
+});
 
 test('complete file preview and Agent guide use the same read-only core', async () => {
   const root = path.resolve(__dirname, '../..'), workspace = path.join(root, 'examples/personal-environment');

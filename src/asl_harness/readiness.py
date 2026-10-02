@@ -129,7 +129,7 @@ def setup_brief(workspace: Workspace, mode_id: str, report: dict, *, scope: str,
                        for key in workspace.mode_skill_ids(mode_id))
     return f"""# 帮用户配置当前电脑的 AI 工作环境
 
-用户要用的 Mode：{mode_id}。目标 Agent：{report['host']}。范围：{'当前用户的所有项目' if scope == 'user' else '仅所选项目或预设'}。
+用户要用的 Mode：{mode_id}。目标 Agent：{report['host']}。范围：{'当前用户的所有项目' if scope == 'user' else '仅所选项目或 DeepSeek 工作模式'}。
 所选工作位置：{project or workspace.root}
 技能源：{workspace.root}
 Mode 原文：{mode.path / 'MODE.md'}

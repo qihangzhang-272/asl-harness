@@ -5,11 +5,11 @@ import { matchLocalModes, shortText } from './presentation.mjs';
 export function LocalModes({ report, onOpen, onScan, onChoose }) {
   return <section className="local-modes"><div className="field-heading"><h2>本机已有的工作模式</h2><div className="heading-actions">
     <button onClick={onChoose}><FolderOpen size={15}/>选择目录</button><button onClick={onScan}><RotateCw size={15}/>刷新</button>
-  </div></div><p className="muted">检查已连接环境、Agent 已登记项目，或所选文件夹及下一层目录；不扫描硬盘。</p>
+  </div></div>
     <div className="list-surface">{report?.modes.map(mode => <button className="local-mode-row" key={`${mode.workspace}:${mode.id}`} onClick={() => onOpen(mode)}>
       <Layers3 size={20}/><span><strong>{mode.title}</strong><small>{mode.workspace}</small></span><ChevronRight size={16}/>
     </button>)}</div>
-    {report && !report.modes.length && <p className="muted">尚未在这些位置找到符合 ASL 定义的 Mode。可以选择一个已有仓库。</p>}
+    {report && !report.modes.length && <p className="muted">尚未找到工作模式。选择已有模式库，或交给 AI 整理。</p>}
     {!!report?.issues.length && <details><summary>{report.issues.length} 处需要检查</summary>{report.issues.map((item, i) => <p key={i} className="path-line">{item.path}：{item.message}</p>)}</details>}
   </section>;
 }

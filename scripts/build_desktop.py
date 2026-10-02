@@ -11,7 +11,19 @@ import json
 import shutil
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
+
+
+def core_metadata(root: Path, output: Path) -> Path:
+    project = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))["project"]
+    folder = output / f"{project['name'].replace('-', '_')}-{project['version']}.dist-info"
+    folder.mkdir()
+    (folder / "METADATA").write_text(
+        f"Metadata-Version: 2.3\nName: {project['name']}\nVersion: {project['version']}\n",
+        encoding="utf-8",
+    )
+    return folder
 
 
 def build(output: Path) -> Path:
@@ -32,7 +44,9 @@ def build(output: Path) -> Path:
     output.mkdir(parents=True)
     work = output / "build"
     work.mkdir()
+    metadata = core_metadata(root, work)
     subprocess.run([sys.executable, "-m", "PyInstaller", "--noconfirm", "--name", "asl-harness",
+                    "--add-data", f"{metadata};{metadata.name}",
                     "--paths", str(root / "src"), "--distpath", str(work / "dist"),
                     "--workpath", str(work / "work"), "--specpath", str(work), str(desktop / "core_entry.py")], check=True)
     app = output / "ASL Workspace"
@@ -40,7 +54,7 @@ def build(output: Path) -> Path:
     (app / "electron.exe").rename(app / "ASL Workspace.exe")
     assets = app / "resources/app"
     assets.mkdir()
-    for name in ("package.json", "main.cjs", "preload.cjs", "bridge.cjs", "library.cjs", "native.cjs", "market.cjs", "assistant.cjs", "repository.cjs", "read-requests.cjs", "repository-import.cjs", "connections.cjs"):
+    for name in ("package.json", "main.cjs", "preload.cjs", "bridge.cjs", "library.cjs", "native.cjs", "market.cjs", "assistant.cjs", "repository.cjs", "read-requests.cjs", "repository-import.cjs", "connections.cjs", "local-discovery.cjs", "mermaid-check.cjs"):
         shutil.copy2(desktop / name, assets / name)
     shutil.copytree(desktop / "dist", assets / "dist")
     shutil.copytree(work / "dist/asl-harness", app / "resources/core")

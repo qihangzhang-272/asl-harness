@@ -1,0 +1,139 @@
+/* Mode workspace chrome: one compact strip above the canvas. Scoped to
+   .mode-workspace so the node editor and the global sheets stay untouched.
+   The Mode name and the MODE.md entry stay small until the document is asked for. */
+
+.mode-workspace-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-bottom: 10px;
+  padding: 5px 8px;
+  border: 1px solid var(--line, #dbe4f2);
+  border-radius: var(--radius, 10px);
+  background: var(--surface-muted, #f7f9fd);
+  flex-shrink: 0;
+}
+.mode-workspace-meta > .field {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+}
+.mode-workspace-meta .field > span {
+  font-size: 12px;
+  color: var(--muted, #5b7191);
+}
+.mode-workspace-name {
+  width: 200px;
+  padding: 5px 8px;
+  border-color: transparent;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink, #22324a);
+}
+.mode-workspace-name:hover {
+  border-color: var(--line, #dbe4f2);
+  background: var(--surface, #fff);
+}
+.mode-workspace-name:focus {
+  border-color: #93b8f0;
+  background: var(--surface, #fff);
+}
+
+/* Small chips: 文档 / 文件夹 / 未纳入 stay one line until opened. */
+.mode-workspace-meta details > summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 3px 10px;
+  border: 1px solid var(--line, #dbe4f2);
+  border-radius: 8px;
+  background: var(--surface, #fff);
+  color: var(--ink-soft, #506782);
+  font-size: 12px;
+  list-style: none;
+  cursor: pointer;
+  transition: background-color 180ms ease-out, border-color 180ms ease-out, color 180ms ease-out;
+}
+.mode-workspace-meta summary::-webkit-details-marker {
+  display: none;
+}
+.mode-workspace-meta details > summary:hover {
+  background: var(--brand-tint, #f4f8ff);
+  border-color: #c5d6f5;
+}
+.mode-workspace-meta details[open] > summary {
+  border-color: #93b8f0;
+  color: var(--brand-deep, #1f4da8);
+}
+.mode-workspace-document[open],
+.mode-workspace-id[open],
+.mode-workspace-issues[open] {
+  flex: 1 0 100%;
+  order: 5;
+}
+.mode-workspace-meta textarea {
+  display: block;
+  margin-top: 8px;
+  min-height: 96px;
+  resize: vertical;
+}
+.mode-workspace-id input {
+  display: block;
+  max-width: 280px;
+  margin-top: 8px;
+}
+.mode-workspace-issues {
+  font-size: 12px;
+  color: var(--muted, #5b7191);
+}
+.mode-workspace-issues p {
+  margin-top: 6px;
+}
+.mode-workspace-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+.mode-workspace-tools button {
+  min-height: 28px;
+  padding: 4px 10px;
+  font-size: 12px;
+}
+.mode-workspace-tools small {
+  color: var(--muted, #5b7191);
+  font-size: 12px;
+}
+.mode-workspace-meta .inline-note {
+  flex: 1 0 100%;
+  margin: 0;
+  padding: 8px 10px;
+}
+.mode-workspace-tabs { display: flex; padding: 3px; background: var(--brand-soft); border-radius: 9px; }
+.mode-workspace-tabs button { border: 0; background: transparent; min-height: 28px; padding: 4px 14px; font-size: 12px; }
+.mode-workspace-tabs [aria-selected=true] { background: var(--surface); color: var(--brand); }
+.mode-workspace-document-pane { display: flex; flex-direction: column; flex: 1; min-height: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.mode-workspace-document-toolbar { display: flex; justify-content: space-between; align-items: center; padding: 10px 18px; border-bottom: 1px solid var(--line); color: var(--muted); }
+.mode-workspace-document-pane > textarea { flex: 1; min-height: 0; resize: none; border: 0; border-radius: 0; padding: 24px; line-height: 1.8; }
+.mode-workspace-document-preview { flex: 1; min-height: 0; overflow: auto; padding: 24px; }
+.mode-workspace-meta .read-status {
+  padding: 0;
+  margin: 0;
+  background: none;
+  border: 0;
+}
+.mode-workspace-meta .read-status > div {
+  gap: 6px;
+  padding: 0;
+}
+
+/* The page heading already steps back through the global .mode-editing rule in style.css. */
+
+@media (prefers-reduced-motion: reduce) {
+  .mode-workspace-meta details > summary {
+    transition: none;
+  }
+}

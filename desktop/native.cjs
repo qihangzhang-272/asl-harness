@@ -95,6 +95,7 @@ async function nativeInventory(home = os.homedir(), env = process.env, mcp = nul
         presets.push({
           name: entry.name,
           path: path.join(presetRoot, entry.name),
+          managed: await exists(path.join(presetRoot, entry.name, ".asl-preset-projection.json")),
         });
   } catch {}
   if (presets.length) hosts.find(h => h.id === "deepseek-harness").configured = true;

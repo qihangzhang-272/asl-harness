@@ -16,11 +16,12 @@ import stat
 import tempfile
 import zipfile
 from contextlib import contextmanager
+from dataclasses import replace as replace_record
 from pathlib import Path, PurePosixPath
 
 from .dependencies import describe_dependencies
-from .sync import _git_status, _replace_package, _rollback_paths
-from .workspace import GENERATED_DIRECTORIES, LIFECYCLE_AREAS, HarnessError, Workspace, package_fingerprint
+from .sync import _git_status, _replace_package, _rollback_paths, environment_write_lock, _environment_fingerprints, _require_unchanged
+from .workspace import GENERATED_DIRECTORIES, LIFECYCLE_AREAS, HarnessError, Workspace, package_fingerprint, safe_write_path
 
 NAMESPACE = "io.github.qihangzhang-272.asl"
 SCHEMA = "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json"
@@ -174,10 +175,12 @@ def export_pack(source: str | Path, mode_id: str, output: str | Path, *, include
     excluded = []
     executable = []
     total = 0
-    for skill_id in workspace.mode_skill_ids(mode_id):
-        root = workspace.skills[skill_id].path
+    packages = [(workspace.skills[skill_id].path, f'skills/{skill_id}')
+                for skill_id in workspace.mode_skill_ids(mode_id)]
+    packages.append((workspace.modes[mode_id].path, f'{NAMESPACE}/modes/{mode_id}'))
+    for root, prefix in packages:
         if root.is_symlink() or getattr(root, "is_junction", lambda: False)():
-            _fail(f"linked Skill must be localized before export: {skill_id}")
+            _fail(f"linked package must be localized before export: {root}")
         # Traverse source once; generated dependencies are not authored package content.
         for current, directories, names in os.walk(root, followlinks=False):
             for name in list(directories):
@@ -187,26 +190,19 @@ def export_pack(source: str | Path, mode_id: str, output: str | Path, *, include
             for name in [*directories, *names]:
                 path = Path(current) / name
                 if path.is_symlink() or getattr(path, "is_junction", lambda: False)() or not path.resolve().is_relative_to(root.resolve()):
-                    _fail(f"linked Skill asset must be localized before export: {path}")
+                    _fail(f"linked package asset must be localized before export: {path}")
             for name in names:
                 path = Path(current) / name
                 if path.suffix in {".pyc", ".pyo"}:
                     excluded.append(path.relative_to(workspace.root).as_posix())
                     continue
-                relative = path.relative_to(workspace.root).as_posix()
+                relative = f'{prefix}/{path.relative_to(root).as_posix()}'
                 total += path.stat().st_size
                 if len(files) >= MAX_FILES or total > MAX_BYTES:
                     _fail("package exceeds 10000 files or 512 MiB")
                 files[relative] = path.read_bytes()
                 if path.stat().st_mode & 0o111:
                     executable.append(relative)
-    for name in ("MODE.md", "mode.yaml", "SOURCE.md"):
-        path = workspace.modes[mode_id].path / name
-        if name == "SOURCE.md" and not path.exists():
-            continue
-        if not path.resolve().is_relative_to(workspace.root):
-            _fail(f"Mode file escapes Environment: {name}")
-        files[f"{NAMESPACE}/modes/{mode_id}/{name}"] = path.read_bytes()
     if include_profile:
         files[f"{NAMESPACE}/PROFILE.md"] = (workspace.root / "PROFILE.md").read_bytes()
     # Repository notices travel once with the snapshot, never mutate every Skill.
@@ -277,21 +273,29 @@ def _opened_pack(source: str | Path):
     with tempfile.TemporaryDirectory(prefix="asl-pack-read-") as temporary:
         root = Path(temporary)
         restored = {}
+        restored_names = {}
         for name, data in payload.items():
             if name.startswith("skills/"):
-                restored[name] = data
-            elif name in {f"{NAMESPACE}/modes/{mode_id}/MODE.md", f"{NAMESPACE}/modes/{mode_id}/mode.yaml", f"{NAMESPACE}/modes/{mode_id}/SOURCE.md", f"{NAMESPACE}/PROFILE.md"}:
-                restored[name.removeprefix(f"{NAMESPACE}/")] = data
+                relative = name
+            elif name.startswith(f"{NAMESPACE}/modes/{mode_id}/") or name == f"{NAMESPACE}/PROFILE.md":
+                relative = name.removeprefix(f"{NAMESPACE}/")
             elif name.startswith(f'{NAMESPACE}/notices/') and re.fullmatch(r'(?i)(license|copying|notice)(\.[\w-]+)?', name.split('/')[-1]) and len(name.split('/')) == 3:
-                restored[f'modes/{mode_id}/notices/{name.split("/")[-1]}'] = data
+                relative = f'modes/{mode_id}/notices/{name.split("/")[-1]}'
             else:
                 _fail(f"unsupported ASL snapshot content: {name}")
+            previous = restored_names.get(relative.casefold())
+            if previous is not None and (previous != relative or restored[previous] != data):
+                _fail(f'restored package path collision: {previous} / {relative}')
+            restored_names[relative.casefold()] = relative
+            restored[relative] = data
         restored.setdefault("PROFILE.md", b"# Profile\n\nConfigure personal preferences locally.\n")
         restored["WORKSPACE.md"] = b"# Work environment\n"
         _write_files(root, restored)
         for name in executable:
             if name.startswith("skills/"):
                 (root / name).chmod(0o755)
+            elif name.startswith(f'{NAMESPACE}/modes/{mode_id}/'):
+                (root / name.removeprefix(f'{NAMESPACE}/')).chmod(0o755)
         for area in LIFECYCLE_AREAS:
             (root / area).mkdir()
         workspace = Workspace.open(root)
@@ -348,16 +352,25 @@ def _package_differences(local: Path, incoming: Path, *, mode: bool = False) -> 
 
 
 def import_pack(source: str | Path, target: str | Path, *, check: bool = False, replace: bool = False, expected: str | None = None) -> dict:
+    if check:
+        return _import_pack(source, target, check=True, replace=replace, expected=expected)
+    with environment_write_lock(target):
+        return _import_pack(source, target, replace=replace, expected=expected)
+
+
+def _import_pack(source: str | Path, target: str | Path, *, check: bool = False, replace: bool = False, expected: str | None = None) -> dict:
     destination = Path(target).resolve()
     with _opened_pack(source) as (incoming, report):
         mode_id = report["mode"]
         existing = Workspace.open(destination) if destination.exists() else None
+        observed = _environment_fingerprints(existing) if existing else {}
         actions = {}
         differences = {}
         packages = {f"skills/{name}": item.path for name, item in incoming.skills.items()}
         packages[f"modes/{mode_id}"] = incoming.modes[mode_id].path
         for relative, package in packages.items():
             local = destination / relative
+            safe_write_path(destination, local)
             if not local.resolve().is_relative_to(destination):
                 _fail(f"import target escapes Environment: {relative}")
             changes = _package_differences(local, package, mode=relative.startswith('modes/')) if local.exists() else []
@@ -366,14 +379,17 @@ def import_pack(source: str | Path, target: str | Path, *, check: bool = False, 
             actions[relative] = ('add' if not local.exists() else 'unchanged' if not significant
                                  else 'source-update' if all(c['kind'] == 'source-record' for c in significant)
                                  else 'replace' if replace else 'conflict')
+            if actions[relative] == 'source-update':
+                safe_write_path(destination, local / 'SOURCE.md')
         conflicts = [path for path, action in actions.items() if action == "conflict"]
         changes = [path for path, action in actions.items() if action in {"add", "replace", "source-update"}]
         changed_skills = {path.split("/")[1] for path, action in actions.items() if path.startswith("skills/") and action != "unchanged"}
         affected = sorted(name for name in existing.modes if changed_skills.intersection(existing.mode_skill_ids(name))) if existing else []
+        local_fingerprints = {name: package_fingerprint(destination / name) if (destination / name).exists() else None for name in packages}
+        mode_fingerprints = {name: package_fingerprint(mode.path) for name, mode in existing.modes.items()} if existing else {}
         fingerprint = _digest(json.dumps({
             "content": report["contentDigest"], "target": str(destination),
-            "local": {name: package_fingerprint(destination / name) if (destination / name).exists() else None for name in packages},
-            "modes": {name: package_fingerprint(mode.path) for name, mode in existing.modes.items()} if existing else {},
+            "local": local_fingerprints, "modes": mode_fingerprints,
         }, sort_keys=True).encode())
         if expected is not None and expected != fingerprint:
             raise HarnessError("PACK_PREVIEW_STALE", "本地内容或导入包已改变，请重新查看导入预览")
@@ -381,15 +397,41 @@ def import_pack(source: str | Path, target: str | Path, *, check: bool = False, 
                   "fingerprint": fingerprint,
                   "actions": actions, "differences": differences, "conflicts": conflicts, "affectedModes": affected,
                   "changed": bool(changes), "profileAction": "preserved" if existing else "imported" if report["includedProfile"] else "local-default"}
+        incoming_fingerprints = {name: package_fingerprint(packages[name]) for name in changes}
+        incoming_environment_fingerprint = package_fingerprint(incoming.root)
+        source_records = {name: (packages[name] / 'SOURCE.md').read_bytes()
+                          for name in changes if actions[name] == 'source-update'}
+        source_path = Path(source).resolve()
+        members = {package: f'{NAMESPACE + "/" if relative.startswith("modes/") else ""}{relative}'
+                   for relative, package in packages.items()}
+        file_roots = {package: str(source_path / member) if source_path.is_dir() else f'{source_path}!/{member}'
+                      for package, member in members.items()}
+        from .mermaid import validate_packages, validate_documents
+        result['diagrams'] = validate_packages([packages[name] for name in changes if actions[name] != 'source-update'],
+                                              file_roots=file_roots)
+        source_diagrams = validate_documents([{'file': file_roots[packages[name]] + '/SOURCE.md',
+                                               'text': data.decode('utf-8')}
+                                              for name, data in source_records.items()])
+        result['diagrams']['rendered'] += source_diagrams['rendered']
+        if existing and not conflicts:
+            replace_record(existing, skills={**existing.skills, **incoming.skills},
+                           modes={**existing.modes, **incoming.modes})._validate_graph()
         if check:
             return result
         if conflicts:
             raise HarnessError("PACK_CONFLICT", "local content conflict: " + ", ".join(conflicts) + "; review and use --replace explicitly")
+        unchanged = {**local_fingerprints, **{f'modes/{name}': digest for name, digest in mode_fingerprints.items()}}
+        if any((package_fingerprint(destination / name) if (destination / name).exists() else None) != digest
+               for name, digest in unchanged.items()):
+            raise HarnessError('PACK_PREVIEW_STALE', '渲染期间本地内容已改变，请重新查看导入预览；未覆盖新内容')
+        _require_unchanged(observed, 'PACK_PREVIEW_STALE')
         if existing is None:
             destination.parent.mkdir(parents=True, exist_ok=True)
             with tempfile.TemporaryDirectory(prefix=".asl-import-", dir=destination.parent) as temporary:
                 staged = Path(temporary) / "incoming"
                 shutil.copytree(incoming.root, staged)
+                if package_fingerprint(staged) != incoming_environment_fingerprint:
+                    raise HarnessError('ADOPTION_STALE', '采用字节与已验收快照不一致，请重新验收；未创建工作环境')
                 Workspace.open(staged).sync_workspace_view()
                 Workspace.open(staged)
                 staged.rename(destination)
@@ -397,11 +439,9 @@ def import_pack(source: str | Path, target: str | Path, *, check: bool = False, 
             with _rollback_paths(destination, [*changes, "WORKSPACE.md"]):
                 for relative in changes:
                     if actions[relative] == 'source-update':
-                        shutil.copy2(packages[relative] / 'SOURCE.md', destination / relative / 'SOURCE.md')
-                    elif actions[relative] == "replace":
-                        _replace_package(packages[relative], destination / relative)
+                        (destination / relative / 'SOURCE.md').write_bytes(source_records[relative])
                     else:
-                        shutil.copytree(packages[relative], destination / relative)
+                        _replace_package(packages[relative], destination / relative, expected=incoming_fingerprints[relative])
                 Workspace.open(destination).sync_workspace_view()
                 Workspace.open(destination)
         result["gitStatus"] = _git_status(destination, [*changes, "WORKSPACE.md"])

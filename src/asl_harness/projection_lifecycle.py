@@ -9,14 +9,14 @@ from uuid import uuid4
 from .adapters import (HOST_LAYOUTS, MANAGED_START, MANAGED_END, _manifest_path,
                        _write_bytes_atomic, verify_mode_projection)
 from .deepseek import verify_preset
-from .workspace import HarnessError, Workspace, package_fingerprint
+from .workspace import HarnessError, Workspace, filesystem_path, package_fingerprint
 
 
 def disconnect(workspace: Workspace, mode: str, host: str, scope: str,
                project: str | Path, *, check: bool = False, expected: str | None = None) -> dict:
     target = Path(project).absolute()
     if target.is_symlink() or target.resolve() != target:
-        raise HarnessError('PATH_ESCAPE', '请在真实项目或预设目录管理配置')
+        raise HarnessError('PATH_ESCAPE', '请在真实项目或 DeepSeek 工作模式目录管理配置')
     instruction = None
     original = None
     if scope == 'preset' and host == 'deepseek-harness':
@@ -48,17 +48,21 @@ def disconnect(workspace: Workspace, mode: str, host: str, scope: str,
         return report
     if expected != fingerprint:
         raise HarnessError('EDIT_STALE', '配置已变化，请刷新后重新确认停用')
-    archive = archive_root / uuid4().hex
-    archive.mkdir(parents=True, exist_ok=False)
+    archive = archive_root / uuid4().hex[:8]
+    # Deep projects can push the archived copy past MAX_PATH, so only the
+    # filesystem boundary uses the extended path; the receipt stays normal.
+    extended_archive = filesystem_path(archive)
+    extended_archive.mkdir(parents=True, exist_ok=False)
     moved = []
     try:
         for file in paths:
-            destination = archive / (file.relative_to(target) if scope == 'project' else file.name)
+            destination = (extended_archive
+                           / (file.relative_to(target) if scope == 'project' else file.name))
             destination.parent.mkdir(parents=True, exist_ok=True)
             file.rename(destination)
             moved.append((file, destination))
         if instruction:
-            (archive / 'instructions-before.txt').write_bytes(original)
+            filesystem_path(archive / 'instructions-before.txt').write_bytes(original)
             text = original.decode('utf-8')
             before, rest = text.split(MANAGED_START, 1)
             _, after = rest.split(MANAGED_END, 1)

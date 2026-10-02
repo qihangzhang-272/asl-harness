@@ -1,6 +1,22 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 
+test('configuration copy names the outcome rather than exposing preset jargon',async()=>{
+  const {errorText,scopeLabel}=await import('../src/presentation.mjs');
+  assert.doesNotMatch(scopeLabel('preset','Writing'),/预设/);
+  assert.match(errorText('Mode capital-markets-desk has an invalid definition'),/capital-markets-desk.*mode.yaml/);
+  assert.doesNotMatch(errorText('DeepSeek preset output directory name must match [a-z0-9][a-z0-9-]*'),/预设/);
+  const fs=require('node:fs'),path=require('node:path');
+  for(const file of ['App.jsx','AgentPage.jsx'])assert.ok(!fs.readFileSync(path.join(__dirname,'../src',file),'utf8').includes('预设'),file);
+});
+
+test('all skills show one record per skill instead of repeating every work paradigm',async()=>{
+  const {allSkillSection}=await import('../src/presentation.mjs');
+  const catalog={skills:[{id:'read'},{id:'write'}],modes:[{id:'one',skills:['read','write']},{id:'two',skills:['read']}]};
+  assert.deepEqual(allSkillSection(catalog).skills,['read','write']);
+  assert.equal(allSkillSection(catalog).title,'全部技能');
+});
+
 test('local Mode matching spans environments but never treats a name as source identity', async () => {
   const { matchLocalModes } = await import('../src/presentation.mjs');
   const rows = [{id:'write', workspace:'/a', repository:'git@github.com:Author/Skills.git'},
@@ -17,8 +33,10 @@ test('restoration validates mode and skill against the selected local environmen
   assert.deepEqual(restoreView(catalog,{mode:'writing',page:'skills',view:'list',skill:'draft',query:'中文'}),
     {mode:'writing',page:'skills',view:'list',skill:'draft',query:'中文',provider:'github-import',githubUrl:''});
   const stale=restoreView(catalog,{mode:'deleted',page:'modes',skill:'draft'});
-  assert.equal(stale.mode,'research');
+  assert.equal(stale.mode,'');
   assert.equal(stale.skill,'');
+  assert.equal(restoreView(catalog).mode,'', 'opening a library starts at its list');
+  assert.equal(restoreView(catalog,{mode:'',page:'modes'}).mode,'', 'returning to the list survives reopening');
 });
 
 test('each actual skill is exactly one node and only authored links are shown', async () => {
@@ -77,11 +95,21 @@ test('Mermaid receives branches, merges and cycles without executable user synta
   assert.ok(!diagram.source.includes('style '));
 });
 
+test('native Mermaid projection retains the authored condition without creating extra nodes',async()=>{
+  const {diagramForMode}=await import('../src/presentation.mjs');
+  const skills=[{id:'a',title:'研究'},{id:'b',title:'写作'}];
+  const graph=diagramForMode({architecture:{edges:[{from:'a',to:'b',label:'研究材料',condition:'证据充分'}]}},skills);
+  assert.match(graph.source,/研究材料 · 证据充分/);
+  assert.equal(graph.nodes.length,2);
+  const conditionOnly=diagramForMode({architecture:{edges:[{from:'a',to:'b',condition:'完成核验'}]}},skills);
+  assert.match(conditionOnly.source,/完成核验/);
+});
+
 test("scope labels never confuse current user with a selected project", async () => {
   const { scopeLabel } = await import("../src/presentation.mjs");
   assert.equal(scopeLabel("project", "我的文章"), "仅项目 · 我的文章");
   assert.equal(scopeLabel("user"), "我的所有项目");
-  assert.equal(scopeLabel("preset", "创作"), "仅预设 · 创作");
+  assert.equal(scopeLabel("preset", "创作"), "DeepSeek 中的工作模式 · 创作");
 });
 test("unclassified skills never receive keyword-inferred business categories", async () => {
   const { capabilityGroups } = await import("../src/presentation.mjs");

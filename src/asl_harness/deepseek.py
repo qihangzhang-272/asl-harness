@@ -168,21 +168,25 @@ def verify_preset(
         "configurationFingerprint",
     }
     skill_ids = workspace.mode_skill_ids(mode_id)
+    legacy = bool(marker and marker.get("version") == 2)
+    installed_ids = marker.get("skills") if marker else None
     if (
         marker is None
-        or set(marker) != expected_keys
-        or marker.get("version") != 3
+        or set(marker) != (expected_keys - {"configurationFingerprint"} if legacy else expected_keys)
+        or marker.get("version") not in (2, 3)
         or marker.get("operation") != "mode.export"
         or marker.get("hostId") != "deepseek-harness"
         or marker.get("environment") != str(workspace.root)
         or marker.get("mode") != mode_id
-        or marker.get("skills") != list(skill_ids)
+        or not isinstance(installed_ids, list)
+        or any(not isinstance(value, str) or not PRESET_ID.fullmatch(value) for value in installed_ids)
+        or len(set(installed_ids)) != len(installed_ids)
         or not isinstance(marker.get("skillFingerprints"), dict)
-        or set(marker["skillFingerprints"]) != set(skill_ids)
+        or set(marker["skillFingerprints"]) != set(installed_ids)
         or not isinstance(marker.get("basePreset"), str)
     ):
         raise HarnessError(
-            "DEEPSEEK_PRESET_INVALID", "DeepSeek preset marker is invalid or outdated; re-export the preset"
+            "DEEPSEEK_PRESET_INVALID", "无法确认这个 DeepSeek 工作模式的配置归属，请检查配置详情"
         )
     composition_path = target / "agent.cordis.yml"
     preset_path = target / "preset.yml"
@@ -200,7 +204,7 @@ def verify_preset(
         raise HarnessError(
             "DEEPSEEK_PRESET_INVALID", "DeepSeek preset Hook config is invalid"
         ) from error
-    if _configuration_fingerprint(target) != marker["configurationFingerprint"]:
+    if not legacy and _configuration_fingerprint(target) != marker["configurationFingerprint"]:
         raise HarnessError("DEEPSEEK_PRESET_INVALID", "DeepSeek preset configuration was modified")
     expected_skill_root = json.dumps(str(target / "skills"), ensure_ascii=False)
     expected_hook_config = json.dumps(
@@ -213,13 +217,15 @@ def verify_preset(
     if (
         HOOK_BRIDGE_PACKAGE not in composition
         or expected_hook_config not in composition
-        or installed_hook_config
-        != hook_config(_hook_command(target))
+        or installed_hook_config not in (
+            [hook_config(_hook_command(target)), hook_config("asl-harness-hook --host-id deepseek-harness")]
+            if legacy else [hook_config(_hook_command(target))]
+        )
     ):
         raise HarnessError(
             "DEEPSEEK_PRESET_INVALID", "DeepSeek preset Hook bridge is invalid"
         )
-    for skill_id in skill_ids:
+    for skill_id in installed_ids:
         skill_path = target / "skills" / skill_id
         if (
             not (skill_path / "SKILL.md").is_file()
@@ -230,6 +236,8 @@ def verify_preset(
                 "DEEPSEEK_PRESET_INVALID",
                 f"DeepSeek preset Skill is incomplete: {skill_id}",
             )
+    if legacy:
+        raise HarnessError("DEEPSEEK_PRESET_UPGRADE_REQUIRED", "这个 DeepSeek 工作模式使用旧版配置，可在原位置升级")
     warnings = []
     if marker["sourceFingerprint"] != workspace.source_fingerprint(mode_id):
         warnings.append(
@@ -272,8 +280,10 @@ def export_preset(
             f"refusing to overwrite a preset not managed by this Mode: {target}",
         )
 
-    temporary = target.with_name(f".asl-tmp-{uuid4().hex}")
-    backup = target.with_name(f".asl-backup-{uuid4().hex}")
+    staging_suffix = uuid4().hex[:8]
+    temporary = target.with_name(f".asl-tmp-{staging_suffix}")
+    backup = target.with_name(f".asl-backup-{staging_suffix}")
+    keep_backup = bool(old_marker and old_marker.get("version") == 2)
     try:
         shutil.copytree(base, temporary, symlinks=False, ignore=_ignore_generated)
         skill_root = temporary / "skills"
@@ -357,15 +367,16 @@ def export_preset(
             if backup.exists() and not target.exists():
                 backup.rename(target)
             raise
-        if backup.exists():
+        if backup.exists() and not keep_backup:
             shutil.rmtree(backup)
         return marker | {
             "output": str(target),
             "hookIntegration": HOOK_BRIDGE_PACKAGE,
             "hookActivation": "included-in-preset",
+            **({"previousConfiguration": str(backup)} if keep_backup else {}),
         }
     finally:
         if temporary.exists():
             shutil.rmtree(temporary)
-        if backup.exists() and target.exists():
+        if backup.exists() and target.exists() and not keep_backup:
             shutil.rmtree(backup)

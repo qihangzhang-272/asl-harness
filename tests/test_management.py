@@ -341,6 +341,17 @@ def test_general_guide_describes_all_existing_modes_and_reports_invalid_content(
     assert '需要修正' in result['document']
 
 
+def test_guide_can_repair_a_selected_broken_mode_without_mutating_it(tmp_path):
+    root = _environment(tmp_path)
+    file = root / 'modes/creator-studio/mode.yaml'
+    file.write_text('broken: true', encoding='utf-8')
+    guide = management.editing_guide(root, 'creator-studio')['document']
+    assert '需要修正' in guide
+    assert str(file) in guide
+    assert 'workspace.validate' in guide
+    assert file.read_text(encoding='utf-8') == 'broken: true'
+
+
 def test_mode_categories_persist_and_do_not_change_membership(tmp_path):
     root = _environment(tmp_path)
     mode = management.catalog(root)["modes"][0]

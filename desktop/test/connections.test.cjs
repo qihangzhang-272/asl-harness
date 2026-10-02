@@ -24,7 +24,24 @@ test('installed mode inventory verifies files rather than treating a receipt as 
   assert.deepEqual(results.map(r=>r.status),['outdated','configured','attention']);
   assert.equal(called.filter(([a])=>a==='catalog').length,1);
   assert.equal(results[2].issues[0],'配置被修改');
+  assert.equal(results[2].title,'Writing');
   assert.ok(!JSON.stringify(results).includes('running'));
+});
+
+test('legacy DeepSeek installation offers repair at its existing location',async t=>{
+  const home=await fs.mkdtemp(path.join(os.tmpdir(),'asl-legacy-'));
+  t.after(()=>fs.rm(home,{recursive:true,force:true}));
+  const preset=path.join(home,'asl-writing'),workspace=path.join(home,'library');
+  await fs.mkdir(preset);
+  await fs.writeFile(path.join(preset,'.asl-preset-projection.json'),JSON.stringify({hostId:'deepseek-harness',environment:workspace,mode:'writing',basePreset:path.join(home,'standard')}));
+  const result=await connections({hosts:[],projects:[],presets:[{path:preset}]},async action=>{
+    if(action==='catalog')return {modes:[{id:'writing',title:'写作',skills:['one']}]};
+    throw Object.assign(new Error('需要升级'),{code:'DEEPSEEK_PRESET_UPGRADE_REQUIRED'});
+  });
+  assert.equal(result[0].status,'outdated');
+  assert.equal(result[0].repair,'upgrade');
+  assert.equal(result[0].location,preset);
+  assert.deepEqual(result[0].skills,['one']);
 });
 
 test('missing source remains visible as an issue, and ordinary presets are not managed',async()=>{

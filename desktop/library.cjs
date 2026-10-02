@@ -61,10 +61,22 @@ async function readPreferences(file) {
     repositories: Array.isArray(value.repositories) ? value.repositories.filter(url => typeof url === "string" && /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+(?:\/|$)/.test(url)).slice(0, 12) : [],
   };
 }
+const RENAME_LOCKS = new Set(["EPERM", "EACCES", "EBUSY"]);
+const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function writePreferences(file, value) {
   await fs.mkdir(path.dirname(file), { recursive: true });
   await fs.writeFile(`${file}.tmp`, JSON.stringify(value, null, 2));
-  await fs.rename(`${file}.tmp`, file);
+  // Windows refuses the rename while any reader still holds the destination (or a scanner holds the
+  // fresh tmp). The old file stays intact, so retry a bounded few times before reporting failure.
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await fs.rename(`${file}.tmp`, file);
+      return;
+    } catch (error) {
+      if (attempt >= 3 || !RENAME_LOCKS.has(error.code)) throw error;
+      await pause(attempt * 10);
+    }
+  }
 }
 async function rememberLibrary(file, root) {
   root = path.resolve(root);
@@ -89,6 +101,11 @@ async function rememberView(file,root,state) {
     return {...value,views:{...value.views,[root]:view}};
   });
 }
+function forgetRepository(file,url) {
+  return updatePreferences(file,value=>({...value,
+    repositories:value.repositories.filter(item=>item!==url),
+    activeSource:value.activeSource?.url===url?null:value.activeSource}));
+}
 module.exports = {
   bundledExample,
   readPreferences,
@@ -97,4 +114,6 @@ module.exports = {
   isLibrary,
   rememberView,
   updatePreferences,
+  forgetRepository,
+  flushPreferences: () => pending,
 };

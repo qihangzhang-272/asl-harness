@@ -166,7 +166,7 @@ function runCore(action, values, options = {}) {
         }
         if (!report.ok || error)
           reject(
-            new Error(report.error?.message || error?.message || "操作失败"),
+            Object.assign(new Error(report.error?.message || error?.message || "操作失败"), {code: report.error?.code, details: report.error?.details}),
           );
         else resolve(report);
       },

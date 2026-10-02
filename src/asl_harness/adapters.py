@@ -331,11 +331,9 @@ def project_mode(
                 "an existing Host projection is no longer owned by ASL",
             )
 
-    with tempfile.TemporaryDirectory(
-        prefix=".asl-project-", dir=manifest_path.parent
-    ) as temporary:
+    with tempfile.TemporaryDirectory(prefix=".asl-project-", dir=project) as temporary:
         transaction = Path(temporary)
-        staged_project = transaction / "staged"
+        staged_project = transaction
         backup = transaction / "previous"
         projections = [
             _project_skill(

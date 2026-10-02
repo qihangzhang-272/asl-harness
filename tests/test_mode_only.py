@@ -146,6 +146,8 @@ spec:
     with pytest.raises(HarnessError) as captured:
         Workspace.open(root)
     assert captured.value.code == "MODE_INVALID"
+    assert 'mode.yaml' in str(captured.value)
+    assert 'spec' in str(captured.value)
 
 
 def test_workspace_requires_all_lifecycle_areas(tmp_path: Path) -> None:
@@ -283,6 +285,31 @@ def test_projects_and_verifies_native_host_surfaces(tmp_path: Path, host_id: str
     assert verify_mode_projection(
         workspace, project, "creator-studio", host_id=host_id
     ) == []
+
+
+def test_copy_projection_stages_inside_the_project_without_deep_nesting(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    workspace = Workspace.open(_environment(tmp_path))
+    pad = max(1, 185 - len(str(tmp_path)) - 1)
+    project = tmp_path / ("q" * pad)
+
+    def no_link(*_args: object, **_kwargs: object) -> None:
+        raise OSError("links unavailable")
+
+    monkeypatch.setattr(Path, "symlink_to", no_link)
+    monkeypatch.setattr(
+        adapters.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(returncode=1),
+    )
+    manifest = project_mode(workspace, project, "creator-studio", host_id="codex-app")
+
+    assert all(item["projection"] == "copy" for item in manifest["skillProjections"])
+    assert verify_mode_projection(
+        workspace, project, "creator-studio", host_id="codex-app"
+    ) == []
+    assert (project / ".agents/skills/creator/.asl-projection.json").is_file()
 
 
 def test_verify_rejects_tampered_copy_projection(

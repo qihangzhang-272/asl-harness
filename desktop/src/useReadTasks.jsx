@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { LoaderCircle, X } from 'lucide-react';
 
-const cancellable = new Set(['run', 'readSkill', 'githubSkills', 'localSkills', 'localModes', 'native', 'mcp', 'discover', 'repositoryUpdates']);
+const cancellable = new Set(['run', 'readSkill', 'githubSkills', 'repositoryOverview', 'localSkills', 'localModes', 'native', 'mcp', 'discover', 'repositoryUpdates']);
 
 export function useReadTasks(onError) {
   const pending = useRef(new Map());

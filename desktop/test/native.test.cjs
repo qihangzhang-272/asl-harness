@@ -67,6 +67,9 @@ test("empty host folders are not reported as configuration and modern WorkBuddy 
   assert.equal(buddy.configured, true);
   assert.deepEqual(buddy.connections, ["search"]);
   assert.equal(data.presets[0].path, preset);
+  assert.equal(data.presets[0].managed, false);
+  await fs.writeFile(path.join(preset,'.asl-preset-projection.json'),'{}');
+  assert.equal((await nativeInventory(home,{})).presets[0].managed,true);
   assert.equal(data.presetRoot, path.dirname(preset));
   assert.ok(!JSON.stringify(data).includes("private"));
 });

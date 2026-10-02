@@ -1,12 +1,13 @@
 import React, {useState} from 'react';
-import {Layers3, Puzzle, ChevronRight, Pencil, FileText} from 'lucide-react';
-import {skillSections, shortText} from './presentation.mjs';
+import {Layers3, Puzzle, ChevronRight, FileText} from 'lucide-react';
+import {allSkillSection, skillSections, shortText} from './presentation.mjs';
+import {ArchitectureMap} from './Architecture.jsx';
 
-export default function SkillLibrary({catalog,query,onSkill,onEditMode}) {
+export default function SkillLibrary({catalog,query,onSkill,onEditMode,onSaveDocument}) {
   const [sectionId,setSectionId]=useState('');
   const sections=skillSections(catalog);
   const selected=sections.find(s=>s.id===sectionId);
-  const groups=(selected?[selected]:sections).map(g=>{
+  const groups=(selected?[selected]:[allSkillSection(catalog)]).map(g=>{
     const nodes=catalog.modes.find(m=>m.id===g.mode)?.architecture?.nodes||[];
     return {...g,items:g.skills.map(id=>catalog.skills.find(s=>s.id===id)).filter(s=>{
       const display=nodes.find(n=>n.skill===s?.id);
@@ -22,14 +23,15 @@ export default function SkillLibrary({catalog,query,onSkill,onEditMode}) {
       {sections.filter(s=>!s.mode).map(g=><button key={g.id} onClick={()=>setSectionId(g.id)}>{g.title}<small>{g.skills.length}</small></button>)}
     </nav>
     <div className="skill-library-content">{groups.filter(g=>g.items.length).map(group=><section key={group.id} className="skill-table-section">
-      <header><div><small>{group.modeTitle}</small><h2>{group.title}</h2></div>{group.mode&&<button className="text-button" disabled={!onEditMode} onClick={()=>onEditMode(group.mode)}><Pencil size={14}/>编辑结构</button>}</header>
-      <div className="skill-table" role="table" aria-label={`${group.modeTitle} ${group.title}`}>
+      <header><div><small>{group.modeTitle}</small><h2>{group.title}</h2></div></header>
+      {group.mode&&<ArchitectureMap key={group.id} mode={catalog.modes.find(m=>m.id===group.mode)} skills={catalog.skills} initialScope={group.id.slice(group.mode.length+1)} onSkill={onSkill} onEdit={onEditMode?title=>onEditMode(group.mode,title):null} onSaveDocument={onSaveDocument}/>}
+      {(!group.mode||query)&&<div className="skill-table" role="table" aria-label={`${group.modeTitle} ${group.title}`}>
         <div className="skill-table-head" role="row"><span>技能</span><span>用途</span><span>内容</span><span/></div>
         {group.items.map(skill=><button role="row" className="skill-table-row" key={skill.id} onClick={()=>onSkill(skill)}>
           <span title={skill.id}><Puzzle size={15}/>{catalog.modes.find(m=>m.id===group.mode)?.architecture?.nodes?.find(n=>n.skill===skill.id)?.title||skill.title}</span>
           <span title={skill.description}>{shortText(catalog.modes.find(m=>m.id===group.mode)?.architecture?.nodes?.find(n=>n.skill===skill.id)?.note||skill.description,110)}</span><span><FileText size={13}/>{skill.fileCount}</span><ChevronRight size={15}/>
         </button>)}
-      </div>
+      </div>}
     </section>)}{!groups.some(g=>g.items.length)&&<p className="muted">没有匹配的技能。</p>}</div>
   </div>;
 }
