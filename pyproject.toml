@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "asl-harness"
-version = "0.4.4"
+version = "0.4.5"
 description = "Mode-only local Environment and Host projections for ASL-WEP"
 readme = "README.md"
 license = "MIT"

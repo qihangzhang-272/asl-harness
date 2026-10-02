@@ -25,13 +25,17 @@ def test_selected_parent_is_one_level_only_and_errors_do_not_hide_good_roots(tmp
 def test_imported_source_is_recognized_and_same_name_is_not_deduplicated(tmp_path):
     one = _environment(tmp_path / 'one')
     two = _environment(tmp_path / 'two')
+    _write(one / '.git' / 'config', '[remote "origin"]\nurl = https://github.com/test/library.git\n')
     _write(one / 'modes' / 'creator-studio' / 'SOURCE.md',
            '# Source\n<!-- asl:upstream -->\n- Repository: https://github.com/test/skills\n'
            '- URL: https://github.com/test/skills\n- Commit: ' + 'a' * 40 + '\n<!-- /asl:upstream -->\n')
     report = scan_modes([str(one), str(two)])
     assert len(report['modes']) == 2
     assert report['modes'][0]['upstream']['commit'] == 'a' * 40
+    assert report['modes'][0]['repository'] == 'https://github.com/test/skills'
+    assert report['modes'][0]['libraryRepository'] == 'https://github.com/test/library.git'
     assert report['modes'][1]['upstream'] is None
+    assert report['modes'][1]['libraryRepository'] is None
 
 
 def test_discovery_follows_project_projection_to_its_actual_library(tmp_path):

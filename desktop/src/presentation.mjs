@@ -165,6 +165,17 @@ export function repositoryKey(value) {
     .replace(/\/$/, '').replace(/\.git$/i, '').toLowerCase();
 }
 
+// Discovery finds candidates; only explicitly opened libraries belong in the sidebar.
+export function libraryGroups(discovered=[],roots=[],workspace=null,currentModes=null) {
+  const order=[...new Set([...roots,...(workspace?[workspace]:[])])];
+  return order.map(root=>{
+    const found=discovered.filter(item=>item.workspace===root);
+    const modes=root===workspace&&currentModes!==null?currentModes:found;
+    return {root,repository:found.find(item=>item.libraryRepository)?.libraryRepository||null,
+      modes:[...new Map(modes.map(item=>[item.id,{...item,workspace:root}])).values()]};
+  });
+}
+
 export function matchLocalModes(modes, id, repository) {
   return (modes || []).filter(mode => mode.id === id).map(mode => ({ ...mode,
     sameSource: !!repository && repositoryKey(mode.repository || mode.upstream?.repository) === repositoryKey(repository),

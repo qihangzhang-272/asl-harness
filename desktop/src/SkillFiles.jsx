@@ -17,7 +17,7 @@ export default function SkillFiles({ item, Dialog, readFile, saveFile, onClose, 
   useEffect(()=>{
     if(!embedded||!dirty)return;
     const guard=event=>{
-      if(event.target.closest('.skill-file-panel'))return;
+      if(event.target.closest('.skill-file-panel,.skill-canvas-panel'))return;
       if(busy||!window.confirm('当前文件有未保存的修改，放弃这些修改？')){event.preventDefault();event.stopImmediatePropagation();}
     };
     const unload=event=>{event.preventDefault();event.returnValue='';};

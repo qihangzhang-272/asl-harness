@@ -1,0 +1,29 @@
+.skill-canvas{position:relative;min-height:560px;container-type:inline-size}
+.skill-canvas-graph{position:absolute;right:0;top:0;width:100%;margin-left:auto;border:1px solid transparent;border-radius:18px;transition:width 300ms cubic-bezier(.2,.8,.2,1),background 240ms,box-shadow 240ms}
+.skill-canvas .architecture-toolbar{padding:0}
+.skill-canvas .mermaid-view{margin:12px 0}
+.skill-canvas .mermaid-viewport{min-height:370px;display:flex;align-items:center}
+.skill-canvas .mermaid-drawing{flex:none;min-width:0}
+.skill-canvas.is-focused .skill-canvas-graph{position:absolute;right:0;top:0;width:300px;z-index:3;background:#f5f9ffdf;border-color:#dce8f8;box-shadow:0 8px 28px #446c9d14;backdrop-filter:blur(20px);overflow:hidden}
+.canvas-return{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:10px;border:0!important;border-bottom:1px solid #e3ecf9!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;font-size:12px;color:var(--brand-deep)}
+.skill-canvas.is-focused .architecture-toolbar,.skill-canvas.is-focused .paradigm-tabs,.skill-canvas.is-focused .paradigm-description{display:none}
+.skill-canvas.is-focused .architecture-section{padding:0;border:0;margin:0}
+.skill-canvas.is-focused .mermaid-edit,.skill-canvas.is-focused .mermaid-view{min-height:0;margin:0}
+.skill-canvas.is-focused .mermaid-viewport{height:174px;min-height:174px;max-height:174px;padding:12px;overflow:hidden}
+.skill-canvas-heading{min-height:80px;padding:20px 328px 20px 12px;display:flex;align-items:flex-start}
+.skill-canvas-heading h2{font-size:25px;line-height:1.45;letter-spacing:-.5px;margin:0;overflow-wrap:anywhere}
+.skill-canvas-panel{animation:canvas-content-in 260ms ease-out}
+.skill-canvas-panel .file-workbench{height:65vh;min-height:380px;grid-template-columns:180px minmax(0,1fr);border-radius:14px;background:#ffffff80}
+.skill-canvas-panel .package-document{min-width:0}
+.skill-canvas-panel .dialog-actions{position:static;padding:12px 0;margin:0;background:transparent}
+.mode-page:has(.skill-canvas.is-focused)>.page-heading,.mode-page:has(.skill-canvas.is-focused)>.mode-installations,.mode-page:has(.skill-canvas.is-focused)>.mode-origin,.mode-page:has(.skill-canvas.is-focused)>details,.mode-page:has(.skill-canvas.is-focused)>.mode-toolbar{display:none}
+.skill-canvas-panel .file-workbench{height:calc(100vh - 245px)}
+.skill-canvas-panel .package-document>header{padding-right:320px;min-height:58px}
+.skill-canvas-panel .package-rendered::before{content:'';float:right;width:300px;height:88px;pointer-events:none}
+.skill-canvas-panel .package-tree{background:#f3f7ffab}
+.skill-canvas-panel .package-tree button.active{background:#e3eeff;color:#245fb4}
+.skill-library:has(.skill-canvas.is-focused){grid-template-columns:minmax(0,1fr)}
+.skill-library:has(.skill-canvas.is-focused)>.skill-library-tree{display:none}
+@keyframes canvas-content-in{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@container(max-width:640px){.skill-canvas.is-focused .skill-canvas-graph{width:240px}.skill-canvas-heading{padding-right:258px;padding-left:0}.skill-canvas-heading h2{font-size:20px}.skill-canvas-panel .file-workbench{grid-template-columns:140px minmax(0,1fr)}.skill-canvas-panel .package-document>header{padding-right:250px;flex-wrap:wrap}.skill-canvas-panel .package-rendered::before{width:230px}}
+@media(prefers-reduced-motion:reduce){.skill-canvas-graph{transition:none}.skill-canvas-panel{animation:none}}

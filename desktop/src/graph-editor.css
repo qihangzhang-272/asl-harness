@@ -45,75 +45,11 @@
 .graph-skill-text small { display: block; color: var(--faint, #7b8dab); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .graph-skill .icon-button { width: 24px; height: 24px; min-height: 24px; opacity: .6; }
 .graph-skill:hover .icon-button, .graph-skill:focus-within .icon-button, .graph-skill .icon-button:focus-visible { opacity: 1; }
-.graph-skill.is-conflict { border-color: #eccfa0; background: var(--warn-bg, #fdf6e8); }
 .graph-list-note { margin: 6px 8px; font-size: 12px; color: var(--faint, #7b8dab); line-height: 1.6; }
 .graph-notice { color: var(--ink-soft, #506782); }
 .graph-bulk { margin: 4px 6px 2px; min-height: 28px; padding: 3px 9px; border: 1px dashed var(--line, #dbe4f2); border-radius: 8px; background: none; color: var(--muted, #5b7191); font-size: 12px; }
 .graph-bulk:hover { background: var(--brand-tint, #f4f8ff); border-color: #c5d6f5; }
 
-.graph-canvas { position: relative; flex: 1; min-height: 0; }
-.graph-canvas.is-readonly { height: 100%; }
-.graph-canvas.is-readonly .graph-handle { visibility: hidden; }
-.graph-canvas.is-readonly .react-flow__node { cursor: pointer; }
-.graph-canvas .graph-flow { background: linear-gradient(180deg, #fbfcff, #f3f7ff); }
-.graph-canvas-controls { position: absolute; right: 10px; bottom: 10px; z-index: 5; display: flex; flex-direction: column; border: 1px solid var(--line, #dbe4f2); border-radius: 9px; background: #fffffff0; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: inset 0 1px 0 #fff, 0 6px 18px -10px #22324a2e; overflow: hidden; }
-.graph-canvas-controls button { width: 30px; min-height: 28px; border: 0; border-radius: 0; background: var(--surface, #fff); color: var(--ink-soft, #506782); }
-.graph-canvas-controls button:hover { background: var(--brand-tint, #f4f8ff); }
-.graph-canvas-controls button + button { border-top: 1px solid var(--line-soft, #edf2fc); }
-
-.graph-canvas .react-flow__node { padding: 0; border: 0; background: none; width: auto; text-align: left; font: inherit; }
-.graph-canvas .react-flow__node.selected { box-shadow: none; }
-
-/* Hairline relations, like a Mermaid diagram: the shape carries the meaning. */
-.graph-canvas .react-flow__edge-path { stroke: #c4d0e4; stroke-width: 1.2; }
-.graph-canvas .react-flow__edge.selected .graph-edge-line { stroke: var(--brand, #3978e8); stroke-width: 1.7; }
-.graph-canvas .react-flow__edge-interaction { cursor: pointer; }
-.graph-canvas .react-flow__connection-path { stroke: var(--brand, #3978e8); stroke-width: 1.4; }
-
-/* Edge labels render before the nodes in DOM order, so the node boxes used to hide
-   them. Keep the meaning of a relation on top of the diagram it describes. */
-.graph-canvas .react-flow__edgelabel-renderer { z-index: 1; }
-
-.graph-node { box-sizing: border-box; width: 184px; min-height: 58px; display: flex; align-items: center; gap: 8px; padding: 9px 11px; border: 1px solid #dfe9fa; border-radius: 10px; background: linear-gradient(180deg, #ffffff, #fbfcff); box-shadow: inset 0 1px 0 #fff, 0 1px 2px #22324a0f, 0 6px 16px -10px #22324a2b; transition: border-color 180ms ease-out, box-shadow 180ms ease-out; }
-.graph-node.is-selected { border-color: var(--brand, #3978e8); box-shadow: inset 0 1px 0 #fff, 0 0 0 3px #3978e81f, 0 6px 16px -10px #22324a2b; }
-.graph-node:focus-visible { outline: 3px solid #a8c8f8; outline-offset: 2px; }
-.graph-node-icon { display: grid; place-items: center; width: 20px; height: 20px; color: var(--muted, #5b7191); flex: 0 0 20px; }
-.graph-node-emoji { font-size: 14px; line-height: 1; }
-.graph-node-text { flex: 1; min-width: 0; }
-.graph-node-text strong { display: block; max-width: 100%; font-size: 14px; font-weight: 600; line-height: 1.25; color: var(--ink, #22324a); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.graph-node-text small { display: block; max-width: 100%; margin-top: 1px; font-size: 11.5px; line-height: 1.3; color: var(--faint, #7b8dab); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-.graph-canvas .react-flow__handle.graph-handle { width: 8px; height: 8px; border: 1.2px solid #c2cfe4; border-radius: 50%; background: var(--surface, #fff); opacity: .45; transition: opacity 180ms ease-out, background-color 180ms ease-out, border-color 180ms ease-out; }
-.graph-canvas .react-flow__handle.graph-handle:hover,
-.graph-node.is-selected .react-flow__handle.graph-handle { opacity: 1; background: var(--brand, #3978e8); border-color: var(--brand, #3978e8); }
-
-.graph-edge-label { position: absolute; pointer-events: all; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 2px 5px; min-height: 0; max-width: 224px; padding: 2px 7px; border: 1px solid var(--line, #dbe4f2); border-radius: 7px; background: var(--surface, #fff); color: var(--ink-soft, #506782); font-size: 12.5px; line-height: 1.45; overflow-wrap: anywhere; transition: border-color 180ms ease-out, box-shadow 180ms ease-out; }
-.graph-edge-label:hover { border-color: #b4cdf5; color: var(--ink, #22324a); }
-.graph-edge-label.is-selected { border-color: var(--brand, #3978e8); color: var(--brand-deep, #1f4da8); box-shadow: 0 0 0 3px #3978e81a; }
-.graph-edge-label.is-empty { padding: 1px 6px; border-style: dashed; color: var(--faint, #7b8dab); }
-.graph-edge-text { min-width: 0; overflow-wrap: anywhere; }
-.graph-edge-condition { max-width: 128px; padding: 0 5px; border-radius: 6px; background: var(--brand-soft, #e6efff); color: var(--brand-deep, #1f4da8); font-size: 11px; line-height: 1.45; overflow-wrap: anywhere; }
-.graph-edge-label.is-selected .graph-edge-condition { background: #dfe9fa; color: var(--brand-deep, #1f4da8); }
-
-/* A meaning that had to leave its anchor keeps a thin dashed leader and a dot back to its line.
-   A zero-sized SVG viewport paints nothing even with overflow visible, so give it a tiny non-zero
-   box; pointer-events stays off so the leader can never swallow a click on the diagram. */
-.graph-edge-leader { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: visible; pointer-events: none; }
-.graph-edge-leader-line { stroke: #b9c6dc; stroke-width: 1; stroke-dasharray: 2 2; }
-.graph-edge-leader-dot { fill: #b9c6dc; }
-
-.graph-inline-editor { width: 260px; padding: 10px; border: 1px solid var(--line); border-radius: 12px; background: #f9fcfff7; box-shadow: 0 10px 28px #2e66ce22, inset 0 1px #fff; pointer-events: all; }
-.graph-inline-editor input, .graph-inline-editor textarea { width: 100%; font-size: 13px; padding: 6px 8px; margin-bottom: 6px; }
-.graph-inline-editor textarea { resize: vertical; max-height: 130px; }
-.graph-inline-actions { display: flex; align-items: center; gap: 6px; justify-content: flex-end; }
-.graph-inline-actions button { min-height: 28px; padding: 4px 7px; font-size: 12px; white-space: nowrap; }
-.graph-inline-actions input { width: 70px; min-width: 0; margin: 0; }
-.graph-inline-actions input[type=color] { width: 30px; height: 28px; padding: 3px; flex-shrink: 0; }
-.graph-inline-edge { position: absolute; transform-origin: top center; z-index: 6; }
-.graph-canvas .react-flow__edgelabel-renderer:has(.graph-inline-edge) { z-index: 6; }
-.graph-context-menu { position: absolute; z-index: 20; width: 146px; padding: 5px; background: #f8fbfff7; border: 1px solid var(--line); box-shadow: 0 8px 28px #2e66ce22; border-radius: 10px; }
-.graph-context-menu button { display: block; width: 100%; border: 0; background: transparent; text-align: left; min-height: 30px; padding: 5px 10px; }
-.graph-context-menu button:hover { background: var(--brand-soft); }
 .graph-scope-editor { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .graph-scope-editor input { width: 180px; }
 .graph-scope-editor textarea { flex: 1; min-width: 0; resize: none; }
@@ -130,5 +66,5 @@
   .graph-workbench { grid-template-columns: 204px minmax(0, 1fr); gap: 8px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .graph-node, .graph-skill, .graph-search, .graph-canvas .react-flow__handle.graph-handle { transition: none; }
+  .graph-skill, .graph-search { transition: none; }
 }

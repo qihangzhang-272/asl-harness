@@ -16,7 +16,7 @@ const {
 } = require("./library.cjs");
 const { nativeInventory, existingDirectory, localSkillRoots } = require("./native.cjs");
 const { discover, publicUrl } = require("./market.cjs");
-const { readRepository, readOverview } = require('./repository-import.cjs');
+const { readRepository, readOverview, readRepositoryDocument } = require('./repository-import.cjs');
 const {localDiscovery}=require('./local-discovery.cjs');
 const { connections } = require('./connections.cjs');
 const { ReadRequests } = require('./read-requests.cjs');
@@ -289,7 +289,8 @@ if(primary) app.whenReady().then(() => {
     if (relative.startsWith("..") || path.isAbsolute(relative) || (await fs.stat(file)).size > 1024 * 1024) throw new Error("原文越界或过大，请在原位置查看");
     return fs.readFile(file, "utf8");
   });
-  readHandle('repositoryOverview','asl:repository-overview',([url],signal)=>readOverview(url,(...args)=>net.fetch(...args),signal));
+  readHandle('repositoryOverview','asl:repository-overview',([url,document],signal)=>readOverview(url,(...args)=>net.fetch(...args),signal,document));
+  handle('asl:repository-document',(snapshot,file)=>readRepositoryDocument(snapshot,file,repositories));
   readHandle("githubSkills", "asl:github-skills", async ([url], signal) => {
     return readRepository(url, { fetch: (...args) => net.fetch(...args),
       core: (action, values, signal) => runCore(action, values, { ...options, signal }),

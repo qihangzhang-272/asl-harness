@@ -33,3 +33,18 @@ jobs:
         working-directory: desktop
       - run: npm run build
         working-directory: desktop
+      - run: node node_modules/electron/install.js
+        if: runner.os == 'Windows'
+        working-directory: desktop
+      - run: node --test e2e/workspace.cjs
+        if: runner.os == 'Windows'
+        working-directory: desktop
+        env:
+          ASL_PYTHON: python
+          ASL_E2E_OUTPUT: ${{ runner.temp }}
+      - uses: actions/upload-artifact@v6
+        if: always() && runner.os == 'Windows'
+        with:
+          name: desktop-acceptance
+          path: ${{ runner.temp }}/asl-e2e-*/
+          retention-days: 7

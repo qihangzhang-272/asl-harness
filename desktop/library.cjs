@@ -82,7 +82,7 @@ async function rememberLibrary(file, root) {
   root = path.resolve(root);
   if (!(await isLibrary(root))) throw new Error("这个文件夹不是 ASL 技能库");
   return updatePreferences(file,value=>({...value,lastLibrary:root,
-    libraries:[root,...value.libraries.filter(p=>p!==root)].slice(0,12)}));
+    libraries:value.libraries.includes(root)?value.libraries:[...value.libraries,root].slice(-12)}));
 }
 function updatePreferences(file,update) {
   const next=pending.catch(()=>{}).then(async()=>{

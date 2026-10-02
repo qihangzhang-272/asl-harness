@@ -59,7 +59,7 @@ def scan_modes(roots: list[str], *, parent: Path | None = None) -> dict:
                     mode = _read_mode(package, package.name)
                     upstream = mode_upstream(package)
                     rows.append({'id': mode.id, 'title': _title(mode.document, mode.id),
-                                 'workspace': str(root), 'skills': list(mode.skill_roots),
+                                 'workspace': str(root), 'skills': list(mode.skill_roots), 'libraryRepository': repository,
                                  'upstream': upstream, 'repository': upstream['repository'] if upstream else repository})
                 except (OSError, ValueError, HarnessError) as error:
                     issues.append({'path': str(package), 'message': str(error)})

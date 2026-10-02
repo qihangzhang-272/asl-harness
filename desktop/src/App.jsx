@@ -1,3 +1,4 @@
+import {SetupDialog,ConnectDialog} from './AgentDialogs.jsx';
 import React, {
   createContext,
   useContext,
@@ -6,9 +7,9 @@ import React, {
   useRef,
   useState,
 } from "react";
-import SkillFiles,{SkillPanel} from './SkillFiles.jsx';
+import SkillFiles from './SkillFiles.jsx';
+import SkillCanvas from './SkillCanvas.jsx';
 import EditorPage from './EditorPage.jsx';
-import DiagramEditor from './DiagramEditor.jsx';
 import PanelResize from './PanelResize.jsx';
 import DiagramExamples from './DiagramExamples.jsx';
 import EnvironmentGuide from './EnvironmentGuide.jsx';
@@ -22,7 +23,6 @@ import {navigate} from './motion.js';
 import { LocalModes } from './LocalModes.jsx';
 import { useReadTasks, ReadStatus } from './useReadTasks.jsx';
 import {ArchitectureMap} from './Architecture.jsx';
-import {modeEditorKind} from './mode-diagrams.mjs';
 import {
   Layers3,
   Puzzle,
@@ -58,15 +58,10 @@ import {
   shortText,
   restoreView,
   matchLocalModes,
+  libraryGroups,
 } from "./presentation.mjs";
 
 const baseName = (value) => (value || "").split(/[\\/]/).filter(Boolean).pop();
-const AGENT_CHOICES = [
-  {id:'codex-app',name:'Codex',scopes:['project','user']},
-  {id:'claude-code',name:'Claude Code',scopes:['project','user']},
-  {id:'deepseek-harness',name:'DeepSeek Harness',scopes:['preset']},
-  {id:'workbuddy',name:'WorkBuddy',scopes:['project']},
-];
 const NoticeContext = createContext(null);
 async function api(method, ...args) {
   const reply = await window.asl[method](...args);
@@ -399,232 +394,6 @@ function SkillDetails({
   );
 }
 
-function SetupDialog({ values, title, onClose, task, resultMessage }) {
-  const [report, setReport] = useState(null);
-  const [assistants, setAssistants] = useState([]);
-  const [assistant, setAssistant] = useState("");
-  const [session, setSession] = useState(null);
-  const [checking, setChecking] = useState(false);
-  async function check(probe = false) {
-    setChecking(true);
-    try {
-      setReport(await api("run", "readiness", { ...values, probe }));
-      if (session) setSession(await api("setupStatus", session.id));
-    } finally { setChecking(false); }
-  }
-  useEffect(() => {
-    task(async () => {
-      const native = await api("native");
-      setAssistants(native.assistants);
-      setAssistant(native.assistants.find(a => a.available && a.id === values.host)?.id || native.assistants.find(a => a.available)?.id || "");
-      await check();
-    });
-  }, []);
-  const labels = { found: "已找到", configured: "有配置 · 待实测", missing: "待安装 / 连接", unknown: "需检查", ok: "渠道体检通过", warn: "需处理", off: "未连接", error: "检查异常" };
-  return <Dialog title="配置这台电脑" onClose={onClose}>
-    {resultMessage && <p role="status" className="inline-note">{resultMessage}</p>}
-    <div className="apply-summary"><SlidersHorizontal size={19} /><span>{title}<small>{{"codex-app": "Codex", "claude-code": "Claude Code", "deepseek-harness": "DeepSeek Harness", workbuddy: "WorkBuddy"}[values.host]} · {values.scope === "user" ? "当前用户" : values.scope === "preset" ? "工作模式" : "所选项目"}</small></span></div>
-    {report ? <>
-      {report.nativeDiscoveryUnverified && <div className="inline-note"><FolderOpen size={18} /><span>所选目录还需与 Agent 关联<small>{report.chosenSkillsDirectory}</small></span></div>}
-      <div className="setup-checks">
-        {report.checks.map(item => <div className="sync-item" key={`${item.kind}:${item.name}`}><span><strong>{item.name}</strong><small>{item.kind === "mcp" ? "MCP" : item.kind === "binary" ? "本机工具" : "登录 / 环境变量"}</small></span><Tag tone={["missing", "unknown"].includes(item.status) ? "warning" : ""}>{labels[item.status]}</Tag></div>)}
-        {!report.checks.length && <p>未声明额外安装项。</p>}
-      </div>
-      {!!report.setupNotes.length && <details className="setup-notes"><summary>配置助手还会阅读 {report.setupNotes.length} 份技能说明</summary>{report.setupNotes.map((item, index) => <small key={index}>{item.skill}</small>)}</details>}
-      {report.doctor && <div className="setup-channels"><h3>Agent Reach</h3>{report.doctor.map(item => <div className="sync-item" key={item.id}><span>{item.name}</span><Tag tone={item.status === "ok" ? "green" : "warning"}>{labels[item.status] || "需检查"}</Tag></div>)}</div>}
-      {report.doctorError && <p className="error-text">{report.doctorError}</p>}
-    </> : <div className="inline-note"><LoaderCircle size={18} className="spin" />正在检查本机环境…</div>}
-    <Field label="用谁来配置"><select value={assistant} onChange={e => setAssistant(e.target.value)}><option value="" disabled>选择已安装的 Agent</option>{assistants.map(item => <option key={item.id} value={item.id} disabled={!item.available}>{item.name}{!item.available && " · 未安装"}</option>)}</select><small>沿用该工具的模型、套餐和登录。安装授权在原生窗口确认。</small></Field>
-    {session && <div className="inline-note">{session.status === "failed" ? <AlertCircle size={18} /> : <Check size={18} />}<span>{session.status === "failed" ? "原生 Agent 未成功完成。请检查其模型与连接，或换一个助手重试。" : session.status === "ended" ? "配置会话已结束，请复查本机结果。" : "配置助手已打开，请在原生窗口继续。"}<small>会话结束不代表所有连接已验证。</small></span></div>}
-    <div className="dialog-actions"><button onClick={() => task(() => check(true))} disabled={checking}><RotateCw size={16} className={checking ? "spin" : ""} />重新检查</button><button disabled={!report || checking} onClick={()=>task(()=>api('copyText',report.brief))}><Copy size={16}/>复制配置提示词</button><button className="primary" disabled={!assistant || !report || checking} onClick={() => task(async () => { const result = await api("setup", assistant, values); if (!result.canceled) setSession(result); })}>打开原生助手<ArrowUpRight size={16} /></button></div>
-  </Dialog>;
-}
-
-function ConnectDialog({
-  mode: initialMode,
-  modes,
-  workspace,
-  onClose,
-  task,
-  onApplied,
-  initialHost = "codex-app",
-  initialScope,
-  initialProject = "",
-  locations,
-}) {
-  const [modeId, setModeId] = useState(initialMode.id);
-  const mode = modes.find((item) => item.id === modeId) || initialMode;
-  const [native, setNative] = useState(locations || null);
-  const [locationError, setLocationError] = useState('');
-  const [host, setHost] = useState(initialHost);
-  const [project, setProject] = useState(initialProject);
-  const [preset, setPreset] = useState("");
-  const [scope, setScope] = useState(initialScope || (["codex-app", "claude-code"].includes(initialHost) ? "user" : "project"));
-  const [customSkillsDir, setSkillsDir] = useState(null);
-  const currentHost=native?.hosts.find(h=>h.id===host);
-  const skillsDir=customSkillsDir ?? (currentHost?.userMode?.skillsDir && currentHost.userMode.skillsDir!==currentHost.skillRoot ? currentHost.userMode.skillsDir : "");
-  const [preview, setPreview] = useState(null);
-  useEffect(() => setPreview(null), [scope, host, modeId, project, preset, skillsDir]);
-  useEffect(()=>{
-    if(!native||preset)return;
-    const choices=native.presets.filter(p=>!p.managed);
-    const base=choices.find(p=>/standard|default/i.test(p.name))||choices[0];
-    if(base)setPreset(base.path);
-  },[native]);
-  useEffect(() => {
-    let active=true;
-    api('nativeLocations').then(value=>{if(active)setNative(value);})
-      .catch(error=>{if(active)setLocationError(error.message);});
-    return ()=>{active=false;};
-  }, []);
-  const selected = (native?.hosts || AGENT_CHOICES).find((h) => h.id === host);
-  return (
-    <EditorPage title={selected ? `在 ${selected.name} 使用` : '选择 Agent'} onClose={onClose}>
-      <Field label="工作模式">
-        <select
-          value={mode.id}
-          onChange={(event) => setModeId(event.target.value)}
-        >
-          {modes.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.title}
-            </option>
-          ))}
-        </select>
-      </Field>
-      <div className="agent-picker">
-        {(native?.hosts || AGENT_CHOICES).map((h) => (
-          <button
-            key={h.id}
-            disabled={!h.scopes.length}
-            title={!h.scopes.length ? "已识别本机目录，尚未支持应用模式" : h.directory}
-            onClick={() => {
-              setHost(h.id);
-              setSkillsDir(null);
-              setProject("");
-              setScope(h.scopes.includes("user") ? "user" : "project");
-            }}
-            className={host === h.id ? "selected" : ""}
-          >
-            <span className={`host-symbol ${h.id}`}>{h.name[0]}</span>
-            <strong>{h.name}{!h.scopes.length && <small>暂未接入</small>}</strong>
-            {host === h.id && <Check size={16} />}
-          </button>
-        ))}
-      </div>
-      {locationError && <p role="alert">{locationError}<button onClick={()=>api('nativeLocations').then(value=>{setNative(value);setLocationError('');}).catch(error=>setLocationError(error.message))}>重试</button></p>}
-          <div className="field-heading">
-            <b>在哪里使用</b>
-          </div>
-          <button type="button" className={`scope-option ${scope === "project" ? "selected" : ""}`} onClick={() => {
-            if(host==="deepseek-harness"||(project&&scope!=="project"))setScope("project");
-            else task(async()=>{const folder=await api("choose","project");if(folder){setProject(folder);setScope("project");}});
-          }} aria-pressed={scope === "project"}>
-            {scope === "project" ? <Check size={17} /> : <Circle size={17} />}
-            <div>
-              <strong>
-                {host === "deepseek-harness" ? "添加到 DeepSeek 的工作模式" : project ? `项目 · ${baseName(project)}` : "选择项目文件夹"}
-              </strong>
-            </div>
-          </button>
-          {selected?.scopes.includes("user") && (
-            <button type="button" className={`scope-option ${scope === "user" ? "selected" : ""}`} onClick={() => setScope("user")} aria-pressed={scope === "user"}>
-              {scope === "user" ? <Check size={17} /> : <Circle size={17} />}
-              <div>
-                <strong>当前用户的所有项目</strong>
-              </div>
-            </button>
-          )}
-          {host === "deepseek-harness" ? (
-            <details className="preset-options" open={!preset}><summary>{preset?'工具设置':'选择要沿用的工具设置'}</summary><Field label="沿用 DeepSeek 的工具">
-              <select
-                value={preset}
-                onChange={(e) => setPreset(e.target.value)}
-              >
-                <option value="">选择工具设置</option>
-                {native?.presets.map((p) => (
-                  <option key={p.path} value={p.path}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-              <button
-                onClick={() =>
-                  task(async () => {
-                    const value = await api("choose", "basePreset");
-                    if (value) setPreset(value);
-                  })
-                }
-              >
-                <FolderOpen size={15} />
-                选择其他配置文件夹
-              </button>
-            </Field></details>
-          ) : scope === "project" ? (project && <p className="path-line">{project}</p>)
-          : <div className="user-location"><div>{native?<Check size={16}/>:<LoaderCircle size={16} className="spin"/>}<strong>用户技能目录</strong></div><p className="path-line">{skillsDir || selected?.skillRoot || '正在读取位置…'}</p><details><summary>高级设置</summary><button onClick={() => task(async () => { const folder = await api("choose", "userSkills"); if (folder) setSkillsDir(folder); })}><FolderOpen size={15} />更换技能目录</button>{skillsDir && <button onClick={() => setSkillsDir("")}>恢复标准目录</button>}</details></div>}
-          {preview && <div className="sync-preview">
-            <h3>同步预览</h3>
-            {preview.previousMode && <small>原默认模式：{preview.previousMode}</small>}
-            {preview.items.filter(item => item.action !== "unchanged").map(item => <div className="sync-item" key={item.skill}>
-              <span>{item.skill}</span><Tag tone={item.action === "conflict" ? "warning" : ""}>{({add:"加入",update:"更新",remove:"移出",conflict:"需处理同名内容"})[item.action]}</Tag>
-            </div>)}
-            {!preview.needsSync && <p>已与技能源一致。</p>}
-            {preview.conflicts.map(text => <p className="error-text" key={text}>{text}</p>)}
-            <small>只管理 ASL 同步的副本；不删除你的原技能源。</small>
-          </div>}
-          <div className="dialog-actions">
-            {scope === "user" && native?.hosts.find(h => h.id === host)?.userMode?.mode === mode.id ? <button onClick={() => task(async () => {
-              const plan = await api("run", "userSync", { workspace, mode: mode.id, host, remove: true, ...(skillsDir && { skillsDir }) });
-              const result = await api("run", "userSync", { workspace, mode: mode.id, host, remove: true, expected: plan.fingerprint, apply: true, ...(skillsDir && { skillsDir }) });
-              if (!result.canceled) { onClose(); onApplied("已停用用户级默认模式，原技能源不变。",{host}); }
-            })}>停用默认模式</button> : <button onClick={onClose}>取消</button>}
-            <button
-              className="primary"
-              disabled={!native || !!locationError || !selected || (host === "deepseek-harness" ? !preset : scope === "project" ? !project : !!preview?.conflicts.length)}
-              onClick={() =>
-                task(async () => {
-                  let result;
-                  let target = scope === "project" ? project : "";
-                  if (scope === "user" && host !== "deepseek-harness") {
-                    if (!preview) {
-                      setPreview(await api("run", "userSync", { workspace, mode: mode.id, host, ...(skillsDir && { skillsDir }) }));
-                      return;
-                    }
-                    result = await api("run", "userSync", { workspace, mode: mode.id, host, expected: preview.fingerprint, apply: true, ...(skillsDir && { skillsDir }) });
-                  } else if (host === "deepseek-harness") {
-                    const output = await api("presetTarget", mode.id);
-                    target = output;
-                    result = await api("run", "preset", {
-                      workspace,
-                      mode: mode.id,
-                      basePreset: preset,
-                      output,
-                    });
-                  } else
-                    result = await api("run", "project", {
-                      workspace,
-                      mode: mode.id,
-                      project,
-                      host,
-                    });
-                  if (!result.canceled) {
-                    onClose();
-                    const status = host === "deepseek-harness"
-                      ? result.presetRegistered ? "已添加到 DeepSeek，请在新会话中选择这个工作模式。" : "工作模式已保存，但 DeepSeek 尚未识别。请检查配置位置。"
-                      : result.discovery === "requires-connection" ? "已放入所选目录，还需关联 Agent。" : `${selected.name} 的模式已同步。`;
-                    onApplied(status, { workspace, mode: mode.id, host, scope: host === "deepseek-harness" ? "preset" : scope, ...(target && { project: target }), ...(scope === "user" && skillsDir && { skillsDir }) });
-                  }
-                })
-              }
-            >
-              {scope === "user" && !preview ? "继续" : `配置到 ${selected?.name || 'Agent'}`}
-              <ArrowUpRight size={16} />
-            </button>
-          </div>
-    </EditorPage>
-  );
-}
-
 export default function App() {
   const [initial, setInitial] = useState(null);
   const [workspace, setWorkspace] = useState(null);
@@ -662,6 +431,14 @@ export default function App() {
   const [cloud, setCloud] = useState(null);
   const cloudRequest = useRef(0);
   const cloudCache = useRef(new Map());
+  const cloudJobs = useRef(new Map());
+  const [,setSourceVersion]=useState(0);
+  function repositoryReport(url,refresh=false){
+    if(cloudJobs.current.has(url))return cloudJobs.current.get(url);
+    if(!refresh&&cloudCache.current.has(url))return Promise.resolve(cloudCache.current.get(url));
+    const job=api('githubSkills',url).then(report=>{cloudCache.current.set(url,report);setSourceVersion(v=>v+1);return report;}).finally(()=>cloudJobs.current.delete(url));
+    cloudJobs.current.set(url,job);return job;
+  }
   const [githubReport, setGithubReport] = useState(null);
   const [updates, setUpdates] = useState(null);
   const [checkingUpdates, setCheckingUpdates] = useState(false);
@@ -692,6 +469,7 @@ export default function App() {
     reads.cancel('github'); reads.cancel('local'); reads.cancel('market'); reads.cancel('detail');
   }, [workspace]);
   const [externalChange, setExternalChange] = useState(false);
+  const [contentSaving,setContentSaving]=useState(false);
   useEffect(() => {
     if (!workspace || workspace === initial?.example) return;
     const stop = window.asl.onEnvironmentChanged(data => {
@@ -703,14 +481,14 @@ export default function App() {
     return stop;
   }, [workspace]);
   useEffect(() => {
-    if (externalChange && !modal && !busy) {
+    if (externalChange && !modal && !busy && !contentSaving) {
       setExternalChange(false);
       read('environment', '刷新工作环境', async call=>{
         try { await load(workspace, call); }
         catch (error) { throw new Error(`本地文件需要修正：${error.message}。界面暂保留上次有效内容。`); }
       });
     }
-  }, [modal, externalChange, busy]);
+  }, [modal, externalChange, busy, contentSaving]);
   const detailRequest = useRef(0);
   const contentRef = useRef(null);
   useEffect(() => { contentRef.current?.scrollTo(0, 0); }, [page, modeId]);
@@ -758,7 +536,7 @@ export default function App() {
         if(saved.skill) read('detail','读取技能',next=>selectSkill(data.skills.find(s=>s.id===saved.skill),root,next));
         if(saved.page==='discover' && (saved.provider==='local'||saved.provider==='github-import'&&saved.githubUrl))setResumeDiscovery(saved);
       }
-      setInitial(previous=>({...previous,views:preferences.views,libraries:[root,...(previous?.libraries||[]).filter(p=>p!==root)]}));
+      setInitial(previous=>({...previous,views:preferences.views,libraries:preferences.libraries}));
       return true;
     } catch(error) {
       if(request===loadRequest.current)setLoadError({root,message:error.message});
@@ -811,9 +589,20 @@ export default function App() {
     return ()=>window.removeEventListener('focus',check);
   },[initial,workspace]);
   useEffect(() => {
-    if (page === "agents") read('native', '读取 Agent 配置', async call => setNative(await call("native")));
-    if (page === "discover" && provider === "local" && !localReport) read('local', '发现本机技能', async call => setLocalReport(await call("localSkills")));
+    if (page === "agents" && !native) read('native', '读取 Agent 配置', async call => setNative(await call("native")));
+    if (page === "discover" && provider === "local" && !localReport && !localIndex.current) read('local', '发现本机技能', async call => setLocalReport(await call("localSkills")));
   }, [page, provider]);
+  const repositoryKey=JSON.stringify(initial?.repositories||[]);
+  useEffect(()=>{
+    if(!ready)return;
+    let stopped=false;
+    // One bounded queue shares in-flight work with navigation; no repeated click-time scan.
+    (async()=>{for(const url of initial?.repositories||[]){
+      if(stopped)break;
+      try{await repositoryReport(url,updateTick>0);}catch{/* Keep the existing snapshot and let explicit refresh report errors. */}
+    }})();
+    return()=>{stopped=true;};
+  },[ready,repositoryKey,updateTick]);
   useEffect(() => {
     if (!ready) return;
     read('native', '读取 Agent 配置', async call=>setNative(await call('native')));
@@ -858,12 +647,28 @@ export default function App() {
     const root = await api("choose", "environment");
     if (root) await openLibrary(root);
   }
-  async function saveDiagram(item,document) {
-    const root=workspace,request={operation:'mode.save',id:item.id,expected:item.fingerprint,skills:item.roots,document};
+  const canvasSkills=useMemo(()=>{
+    const byId=new Map((catalog?.skills||[]).map(skill=>[skill.id,skill]));
+    for(const skill of localSkillCandidates(catalog?.skills,localReport?.skills))if(!byId.has(skill.id))byId.set(skill.id,skill);
+    return [...byId.values()];
+  },[catalog?.skills,localReport]);
+  async function saveDiagram(item,document,{skill,placement}={}) {
+    const root=workspace;
+    setContentSaving(true);
+    try {
+    if(skill&&!catalog.skills.some(s=>s.id===skill.id)){
+      const request=candidateImportRequest(skill);
+      if(!request)throw new Error('找不到完整技能目录，请重新扫描本机');
+      const preview=await api('run','edit',{workspace:root,request});
+      const result=await api('run','edit',{workspace:root,request:{...request,expectedSource:preview.sourceFingerprint},apply:true});
+      if(result.canceled)throw new Error('已取消添加');
+    }
+    const request={operation:'mode.save',id:item.id,expected:item.fingerprint,skills:skill?[...new Set([...item.roots,skill.id])]:item.roots,document,...(placement?{placement}:{})};
     const result=await api('run','edit',{workspace:root,request,apply:true});
     if(result.canceled)throw new Error('未保存修改');
     catalogCache.current.delete(root);
     if(currentRoot.current===root)await load(root);
+    } finally {setContentSaving(false);}
   }
   const openLibrary = (root, targetMode = null) => {
     setModal(null);setCloud(null);cloudRequest.current++;reads.cancel('cloud');
@@ -984,7 +789,7 @@ export default function App() {
       catch{/* Full inspection supplies the final error/retry; this independent preview is optional. */}
     });
     return read('cloud','读取模式库',async call=>{try {
-      const report=await call('githubSkills',url);
+      const report=await repositoryReport(url,refresh);
       cloudCache.current.set(url,report);
       if(cloudCache.current.size>12)cloudCache.current.delete(cloudCache.current.keys().next().value);
       if(sequence!==cloudRequest.current)return;
@@ -1076,7 +881,7 @@ export default function App() {
     const report = await api("run", "import", { source: modal.source, target });
     setModal({ kind: "import-review", source: modal.source, target, report, replace: false });
   }
-  const editorOpen=['mode-workspace','diagram-editor','skill-editor','skill-files','import-review','connect','agent-guide'].includes(modal?.kind);
+  const editorOpen=['mode-workspace','skill-editor','skill-files','import-review','connect','agent-guide'].includes(modal?.kind);
 
   return (
     <NoticeContext.Provider value={{ ...message, busy, reads }}>
@@ -1113,7 +918,7 @@ export default function App() {
               </button>
             ))}
           </nav>
-          <SourceTree local={[...(localModeReport?.modes||[]).filter(m=>m.workspace!==workspace),...(catalog?.modes||[]).map(m=>({...m,workspace}))]}
+          <SourceTree groups={libraryGroups(localModeReport?.modes,initial?.libraries,workspace,catalog?.modes??null)}
             repositories={initial?.repositories||[]} workspace={workspace} mode={modeId} cloud={cloud}
             onLocal={openLocalMode} onCloud={openCloud} onNavigate={navigateCloud} onContext={url=>task(()=>sourceMenu(url))}/>
           {catalog&&!readOnly&&<button className="new-mode-button" onClick={()=>setModal({kind:'mode-workspace'})}><Plus size={15}/>新建模式</button>}
@@ -1237,7 +1042,8 @@ export default function App() {
                       </div>
                     </div>
                     {updates?.error && <p className="inline-note">{updates.error}。本地模式仍可使用。</p>}
-                    {!catalog?.modes.some(m => m.upstream) ? <Empty icon={Link2} title="未连接仓库"/> : <div className="update-list">{catalog.modes.filter(m => m.upstream).map(item => {
+                    {!!initial?.repositories?.length&&<div className="update-list">{initial.repositories.map(url=>{const report=cloudCache.current.get(url);return <article className="update-card" key={url}><button className="row-main" onClick={()=>openCloud(url)}><Cloud size={20}/><strong>{url.replace('https://github.com/','')}</strong><ChevronRight size={15}/></button><p>{report?.checkedAt?`更新于 ${new Date(report.checkedAt).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'})}`:'已连接'}</p><button aria-label={`刷新 ${baseName(url)}`} onClick={()=>openCloud(url,null,true)}><RotateCw size={15}/>刷新仓库</button></article>;})}</div>}
+                    {!catalog?.modes.some(m => m.upstream) ? (!initial?.repositories?.length&&<Empty icon={Link2} title="还没有添加仓库"/>) : <div className="update-list">{catalog.modes.filter(m => m.upstream).map(item => {
                       const row = updates?.modes.find(r => r.mode === item.id);
                       return <article className="update-card" key={item.id}>
                         <div className="field-heading">
@@ -1310,11 +1116,9 @@ export default function App() {
                             label="编辑模式"
                             disabled={readOnly}
                             onClick={() =>
-                              setModal({ kind: modeEditorKind(mode), item: mode })
+                              setModal({ kind: 'mode-workspace', item: mode })
                             }
                           />
-                          {modeEditorKind(mode)==='diagram-editor'&&<IconButton icon={Puzzle} label="管理技能" disabled={readOnly}
-                            onClick={()=>setModal({kind:'mode-workspace',item:mode})}/>}
                           <IconButton
                             icon={Archive}
                             label="归档模式"
@@ -1373,20 +1177,26 @@ export default function App() {
                         </div>
                       </div>
                       {view === "map" ? (
+                        <SkillCanvas selected={selected} onSelect={setSelected} readOnly={readOnly} readFile={(item,file)=>api('run','files',{workspace,skill:item.id,file})} saveFile={saveFile}>
                         <ArchitectureMap
                           key={`${workspace}:${mode.id}`}
                           mode={mode}
                           skills={modeSkills}
+                          availableSkills={canvasSkills}
+                          compact={!!selected}
+                          selectedId={selected?.id}
                           onSkill={item=>setSelected(item)}
-                          onEdit={readOnly?null:title=>setModal({kind:'diagram-editor',item:mode,title})}
+                          onEdit={readOnly?null:title=>setModal({kind:'mode-workspace',item:mode,title})}
                           onSaveDocument={readOnly?null:saveDiagram}
                         />
+                        </SkillCanvas>
                       ) : (
                         <SkillLibrary
                           catalog={modeCatalog}
                           query={query}
-                          onSkill={skill=>read('detail', '读取技能', call=>selectSkill(skill,workspace,call))}
-                          onEditMode={readOnly?undefined:(_,title)=>setModal({kind:'diagram-editor',item:mode,title})}
+                          onSkill={item=>setModal({kind:'skill-files',item})}
+                          readOnly={readOnly} readFile={(item,file)=>api('run','files',{workspace,skill:item.id,file})} saveFile={saveFile}
+                          onEditMode={readOnly?undefined:(_,title)=>setModal({kind:'mode-workspace',item:mode,title})}
                           onSaveDocument={readOnly?null:saveDiagram}
                         />
                       )}
@@ -1432,7 +1242,8 @@ export default function App() {
                         )}
                       </div>
                       <SkillLibrary catalog={catalog} query={query} onSkill={item=>setModal({kind:'skill-files',item})}
-                        onEditMode={readOnly?undefined:(id,title)=>setModal({kind:'diagram-editor',item:catalog.modes.find(m=>m.id===id),title})} onSaveDocument={readOnly?null:saveDiagram}/>
+                        readOnly={readOnly} readFile={(item,file)=>api('run','files',{workspace,skill:item.id,file})} saveFile={saveFile}
+                        onEditMode={readOnly?undefined:(id,title)=>setModal({kind:'mode-workspace',item:catalog.modes.find(m=>m.id===id),title})} onSaveDocument={readOnly?null:saveDiagram}/>
                     </>
                   )}
                   {page === "discover" && (
@@ -1586,10 +1397,8 @@ export default function App() {
                 </>
               )}
             </main>
-            {selected && catalog && (
-              page==='modes'&&view==='map'?<SkillFiles key={`${workspace}:${selected.id}`} item={selected} Dialog={SkillPanel} embedded readOnly={readOnly} onClose={()=>setSelected(null)}
-                readFile={file=>api('run','files',{workspace,skill:selected.id,file})}
-                saveFile={saveFile}/>:<SkillDetails
+            {selected && catalog && !(page==='modes'&&view==='map') && (
+              <SkillDetails
                 skill={selected}
                 readOnly={readOnly}
                 texts={texts}
@@ -1684,12 +1493,13 @@ export default function App() {
             <button onClick={()=>task(async()=>{const target=await api('choose','newEnvironment');if(target)await importRepositoryMode(modal.item,target);})}>另存为独立环境</button>
           </div>
         </Dialog>}
-        {modal?.kind === 'diagram-editor'&&<DiagramEditor mode={modal.item} initialTitle={modal.title} skills={catalog.skills} onSave={saveContent} onClose={()=>setModal(null)}
-          readFile={(item,file)=>api('run','files',{workspace,skill:item.id,file})}
-          saveFile={request=>saveFile(request,false)}/>}
         {modal?.kind === "mode-workspace" && catalog && (
           <ModeWorkspace
+            preloadedReport={localReport}
             mode={modal.item || null}
+            initialTitle={modal.title}
+            readFile={(item,file)=>api('run','files',{workspace,skill:item.id,file})}
+            saveFile={request=>saveFile(request,false)}
             draft={modal.draft || null}
             catalog={catalog}
             workspace={workspace}
@@ -1698,7 +1508,7 @@ export default function App() {
             reads={reads}
             Dialog={EditorPage}
             Field={Field}
-            onSave={(request) => task(() => saveContent(request))}
+            onSave={saveContent}
             onCatalog={next => setCatalog(next)}
             onClose={() => setModal(null)}
           />
@@ -1771,7 +1581,7 @@ export default function App() {
           </Dialog>
         )}
         {modal?.kind === "connect" && (
-          <ConnectDialog
+          <ConnectDialog api={api} Field={Field} Tag={Tag}
             mode={catalog.modes.find(m => m.id === modal.modeId) || mode || catalog.modes[0]}
             modes={catalog.modes}
             workspace={workspace}
@@ -1797,7 +1607,7 @@ export default function App() {
             <button className="primary" disabled={!catalog || readOnly} onClick={() => adoptSkill(modal.skill)}>添加到 Mode</button>
           </div>
         </Dialog>}
-        {modal?.kind === "setup" && <SetupDialog values={modal.values} resultMessage={modal.resultMessage} title={catalog?.modes.find(m => m.id === modal.values.mode)?.title || modal.values.mode} task={task} onClose={() => setModal(null)} />}
+        {modal?.kind === "setup" && <SetupDialog api={api} Dialog={Dialog} Tag={Tag} values={modal.values} resultMessage={modal.resultMessage} title={catalog?.modes.find(m => m.id === modal.values.mode)?.title || modal.values.mode} task={task} onClose={() => setModal(null)} />}
         {modal?.kind === "add-to-mode" && (
           <Dialog title="加入工作模式" onClose={() => setModal(null)}>
             <div className="library-list">

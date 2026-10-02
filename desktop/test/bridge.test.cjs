@@ -187,7 +187,7 @@ test("desktop reads the actual Python core, not a mock catalog", async () => {
   assert.ok(report.modes.some((mode) => mode.id === "creator-studio"));
   assert.match(
     report.modes.find((mode) => mode.id === "creator-studio").document,
-    /动态组合/,
+    /技能怎么配合/,
   );
   assert.ok(report.skills.some((skill) => skill.id === "product-analysis"));
 });

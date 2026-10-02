@@ -6,12 +6,14 @@ const { isLibrary } = require('./library.cjs');
 // Reuse inspected snapshots in this App session; never treat the cache as a content source.
 const cache = new Map();
 
-async function readOverview(url, fetch, signal) {
+async function readOverview(url, fetch, signal, document) {
   const repo=githubRepository(url);
   const request=(url,options={})=>fetch(url,{...options,signal:AbortSignal.any([signal,AbortSignal.timeout(20000)].filter(Boolean))});
   const snapshot=repo.kind?await githubSnapshot(url,request):null;
-  const endpoint=`https://api.github.com/repos/${repo.owner}/${repo.repo}/readme`;
-  const response=await request(endpoint+(snapshot?.subpath?'/'+snapshot.subpath.split('/').map(encodeURIComponent).join('/'):'')+(snapshot?'?ref='+snapshot.commit:''),{headers:{Accept:'application/vnd.github+json','User-Agent':'ASL-Workspace'}});
+  if(document&&(typeof document.file!=='string'||!document.file.toLowerCase().endsWith('.md')||document.file.includes('\\')||document.file.includes(':')||document.file.split('/').some(p=>p==='..'||p==='.')||typeof document.ref!=='string'))throw new Error('文档路径无效');
+  const endpoint=`https://api.github.com/repos/${repo.owner}/${repo.repo}/${document?'contents/'+document.file.split('/').map(encodeURIComponent).join('/'):'readme'+(snapshot?.subpath?'/'+snapshot.subpath.split('/').map(encodeURIComponent).join('/'):'')}`;
+  const ref=document?.ref||snapshot?.commit;
+  const response=await request(endpoint+(ref?'?ref='+encodeURIComponent(ref):''),{headers:{Accept:'application/vnd.github+json','User-Agent':'ASL-Workspace'}});
   if(response.status===404)return null;
   if(!response.ok)throw new Error(response.status===403?'GitHub 限制了请求频率，请稍后重试':`仓库介绍暂时不可用（${response.status}）`);
   const raw=await response.text();if(raw.length>2*1024*1024)throw new Error('README 过大，请到 GitHub 查看');
@@ -86,6 +88,7 @@ async function readRepository(url, { fetch, core, temp, selected, repositories, 
       } catch (error) { modeError = error.message; }
     }
     signal?.throwIfAborted();
+    repositories.set(output,{environment,repo,url:new URL(url).href,modes:new Set(modes.map(m=>m.id))});
     await remember(url);
     // README belongs to the selected folder (or repository root), never to every Skill.
     let readme=null;
@@ -106,4 +109,14 @@ async function readRepository(url, { fetch, core, temp, selected, repositories, 
     return result;
 }
 
-module.exports = { readRepository, readOverview };
+async function readRepositoryDocument(snapshot,file,repositories) {
+  const entry=repositories.get(snapshot);
+  if(!entry)throw new Error('请重新打开这个仓库');
+  if(typeof file!=='string'||!file||!file.toLowerCase().endsWith('.md')||file.includes('\\')||file.includes(':')||file.split('/').some(p=>p==='..'||p==='.'))throw new Error('文档路径无效');
+  const root=await fs.realpath(snapshot),actual=await fs.realpath(path.join(root,file)).catch(()=>null);
+  if(!actual)throw new Error('仓库中没有这份文档');
+  const relative=path.relative(root,actual);
+  if(relative.startsWith('..')||path.isAbsolute(relative)||(await fs.stat(actual)).size>1024*1024)throw new Error('文档超出读取范围');
+  return {file,text:await fs.readFile(actual,'utf8'),url:`${entry.repo.url}/blob/${entry.repo.commit}/${file.split('/').map(encodeURIComponent).join('/')}`};
+}
+module.exports = { readRepository, readOverview, readRepositoryDocument };

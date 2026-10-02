@@ -13,7 +13,6 @@ test("ModeWorkspace keeps the node editor contract and owns name, Markdown and d
     "skills={librarySkills}",
     "localSkills={candidates}",
     "onLocalSkillAdded={addLocalSkill}",
-    "Field={Field}",
     "onSave={handleSave}",
     "onClose={requestClose}",
     "Dialog={WorkspaceFrame}",
@@ -36,7 +35,7 @@ test("App routes new and existing Modes through the workspace and keeps two Mode
   assert.match(app, /kind === "mode-workspace"/);
   assert.match(app, /kind: "mode-workspace"/);
   assert.match(app, /kind:'mode-workspace'/);
-  assert.ok(app.includes("['mode-workspace','diagram-editor','skill-editor'"));
+  assert.ok(app.includes("['mode-workspace','skill-editor'"));
   assert.match(app, /Dialog=\{EditorPage\}/);
   assert.match(app, /onCatalog=\{next => setCatalog\(next\)\}/);
   assert.match(app, /createModeWithSkill/);

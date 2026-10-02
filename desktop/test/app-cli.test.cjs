@@ -10,7 +10,7 @@ test('ordinary diagram and text saves apply once; there is no discarded check be
   for(const [name,end] of [['saveDiagram','  const openLibrary'],['saveContent','  async function applyEdit']]){
     const calls=[];
     const context={workspace:'library',currentRoot:{current:'other'},catalogCache:{current:{delete(){}}},
-      api:async(...args)=>{calls.push(args);return{};},load:async()=>{},setModal(){},showMode(){},setMessage(){}};
+      api:async(...args)=>{calls.push(args);return{};},load:async()=>{},setContentSaving(){},setModal(){},showMode(){},setMessage(){}};
     const save=vm.runInNewContext(`(${part(`  async function ${name}`,end).split('\n  async function saveFile')[0].trim()})`,context);
     if(name==='saveDiagram')await save({id:'m',fingerprint:'fp',roots:['a']},'# m');
     else await save({operation:'skill.file.save',id:'a',expected:'fp',file:'SKILL.md',document:'# a'});
@@ -39,18 +39,4 @@ test('diagram preview keeps parser diagnostics behind an explicit details action
   const view=fs.readFileSync(path.join(__dirname,'../src/MermaidView.jsx'),'utf8');
   assert.match(view,/<details><summary>详细错误<\/summary><pre>\{error\}<\/pre><\/details>/);
   assert.doesNotMatch(view,/<strong>这张图需要修正<\/strong><pre>/);
-});
-
-test('authored Mermaid opens the native editor; member management cannot edit a second relationship graph',async()=>{
-  const {modeEditorKind}=await import('../src/mode-diagrams.mjs');
-  assert.equal(typeof modeEditorKind,'function');
-  const document='# Mode\n\n```mermaid\nsequenceDiagram\n A->>B: 内容\n```\n';
-  assert.equal(modeEditorKind({document}),'diagram-editor');
-  assert.equal(modeEditorKind({document:'# Mode'}),'mode-workspace');
-  assert.match(app,/kind: modeEditorKind\(mode\)/);
-  const workspace=fs.readFileSync(path.join(__dirname,'../src/ModeWorkspace.jsx'),'utf8');
-  const editor=fs.readFileSync(path.join(__dirname,'../src/ParadigmEditor.jsx'),'utf8');
-  assert.match(workspace,/membersOnly=\{authored\}/);
-  assert.match(editor,/membersOnly\?/);
-  assert.match(editor,/aria-label="当前分组技能"/);
 });

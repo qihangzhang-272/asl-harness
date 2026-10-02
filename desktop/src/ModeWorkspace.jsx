@@ -3,16 +3,18 @@ import {FolderOpen, RotateCw} from 'lucide-react';
 import ParadigmEditor from './ParadigmEditor.jsx';
 import EditorPage from './EditorPage.jsx';
 import Markdown from './Markdown.jsx';
-import {diagramsIn} from './mermaid-document.mjs';
+import {diagramsIn,replaceDiagram,editFlowchart,diagramLabel,flowchartItems} from './mermaid-document.mjs';
+import {modeDiagramDocument,skillNodes,diagramBlock,withoutSkillNodes} from './mode-diagrams.mjs';
+import MermaidEdit from './MermaidEdit.jsx';
+import SkillCanvas from './SkillCanvas.jsx';
+import {memberIds} from './graph-model.mjs';
 import {ReadStatus} from './useReadTasks.jsx';
 import {
   candidateImportRequest, localSkillCandidates, modeDocument, readModeDocument,
 } from './presentation.mjs';
 import './mode-workspace.css';
 
-// ParadigmEditor renders through its Dialog prop. The workspace supplies a dialog that
-// keeps one editor page (name + Markdown + the canvas), so the metadata and the graph
-// share the same 取消/保存 actions and the same unsaved confirmation.
+// One page owns the draft, membership and native Mermaid; the core owns the write gate.
 const FrameContext = createContext({Dialog: EditorPage, meta: null});
 const DefaultField = ({label, children}) => <label className="field"><span>{label}</span>{children}</label>;
 // The core names a Mode folder with workspace.SAFE_ID = [A-Za-z0-9][A-Za-z0-9._-]*.
@@ -35,11 +37,16 @@ function WorkspaceFrame({title, children, onClose, wide}) {
  */
 export default function ModeWorkspace({
   mode = null, draft = null, catalog = null, workspace, api, read, reads,
-  Dialog = EditorPage, Field = DefaultField, onSave, onCatalog, onClose,
+  Dialog = EditorPage, Field = DefaultField, onSave, onCatalog, onClose, readFile, saveFile, initialTitle = '', preloadedReport,
 }) {
   const source = useMemo(() => readModeDocument(mode?.document), [mode]);
   const [name, setName] = useState(() => draft?.name ?? source.name);
-  const [body, setBody] = useState(() => draft?.body ?? source.body);
+  const [body, setBody] = useState(() => mode
+    ? readModeDocument(modeDiagramDocument(mode,catalog?.skills||[])).body
+    : (draft?.body||'')+diagramBlock('技能协作',['flowchart LR',...skillNodes((catalog?.skills||[]).filter(s=>memberIds(draft?.roots||[],catalog?.skills||[]).includes(s.id))).map(n=>`${n.alias}["${diagramLabel(n.data.title)}"]`)].join('\n')));
+  const [diagramIndex,setDiagramIndex]=useState(()=>Math.max(0,diagramsIn(body).findIndex(d=>d.title===initialTitle)));
+  const [selected,setSelected]=useState(null);
+  const [expanded,setExpanded]=useState(false);
   const [id, setId] = useState(() => mode?.id || draft?.id || `mode-${crypto.randomUUID().slice(0, 8)}`);
   // Freeze identity fields at open time so an import or a background refresh can never
   // change what the fingerprint check compares against.
@@ -58,19 +65,19 @@ export default function ModeWorkspace({
     return {
       nodes: Array.isArray(saved?.nodes) ? saved.nodes : [],
       shared,
-      paradigms: [{id: 'main', title: draft?.name ?? source.name, description: draft?.body ?? source.body,
-        skills: roots.filter(skill => !shared.includes(skill))}],
+      paradigms: [{id: 'main', title: '技能协作', description: draft?.body || source.body || '组织本模式使用的技能',
+        skills: memberIds(roots,catalog?.skills||[]).filter(skill => !shared.includes(skill))}],
     };
   });
   const [librarySkills, setLibrarySkills] = useState(() => catalog?.skills || []);
-  const [report, setReport] = useState(() => draft?.report || null);
+  const [report, setReport] = useState(() => draft?.report || preloadedReport || null);
+  useEffect(()=>{if(preloadedReport)setReport(preloadedReport);},[preloadedReport]);
   const [importing, setImporting] = useState('');
   const [error, setError] = useState('');
   const [pane,setPane]=useState('canvas');
-  const authored=diagramsIn(mode?.document||'').length>0;
   const [documentEditing,setDocumentEditing]=useState(false);
   const live=useRef(true);
-  useEffect(()=>{live.current=true;scan();return()=>{live.current=false;reads?.cancel('mode-workspace-local');};},[]);
+  useEffect(()=>{live.current=true;return()=>{live.current=false;reads?.cancel('mode-workspace-local');};},[]);
 
   // Read-back after an import only replaces the skill list; the canvas stays mounted.
   useEffect(() => { if (catalog?.skills) setLibrarySkills(catalog.skills); }, [catalog]);
@@ -84,7 +91,7 @@ export default function ModeWorkspace({
   const currentMode = useMemo(() => ({
     id,
     title: name.trim() || (isNew ? '新建工作模式' : mode?.title || id),
-    document: modeDocument(name, body),
+    document: mode && name===source.name && body===source.body ? mode.document : modeDocument(name, body),
     roots, fingerprint, capabilities, architecture,
   }), [id, name, body, roots, fingerprint, capabilities, architecture, isNew, mode]);
 
@@ -152,7 +159,7 @@ export default function ModeWorkspace({
         onChange={event => setName(event.target.value)} />
     </Field>
     <div className="mode-workspace-tabs" role="tablist" aria-label="编辑内容">
-      <button role="tab" aria-selected={pane==='canvas'} onClick={()=>setPane('canvas')}>{authored?'技能':'画布'}</button>
+      <button role="tab" aria-selected={pane==='canvas'} onClick={()=>setPane('canvas')}>画布</button>
       <button role="tab" aria-selected={pane==='document'} onClick={()=>setPane('document')}>文档</button>
     </div>
     <div className="mode-workspace-tools">
@@ -182,7 +189,41 @@ export default function ModeWorkspace({
       metadataDirty={name !== source.name || body !== source.body || !fingerprint}
       metadataValid={!!name.trim() && idValid && !importing}
       documentOpen={pane==='document'}
-      membersOnly={authored}
+      onOpenSkill={setSelected}
+      initialScopeTitle={diagramsIn(body)[diagramIndex]?.title}
+      onScopeChange={title=>{
+        const matches=diagramsIn(body).map((d,i)=>({title:d.title,index:i})).filter(d=>d.title===title);
+        if(matches.length===1)setDiagramIndex(matches[0].index);
+      }}
+      onDocumentChange={document=>setBody(readModeDocument(document).body)}
+      onRemoveFromDiagram={withoutSkillNodes}
+      onAddToDiagram={skill=>{
+        const diagrams=diagramsIn(body),index=Math.min(diagramIndex,Math.max(0,diagrams.length-1)),diagram=diagrams[index];
+        if(!diagram)throw new Error('先在文档中添加 Mermaid 图');
+        const id=skillNodes([skill])[0].alias;
+        if(flowchartItems(diagram.source).nodes.some(node=>node.id===id))return;
+        return modeDocument(name,replaceDiagram(body,index,editFlowchart(diagram.source,{kind:'add',id,label:skill.title||skill.id})));
+      }}
+      renderCanvas={({draft:map,members,available,onSelectScope,onEditDocument})=>{
+        const diagrams=diagramsIn(body),index=Math.min(diagramIndex,Math.max(0,diagrams.length-1)),diagram=diagrams[index];
+        return <div className={`mode-workspace-native architecture-section ${expanded?'is-expanded':''}`}>
+          <nav className="diagram-edit-toolbar"><div className="tabs">{diagrams.map((d,i)=><button key={i} className={index===i?'active':''} onClick={()=>{
+            setDiagramIndex(i);
+            const scopes=[...map.paradigms,{id:'shared',title:'通用能力'}].filter(p=>p.title===d.title);
+            if(scopes.length===1)onSelectScope(scopes[0].id);
+          }}>{d.title}</button>)}</div>
+            <button onClick={()=>{setPane('document');setDocumentEditing(true);}}>原文</button></nav>
+          <SkillCanvas selected={selected} onSelect={setSelected} readFile={readFile} saveFile={saveFile}>
+            {diagram?<MermaidEdit key={index} source={diagram.source}
+              empty={!members.length&&diagram.source.trim()==='flowchart LR'}
+              nodes={skillNodes(available.filter(s=>members.includes(s.id)),map.nodes)}
+              candidates={skillNodes(available,map.nodes)} compact={!!selected} selectedId={selected?.id}
+              expanded={expanded} onExpand={()=>setExpanded(!expanded)}
+              onNode={setSelected} onSource={()=>{setPane('document');setDocumentEditing(true);}}
+              onChange={(source,skill)=>onEditDocument(modeDocument(name,replaceDiagram(body,index,source)),skill)}/>:<Markdown text={body}/>}
+          </SkillCanvas>
+        </div>;
+      }}
       documentEditor={<section className="mode-workspace-document-pane">
         <div className="mode-workspace-document-toolbar"><span>MODE.md</span><button onClick={()=>setDocumentEditing(!documentEditing)}>{documentEditing?'预览':'编辑'}</button></div>
         {documentEditing?<textarea aria-label="模式说明" autoFocus value={body} onChange={event=>setBody(event.target.value)}/>:<div className="mode-workspace-document-preview" onDoubleClick={()=>setDocumentEditing(true)}><Markdown text={body || '尚未填写'}/></div>}
@@ -191,7 +232,6 @@ export default function ModeWorkspace({
       localSkills={candidates}
       onLocalSkillAdded={addLocalSkill}
       Dialog={WorkspaceFrame}
-      Field={Field}
       onSave={handleSave}
       onClose={requestClose}
     />

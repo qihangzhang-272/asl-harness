@@ -17,6 +17,24 @@ test('exit flush waits for the latest queued preference write',async t=>{
 });
 const os = require("node:os");
 
+test('opening registered libraries changes selection without reordering the sidebar',async t=>{
+  const {rememberLibrary,readPreferences}=require('../library.cjs');
+  const root=await fs.mkdtemp(path.join(os.tmpdir(),'asl-stable-libraries-'));
+  t.after(()=>fs.rm(root,{recursive:true,force:true}));
+  const file=path.join(root,'preferences.json'),libraries=[];
+  for(const name of ['personal','public','older']){
+    const folder=path.join(root,name);libraries.push(folder);
+    await fs.mkdir(path.join(folder,'skills'),{recursive:true});await fs.mkdir(path.join(folder,'modes'));
+    await fs.writeFile(path.join(folder,'WORKSPACE.md'),'# Library');await rememberLibrary(file,folder);
+  }
+  for(const folder of [libraries[0],libraries[2],libraries[1],libraries[0]]){
+    const result=await rememberLibrary(file,folder);
+    assert.deepEqual(result.libraries,libraries);
+    assert.equal(result.lastLibrary,folder);
+  }
+  assert.deepEqual((await readPreferences(file)).libraries,libraries);
+});
+
 test('a packaged example is not a personal library remembered across releases',async t=>{
   const {readPreferences}=require('../library.cjs');
   const root=await fs.mkdtemp(path.join(os.tmpdir(),'asl-example-reference-'));

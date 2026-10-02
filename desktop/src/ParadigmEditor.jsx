@@ -1,13 +1,12 @@
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {Network, Plus, Puzzle, Redo2, Save, Search, Undo2, X, Pencil} from 'lucide-react';
-import GraphCanvas from './GraphCanvas.jsx';
 import './graph-editor.css';
 import {
-  LIMITS, SHARED, addEdge, addParadigm, assignedScopes, commitHistory, createHistory,
+  LIMITS, SHARED, addParadigm, assignedScopes, commitHistory, createHistory,
   displayTitle, installCandidates, isSkillId, memberIds, mergeInventory,
-  normalizeArchitecture, placeSkill, projectGraph, redoHistory, removeEdge, removeParadigm, removeScopeSkill, rootIds,
-  saveRequest, sameState, scopeIncludes, scopeOf, setNodeOverride, setPositions, skillIndex,
-  undoHistory, updateEdge, updateParadigm, validateDraft,
+  normalizeArchitecture, placeSkill, redoHistory, removeParadigm, removeScopeSkill, rootIds,
+  saveRequest, sameState, scopeIncludes, scopeOf,  skillIndex,
+  undoHistory, updateParadigm, validateDraft,
 } from './graph-model.mjs';
 
 const scopeTitle = (draft, scopeId) => scopeOf(draft, scopeId)?.title?.trim() || scopeId;
@@ -21,18 +20,6 @@ export function Placement({mode,value,onChange,required=true}) {
   </select></label>;
 }
 
-
-function useReducedMotion() {
-  const [reduced,setReduced] = useState(() => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches);
-  useEffect(() => {
-    if (typeof matchMedia !== 'function') return undefined;
-    const media = matchMedia('(prefers-reduced-motion: reduce)');
-    const update = () => setReduced(media.matches);
-    media.addEventListener('change', update);
-    return () => media.removeEventListener('change', update);
-  }, []);
-  return reduced;
-}
 
 // A member already inside the Mode. `row.current` means the scope on screen holds
 // it; `row.scopeLabel` lists the other scopes that also hold it.
@@ -63,11 +50,11 @@ function SkillRow({row,onOpen,onPlace,onClear}) {
 
 // One install source. The drag payload is the unique sourceKey (never the bare
 // id), so two folders offering the same skill id can never collapse into one row.
-function CandidateRow({candidate,conflict,busy,onInstall}) {
+function CandidateRow({candidate,busy,onInstall}) {
   const [source,setSource]=useState(candidate.sourceKey);
   const chosen=candidate.sources?.find(row=>row.sourceKey===source)||candidate;
   return <div
-    className={`graph-skill${conflict ? ' is-conflict' : ''}`}
+    className="graph-skill"
     title={`${chosen.source} · 拖到画布`}
     draggable
     onDragStart={event => {
@@ -85,7 +72,7 @@ function CandidateRow({candidate,conflict,busy,onInstall}) {
     </span>
     <button type="button" className="icon-button" disabled={busy}
       aria-label={`加入 ${candidate.title || candidate.id}`}
-      title={conflict ? '库内已有同名技能，用库内版本' : '安装并加入'}
+      title="安装并加入"
       onClick={() => onInstall(chosen.sourceKey)}><Plus size={13} /></button>
   </div>;
 }
@@ -95,8 +82,8 @@ function CandidateRow({candidate,conflict,busy,onInstall}) {
 //   skills   every available skill of the current library: {id, title, description, requires?}
 //   localSkills  install sources {id, title, description, requires?, source, ...}; source is the drag key
 //   onLocalSkillAdded(skill)  async; installs then resolves {skills} (updated library inventory), throws on failure
-//   onSave(request)  receives saveRequest(...) for mode.save; Dialog / Field / onClose are host chrome
-export default function ParadigmEditor({mode,skills,Dialog,Field,onSave,onClose,localSkills=[],onLocalSkillAdded,metadataDirty=false,metadataValid=true,documentOpen=false,documentEditor=null,membersOnly=false}) {
+//   onSave(request)  receives saveRequest(...) for mode.save; Dialog / onClose are host chrome
+export default function ParadigmEditor({mode,skills,Dialog,onSave,onClose,localSkills=[],onLocalSkillAdded,metadataDirty=false,metadataValid=true,documentOpen=false,documentEditor=null,renderCanvas,onOpenSkill,onAddToDiagram,onDocumentChange,onRemoveFromDiagram,initialScopeTitle,onScopeChange}) {
   // `skills` is the whole current library. `available` starts from it and grows
   // only through a successful install; members stay the roots' requires closure.
   const [available,setAvailable] = useState(() => (Array.isArray(skills) ? skills : []));
@@ -110,17 +97,15 @@ export default function ParadigmEditor({mode,skills,Dialog,Field,onSave,onClose,
   const candidates = useMemo(() => installCandidates(localSkills), [localSkills]);
   const [initial] = useState(() => {
     const roots = rootIds(mode);
-    return {draft: normalizeArchitecture(mode?.architecture, memberIds(roots, skills)), roots};
+    return {draft: normalizeArchitecture(mode?.architecture, memberIds(roots, skills)), roots, document:mode.document};
   });
   const [history,setHistory] = useState(() => createHistory(initial));
-  const [scopeId,setScopeId] = useState(() => initial.draft.paradigms[0]?.id || SHARED);
-  const [selection,setSelection] = useState(null);
+  const [scopeId,setScopeId] = useState(() => initial.draft.paradigms.find(p=>p.title===initialScopeTitle)?.id || (initialScopeTitle==='通用能力'?SHARED:initial.draft.paradigms[0]?.id) || SHARED);
   const [editingScope,setEditingScope]=useState(false);
   const [query,setQuery] = useState('');
   const [notice,setNotice] = useState('');
   const [installing,setInstalling] = useState('');
-  const reducedMotion = useReducedMotion();
-  const stamp = useRef(0);
+  const [saving,setSaving]=useState(false);
   const edit = useRef({key: '', at: 0});
 
   const {draft,roots} = history.present;
@@ -128,15 +113,17 @@ export default function ParadigmEditor({mode,skills,Dialog,Field,onSave,onClose,
   const scope = scopeOf(draft, scopeId);
   const validation = useMemo(() => validateDraft({draft, members}), [draft, members]);
   const dirty = metadataDirty || !sameState(history.present, initial);
-  const graph = useMemo(() => projectGraph({draft, scopeId, index}), [draft, scopeId, index]);
 
   useEffect(() => {
     if (scopeId !== SHARED && !draft.paradigms.some(paradigm => paradigm.id === scopeId)) setScopeId(SHARED);
   }, [scopeId, draft.paradigms]);
 
   const update = useCallback(change => {
-    setHistory(state => commitHistory(state, typeof change === 'function' ? change(state.present) : change));
-  }, []);
+    const present={...history.present,document:mode.document};
+    const next=typeof change==='function'?change(present):change;
+    setHistory(commitHistory({...history,present},next));
+    if(next.document!==mode.document)onDocumentChange(next.document);
+  }, [history,mode.document,onDocumentChange]);
   // Typing inside one field stays a single undo step.
   const updateTyped = useCallback((key, change) => {
     const now = Date.now();
@@ -147,8 +134,8 @@ export default function ParadigmEditor({mode,skills,Dialog,Field,onSave,onClose,
       return fresh ? commitHistory(state, next) : {...state, present: next};
     });
   }, []);
-  const undo = useCallback(() => setHistory(state => undoHistory(state)), []);
-  const redo = useCallback(() => setHistory(state => redoHistory(state)), []);
+  const undo = useCallback(() => {const next=undoHistory(history);setHistory(next);onDocumentChange(next.present.document);}, [history,onDocumentChange]);
+  const redo = useCallback(() => {const next=redoHistory(history);setHistory(next);onDocumentChange(next.present.document);}, [history,onDocumentChange]);
 
   useEffect(() => {
     function onKey(event) {
@@ -163,57 +150,38 @@ export default function ParadigmEditor({mode,skills,Dialog,Field,onSave,onClose,
     return () => window.removeEventListener('keydown', onKey);
   }, [undo, redo]);
 
-  const select = useCallback(next => {
-    if (!next) { setSelection(null); return; }
-    stamp.current += 1;
-    setSelection({kind: next.kind, id: next.id, auto: !!next.auto, stamp: stamp.current});
-  }, []);
-
   function showScope(id) {
     setScopeId(id);
-    setSelection(null);
     setEditingScope(false);
+    onScopeChange?.(scopeOf(draft,id)?.title);
   }
 
-  /** Positions of the nodes currently on screen, so a drop keeps every other node still. */
-  function currentPositions() {
-    const positions = {};
-    for (const node of graph.nodes) positions[node.id] = node.position;
-    return positions;
-  }
-
-  // `from` is the scope on screen: removing there never touches the skill's other
-  // paradigms. Adding to a paradigm only takes it out of shared.
-  function placeSkillTo(skillId, target, position) {
+  function placeSkillTo(skillId, target) {
     if (!isSkillId(skillId)) return;
-    update(present => {
-      let next = placeSkill(present.draft, skillId, target, target ? '' : scopeId);
-      if (position && target) next = setPositions(next, target, {...currentPositions(), [skillId]: position});
-      return {...present, draft: next};
-    });
-    if(target) select({kind:'node',id:skillId});
+    update(present => ({...present, draft: placeSkill(present.draft, skillId, target, target ? '' : scopeId)}));
   }
 
-  /** Add a brand new (or freshly installed) root and drop it into the scope on screen. */
-  function addRootAt(skillId, position) {
+  function addRootAt(skillId, diagramAlreadyChanged=false, document=mode.document, inventory=available) {
+    try{if(!diagramAlreadyChanged)document=onAddToDiagram?.(inventory.find(s=>s.id===skillId)||{id:skillId,title:skillId})||document;}
+    catch(error){setNotice(error.message);return;}
     update(present => {
       const roots = present.roots.includes(skillId) ? present.roots : [...present.roots, skillId];
-      let next = placeSkill(present.draft, skillId, scopeId);
-      if (position) next = setPositions(next, scopeId, {...currentPositions(), [skillId]: position});
-      return {...present, roots, draft: next};
+      let draft = placeSkill(present.draft, skillId, scopeId);
+      for (const dependency of memberIds([skillId], inventory))
+        if (!assignedScopes(draft, dependency).length) draft = placeSkill(draft, dependency, scopeId);
+      return {...present, roots, draft, document};
     });
-    select({kind:'node',id:skillId});
   }
 
   // Install only through the callback, and only write references after it
   // actually reports the skill back. A library skill with the same id is used
   // as-is instead of being replaced by the local folder.
-  async function installBySource(sourceKey, position) {
+  async function installBySource(sourceKey) {
     const candidate = candidates.find(row => row.sourceKey === sourceKey);
     if (!candidate) return;
     if (index.has(candidate.id)) {
       setNotice(`库内已有 ${candidate.id}，用库内版本`);
-      addRootAt(candidate.id, position);
+      addRootAt(candidate.id);
       return;
     }
     if (typeof onLocalSkillAdded !== 'function') {
@@ -229,7 +197,7 @@ export default function ParadigmEditor({mode,skills,Dialog,Field,onSave,onClose,
       if (!inventory) throw new Error('安装回调没有返回 {skills} 目录');
       if (!inventory.some(skill => skill?.id === candidate.id)) throw new Error('安装结果里没有这个技能');
       setAvailable(previous => mergeInventory(previous, inventory));
-      addRootAt(candidate.id, position);
+      addRootAt(candidate.id,false,mode.document,inventory);
       setNotice(`已安装 ${candidate.title || candidate.id}`);
     } catch (error) {
       setNotice(`未安装 ${candidate.id}：${error?.message || error}`);
@@ -238,48 +206,18 @@ export default function ParadigmEditor({mode,skills,Dialog,Field,onSave,onClose,
     }
   }
 
-  function dropSkill(payload, position) {
-    if (!payload) return;
-    if (payload.source) { void installBySource(payload.source, position); return; }
-    const skillId = payload.id;
-    if (!skillId || !index.has(skillId)) return;
-    if (!members.includes(skillId)) { addRootAt(skillId, position); return; }
-    if (scopeIncludes(draft, scopeId, skillId)) {
-      update(present => ({...present, draft: setPositions(present.draft, scopeId, {[skillId]: position})}));
-      return;
-    }
-    placeSkillTo(skillId, scopeId, position);
+  function dropSkill(payload) {
+    if (payload?.source) { void installBySource(payload.source); return; }
+    if (index.has(payload?.id)) addRootAt(payload.id);
   }
 
-  function connectEdge(connection) {
-    const from = connection.source, to = connection.target;
-    if (!from || !to || from === to) return;
-    update(present => ({...present, draft: addEdge(present.draft, scopeId, {from, to, label: '', sourceHandle: connection.sourceHandle, targetHandle: connection.targetHandle})}));
-    select({kind: 'edge', id: `${from}->${to}`, auto: true});
-  }
-
-  const moveNodes = useCallback(positions => {
-    update(present => ({...present, draft: setPositions(present.draft, scopeId, positions)}));
-  }, [scopeId, update]);
-
-  const nudgeNodes = useCallback((ids, delta) => {
-    update(present => {
-      const positions = {};
-      for (const node of graph.nodes) positions[node.id] = node.position;
-      for (const id of ids) {
-        const point = positions[id];
-        if (point) positions[id] = {x: point.x + delta.x, y: point.y + delta.y};
-      }
-      return {...present, draft: setPositions(present.draft, scopeId, positions)};
-    });
-  }, [graph, scopeId, update]);
-
-  const deleteEdge = useCallback(key => {
-    update(present => ({...present, draft: removeEdge(present.draft, scopeId, key)}));
-    select(null);
-  }, [scopeId, update, select]);
   function removeNode(id) {
-    try { update(removeScopeSkill(history.present,id,scopeId,available));select(null);setNotice(''); }
+    try {
+      const next=removeScopeSkill({...history.present,document:mode.document},id,scopeId,available);
+      const removed=members.filter(skill=>!memberIds(next.roots,available).includes(skill));
+      next.document=onRemoveFromDiagram(mode.document,removed);
+      update(next);setNotice('');
+    }
     catch(error){setNotice(error.message);}
   }
 
@@ -327,8 +265,19 @@ export default function ParadigmEditor({mode,skills,Dialog,Field,onSave,onClose,
     ? '全部已归属'
     : validation.unassigned.length ? `${validation.unassigned.length} 个待归属` : validation.errors[0].message;
 
+  useEffect(()=>{
+    if(!dirty)return;
+    const guard=event=>{
+      if(event.target.closest('.editor-page, .canvas-menu'))return;
+      if(installing||saving||!window.confirm('有未保存的修改，放弃？')){event.preventDefault();event.stopImmediatePropagation();}
+    };
+    const unload=event=>{event.preventDefault();event.returnValue='';};
+    document.addEventListener('click',guard,true);window.addEventListener('beforeunload',unload);
+    return()=>{document.removeEventListener('click',guard,true);window.removeEventListener('beforeunload',unload);};
+  },[dirty,installing,saving]);
+
   function close() {
-    if(installing){setNotice('正在写入，请稍候');return;}
+    if(installing||saving){setNotice('正在写入，请稍候');return;}
     if (!dirty || window.confirm('有未保存的修改，放弃？')) onClose();
   }
 
@@ -339,16 +288,19 @@ export default function ParadigmEditor({mode,skills,Dialog,Field,onSave,onClose,
     setEditingScope(true);
   }
 
-  function save() {
+  async function save() {
     if (!dirty || !metadataValid || !validation.ok || installing) return;
-    onSave(saveRequest({mode, draft, roots}));
+    setSaving(true);setNotice('');
+    try{await onSave(saveRequest({mode, draft, roots}));}
+    catch(error){setNotice(error.message);}
+    finally{setSaving(false);}
   }
 
   // The Mode name lives in the compact strip above the canvas; the page heading stays
   // a short label so the workbench itself keeps the space.
   return <Dialog title="模式" onClose={close} wide>
     {documentOpen&&documentEditor}
-    <div className="graph-editor" hidden={documentOpen}>
+    <div className="graph-editor" hidden={documentOpen} inert={saving||!!installing}>
       <div className="graph-editor-bar">
         <div className="graph-tabs" role="tablist" aria-label="工作范式">
           {draft.paradigms.map((paradigm,position) => <button key={paradigm.id} role="tab" aria-selected={paradigm.id === scopeId}
@@ -379,7 +331,7 @@ export default function ParadigmEditor({mode,skills,Dialog,Field,onSave,onClose,
             {groups.map(group => <section className="graph-skill-group" key={group.id}>
               <h4>{group.title}</h4>
               {group.rows.map(row => <SkillRow key={row.id} row={row}
-                onOpen={id => { if(!row.current && row.scopes.length)showScope(row.scopes[0]);if(row.scopes.length)select({kind:'node',id}); }}
+                onOpen={id => { if(!row.current && row.scopes.length)showScope(row.scopes[0]);onOpenSkill?.(index.get(id)); }}
                 onPlace={id => placeSkillTo(id, scopeId)}
                 onClear={removeNode} />)}
             </section>)}
@@ -400,46 +352,27 @@ export default function ParadigmEditor({mode,skills,Dialog,Field,onSave,onClose,
             {localRows.length ? <section className="graph-skill-group">
               <h4>本机 · {localRows.length}</h4>
               {localRows.map(candidate => <CandidateRow key={candidate.id} candidate={candidate}
-                conflict={index.has(candidate.id)} busy={installing === candidate.sourceKey}
+                busy={!!installing}
                 onInstall={sourceKey => { void installBySource(sourceKey); }} />)}
             </section> : null}
-            {notice ? <p className="graph-list-note graph-notice" role="status">{notice}</p> : null}
           </div>
         </aside>
 
-        <section className="graph-pane" aria-label={membersOnly?'当前分组技能':'技能节点画布'}
-          onDragOver={membersOnly?event=>event.preventDefault():undefined} onDrop={membersOnly?event=>{
+        <section className="graph-pane" aria-label="技能节点画布"
+          onDragOver={event=>event.preventDefault()} onDrop={event=>{
             event.preventDefault();const source=event.dataTransfer.getData('application/x-asl-skill-source');
             dropSkill(source?{source}:{id:event.dataTransfer.getData('application/x-asl-skill')});
-          }:undefined}>
-          {membersOnly?<div className="graph-skills" aria-label="当前分组技能">
-            {(scope?.skills||[]).map(id=><SkillRow key={id} row={{id,title:displayTitle(draft,index,id),current:true}}
-              onPlace={skill=>placeSkillTo(skill,scopeId)} onClear={removeNode}/>)}
-          </div>:<GraphCanvas
-            key={scopeId}
-            scopeId={scopeId}
-            graph={graph}
-            selection={selection}
-            reducedMotion={reducedMotion}
-            onMoveNode={moveNodes}
-            onNudge={nudgeNodes}
-            onConnectEdge={connectEdge}
-            onRemoveEdge={deleteEdge}
-            onRemoveNode={removeNode}
-            onEditNode={(id,patch,key)=>updateTyped(`node:${id}:${key}`,present=>({...present,draft:setNodeOverride(present.draft,id,patch)}))}
-            onEditEdge={(id,patch,key)=>updateTyped(`edge:${id}:${key}`,present=>({...present,draft:updateEdge(present.draft,scopeId,id,patch)}))}
-            onSelect={select}
-            onOpen={(kind, id) => select({kind, id, auto: true})}
-            onDropSkill={dropSkill}
-          />}
+          }}>
+          {renderCanvas({draft,roots,members,available,scopeId,onSelectScope:showScope,onEditDocument:(document,skill)=>skill?addRootAt(skill.id,true,document):update(present=>({...present,document}))})}
         </section>
 
       </div>
     </div>
+    {notice ? <p className="graph-list-note graph-notice" role="alert">{notice}</p> : null}
     <div className="dialog-actions">
       <span className={validation.ok ? 'muted' : 'graph-status has-error'} role="status">{status}</span>
       <button type="button" onClick={close}>取消</button>
-      <button type="button" className="primary" disabled={!dirty || !metadataValid || !validation.ok || !!installing} onClick={save}><Save size={15} aria-hidden="true" />保存</button>
+      <button type="button" className="primary" disabled={!dirty || !metadataValid || !validation.ok || !!installing || saving} onClick={save}><Save size={15} aria-hidden="true" />保存</button>
     </div>
   </Dialog>;
 }

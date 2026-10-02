@@ -4,7 +4,7 @@ import {Marked} from 'marked';
 import DOMPurify from 'dompurify';
 import MermaidView from './MermaidView.jsx';
 
-export default function Markdown({text, onFile, baseUrl}) {
+export default function Markdown({text, onFile, baseUrl, onLink}) {
   const container=useRef(null),[slots,setSlots]=useState([]);
   const frontmatter=(text||'').match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
   const body=frontmatter?(text||'').slice(frontmatter[0].length):text;
@@ -35,6 +35,7 @@ export default function Markdown({text, onFile, baseUrl}) {
     let href=link.getAttribute('href') || '';
     if(href.startsWith('#'))return;
     if(baseUrl){try{href=new URL(href,baseUrl).href;}catch{return;}}
+    if(onLink?.(href))return;
     if(/^https?:\/\//i.test(href))window.asl.external(href);
     else if(onFile){try{onFile(decodeURIComponent(href.split('#')[0]));}catch{/* malformed repository link */}}
   }} dangerouslySetInnerHTML={{__html:html}}/>{slots.filter(slot=>container.current?.contains(slot)&&diagrams[Number(slot.dataset.mermaidBlock)]!==undefined).map((slot,i)=>createPortal(<MermaidView source={diagrams[Number(slot.dataset.mermaidBlock)]}/>,slot,`${html.length}-${i}`))}</>;

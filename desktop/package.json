@@ -1,7 +1,7 @@
 {
   "name": "asl-desktop",
   "productName": "ASL Workspace",
-  "version": "0.5.5",
+  "version": "0.5.7",
   "private": true,
   "description": "Manage and carry your AI work environments",
   "license": "MIT",
@@ -9,24 +9,24 @@
   "scripts": {
     "start": "npm run build && electron .",
     "build": "vite build",
-    "test": "node --test test/*.test.cjs"
+    "test": "node --test test/*.test.cjs",
+    "test:e2e": "npm run build && node --test e2e/workspace.cjs",
+    "test:performance": "node e2e/performance.cjs"
   },
   "devDependencies": {
     "electron": "44.3.0",
+    "playwright": "1.62.1",
     "vite": "8.2.2"
   },
   "overrides": {
     "lodash-es": "4.18.1"
   },
   "dependencies": {
-    "@dagrejs/dagre": "3.1.1",
-    "@xyflow/react": "12.12.0",
-    "dompurify": "3.4.15",
+    "dompurify": "3.4.16",
     "lucide-react": "1.43.0",
     "marked": "16.4.2",
     "mermaid": "12.0.0",
     "react": "19.2.8",
-    "react-dom": "19.2.8",
-    "svg-pan-zoom": "3.6.2"
+    "react-dom": "19.2.8"
   }
 }
