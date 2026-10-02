@@ -418,7 +418,7 @@ Folders mainly help people browse. Harness resolves a Mode into an explicit Skil
 <details>
 <summary><strong>Does a Mode become another Workflow?</strong></summary>
 
-No. A Mode stores no order, branch, state, or executor. It only selects complete Skills for the active context; the Host Agent still decides how to complete the task.
+No. A Mode selects complete Skills and may describe cooperation, branches, merges, and feedback. These relationships are not an executor or a mandatory route; the Host Agent still decides how to complete the task.
 
 </details>
 
@@ -451,6 +451,10 @@ Harness only manages projection content carrying ASL ownership records. If a tar
 
 <details>
 <summary><strong>CLI Reference</strong></summary>
+
+Agents and the App share one CLI. Run `asl-harness cli.describe` for the machine-readable command and operation contract, then use `environment.catalog`, `mode.files`, and `skill.files` to read actual content and fingerprints. Submit JSON through `environment.edit`; failed validation returns a nonzero exit code and repair details, without replacing valid content. Complete new files use an external Environment draft, fresh `mode.export`, and guarded `mode.import`.
+
+Actual Mermaid rendering requires the bundled renderer; a Python-only install is not a complete rendering runtime. The Windows App includes `resources/core/asl-harness.exe` and does not need to keep a management window open. See the [shared CLI view](docs/architecture/02g-agent-cli.md), [full CLI reference](README.md#cli-reference), and [verified status](docs/asl-architecture-views.md#view-9--当前项目状态). Content Library uses this framework rather than embedding a second implementation.
 
 | Command | Purpose |
 | --- | --- |

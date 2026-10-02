@@ -1,10 +1,12 @@
 # ASL 总体架构与专项视图
 
-> **唯一架构与项目状态真源。** 本文件是 ASL 当前架构、实现边界、验证结果和未完成事项的唯一权威文档。事实依据仍是代码与可复现的运行证据，不能用文档声明代替验证。发现实现、README、其他文档或图示不一致时，修正后优先更新本文件，再同步引用和发布检出；不得把待实现或待验收事项标成完成。开发仓库维护此文件，公开仓库只机械同步。
+> **唯一架构与项目状态真源。** 本总览与 `architecture/` 专项文件共同组成唯一权威架构文档集；项目状态只维护在本总览 View 9。事实依据仍是代码与可复现的运行证据，不能用文档声明代替验证。发现实现、README、其他文档或图示不一致时，修正后优先更新本文件，再同步引用和发布检出；不得把待实现或待验收事项标成完成。开发仓库维护此文件，公开仓库只机械同步。
 
-本文件用多种标准架构图解释 ASL。先看 Master 理解独立 App、可迁移环境和宿主的关系，再看 View 2D / 2E / 2F 理解使用、导入与模型配置，最后看 View 7C 的培养机制及 View 9 的真实状态。其余专项图展开已有底座，不把方案当成已发布功能。
+> **核心产品决策（2026-09-29，最终口述）：** ASL 是连接个人工作环境与 AI 应用的中间平台。**公共 GitHub 库以云端为真源，可直接在线呈现；采用到本地的 Mode 以本地持续使用和培养的版本为唯一真源，不被上游更新直接覆盖。** 文件和已有数据库的业务数据都向用户及 Agent 开放受控读写，协议校验后生效；不为开放而新增数据库。Mode 可独立发布到 GitHub。目标兼容 Codex、Claude Code、DeepSeek Harness、WorkBuddy、千问办公、豆包工作、OpenCode、Cursor；目标不等于已验证接入。口述决策按最新在前记录于 [核心产品决策](product-decisions.md)，本文件仍是唯一实现状态真源。
 
-> 更新：2026-09-26。当前验证数字、部署差异和后续执行路线集中在 View 9。v0.4 工作范式保留；本轮补入模式库层级、云端直接浏览与 Agent 配置生命周期。实现、窗口验收、打包与真实宿主会话分开记录，不以界面可用代替实际运行成功。
+本总览导航到不同专项文件，用标准架构图解释 ASL。先看 Master 理解独立 App、可迁移环境和宿主的关系，再看 View 2D / 2E / 2F 理解使用、导入与模型配置，最后看 View 7C 的培养机制及 View 9 的真实状态。其余专项图展开已有底座，不把方案当成已发布功能。
+
+> 更新：2026-10-02。专项视图已分块，旧 View 锚点保留为导航。当前验证数字、部署差异和后续执行路线集中在 View 9。阅读视图直接使用 Mermaid 原生渲染；基础流程图点击节点即可原位改字，右侧按需打开真实 Skill 文件。图原文在人与 Agent 间共编，写入失败回传重写反馈。v0.4 保留技能归属与范式定义，已有关系可投影为 Mermaid，显式编辑时才写入文档；旧 React Flow 仅用于成员工作台，不是任意 Mermaid 的可视编辑器。三张生成稿已被用户否决，不采用其布局；开发完成不等于桌面入口或远端已更新。
 
 ## 颜色约定
 
@@ -21,1423 +23,219 @@
 
 | 图 | 类型 | 只回答什么问题 |
 | --- | --- | --- |
-| Master | 总体模块关系图 | 所有模块怎样组成一个系统，哪些关系形成反馈环 |
-| View 1 | 系统上下文图 | 用户、Host、Harness、Environment、Case 和外部来源分别站在哪里 |
-| View 2 | 组件图 | Harness System 与 Personal Environment 内部各自包含什么 |
-| View 2B | Runtime 边界与同步图 | ASL 不复制哪些 Host 能力，以及两份 Environment 怎样显式同步完整 Skill |
-| View 2C | Hook 接线图 | 宿主在什么时机调用哪些现有检查，什么时候提醒或阻断 |
-| View 2D | App 入口与状态图 | 怎样管理工作环境、看见能力，并区分已配置与实际生效 |
-| View 2E | 环境包与安装图 | 复杂技能、插件和资料怎样分享，怎样在指定 Mode 安装 |
-| View 2F | 模型与应用时序图 | Mode 如何关联 Model，怎样应用到不同宿主而不携带秘密 |
-| View 3 | 运行时序图 | 一个普通 Goal 从进入到交付怎样发生 |
-| View 4 | 变更时序图 | Skill / Mode 的增删改查怎样与普通业务内容隔离 |
-| View 5 | 生命周期状态图 | 外部能力从发现到采用、合并、依赖、变体、适配或归档怎样流转 |
-| View 5B | 复杂仓库拆解图 | 一个外部仓库应该变成一个 Skill、多个 Skill、共享 Runtime 还是 Adapter |
-| View 5C | 安装与 Mode 绑定时序图 | 用户明确要求引入时，如何直接安装并只绑定指定 Mode |
-| View 6 | 能力图 | Mode 怎样选择 Skill 子图而不退化成固定 Workflow |
-| View 7 | 决策图 | 用户明确反馈应该落在 Case、Skill、Mode 还是 Environment |
-| View 7B | Mode 决策图 | 什么时候新建、修改、合并或退出一个 Mode |
-| View 7C | 培养循环与研究映射 | 借鉴 EvoMap 的哪些经验机制，哪些不采用，怎样保持轻量 |
-| View 8 | 部署图 | 同一真源怎样投影到 Codex、Claude Code 与 DeepSeek Harness |
+| [Master](architecture/00-master.md) | 总体模块关系图 | 所有模块怎样组成一个系统，哪些关系形成反馈环 |
+| [View 1](architecture/01-context.md) | 系统上下文图 | 用户、Host、Harness、Environment、Case 和外部来源分别站在哪里 |
+| [View 2](architecture/02-components.md) | 组件图 | Harness System 与 Personal Environment 内部各自包含什么 |
+| [View 2B](architecture/02b-runtime-sync.md) | Runtime 边界与同步图 | ASL 不复制哪些 Host 能力，以及两份 Environment 怎样显式同步完整 Skill |
+| [View 2C](architecture/02c-host-hooks.md) | Hook 接线图 | 宿主在什么时机调用哪些现有检查，什么时候提醒或阻断 |
+| [View 2D](architecture/02d-app-navigation.md) | App 入口与状态图 | 怎样管理工作环境、看见能力，并区分已配置与实际生效 |
+| [View 2E](architecture/02e-portable-environment.md) | 环境包与安装图 | 复杂技能、插件和资料怎样分享，怎样在指定 Mode 安装 |
+| [View 2F](architecture/02f-model-adaptation.md) | 模型与应用时序图 | Mode 如何关联 Model，怎样应用到不同宿主而不携带秘密 |
+| [View 2G](architecture/02g-agent-cli.md) | Agent CLI 与 App 同源管理 | 读取、候选验收、提交及框架/内容版怎样共用同一实现 |
+| [View 3](architecture/03-task-execution.md) | 运行时序图 | 一个普通 Goal 从进入到交付怎样发生 |
+| [View 4](architecture/04-content-changes.md) | 变更时序图 | Skill / Mode 的增删改查怎样与普通业务内容隔离 |
+| [View 5](architecture/05-capability-lifecycle.md) | 生命周期状态图 | 外部能力从发现到采用、合并、依赖、变体、适配或归档怎样流转 |
+| [View 5B](architecture/05b-complex-repositories.md) | 复杂仓库拆解图 | 一个外部仓库应该变成一个 Skill、多个 Skill、共享 Runtime 还是 Adapter |
+| [View 5C](architecture/05c-installation-binding.md) | 安装与 Mode 绑定时序图 | 用户明确要求引入时，如何直接安装并只绑定指定 Mode |
+| [View 6](architecture/06-mode-skill-architecture.md) | 能力图 | Mode 怎样选择 Skill 子图而不退化成固定 Workflow |
+| [View 7](architecture/07-change-radius.md) | 决策图 | 用户明确反馈应该落在 Case、Skill、Mode 还是 Environment |
+| [View 7B](architecture/07b-mode-evolution.md) | Mode 决策图 | 什么时候新建、修改、合并或退出一个 Mode |
+| [View 7C](architecture/07c-learning.md) | 培养循环与研究映射 | 借鉴 EvoMap 的哪些经验机制，哪些不采用，怎样保持轻量 |
+| [View 8](architecture/08-host-projections.md) | 部署图 | 同一真源怎样投影到 Codex、Claude Code 与 DeepSeek Harness |
 | View 9 | 迁移图 | 当前已经完成什么、还差什么、哪些旧结构必须删除 |
 
 ## 核心对象边界
 
-### 2026-09-09 同步与配置闭环（用户要求继续开发）
-
-目标不是再交一个浏览器，而是让用户选定 Mode 后能安装、迁移、补齐依赖并复查。保持现有 App / 原生 Agent / 本地文件的边界；不新增业务调度器。
-
-同步与配置沿用现有边界，验证范围统一见 View 9：
-
-1. **用户级同步**：`user_projection.py`、CLI、桌面桥接和应用弹窗。Codex / Claude 分别使用真实原生用户目录，支持自定义配置目录；同步前展示新增、更新、移出及同名冲突。只更新 ASL 自己管理且未被另改的内容，保留其他技能和用户说明。测试：独立 home 中两宿主同步、重复执行、切 Mode、冲突、回滚与来源变更。
-2. **本机配置检查**：根据所选 Mode 的完整 Skill、原生依赖声明和当前机器检测结果生成缺项清单。工具存在、配置存在、实际工作成功分开表达，未知不能显示为已就绪。测试：缺少运行时、MCP 未连接、工具路径变化、技能只提供说明的情形。
-3. **Agent 配置助手**：用户点击后，把 Mode、技能原文位置、来源、安装说明与本机缺项交给已安装的原生 Agent；继续使用它自己的模型、权限和登录机制，不直连另一个模型 API。配置后回到 App 复查。第三方安装命令不由市场字符串直接执行，密钥和登录状态不放进分享包。
-4. **交付**：沿用简洁界面接通同步状态、重试和配置入口，更新 Windows 便携 App，完成真实文件同步及原生 Agent 接收任务的检查；代码分步提交、同步公开仓库，当前真实状态仍集中在 View 9。
-
-参考 [CC Switch 的 Skill 同步实现](https://github.com/farion1231/cc-switch/blob/main/src-tauri/src/services/skill.rs)：保留单份技能源、原生目标目录和受管同步；不搬入其数据库或全库启用策略。按当前 [Codex Skill 目录](https://learn.chatgpt.com/docs/build-skills) 和 [Claude 用户目录](https://code.claude.com/docs/en/claude-directory) 分别适配，不把两者的全局目录误认为同一个。
-
-### 2026-09-09 产品改版执行约定（用户已确认，未完成项不得计为交付）
-
-首版桌面入口仅有查看、ASL 快照往返和项目投影。本轮已补上 Mode / Skill 编辑、用户级同步、本机检查与原生配置助手入口，但**不等于完整工作环境管理产品已经完成**。配置助手能够启动与第三方模型实际完成配置是两件事；真实宿主会话、跨电脑及市场采用仍有缺口，验证范围只在 View 9 汇总。
-
-- **产品结构：**真实技能库 → 工作模式 → 技能架构图 / 技能分类 / 技能列表 → 详情侧栏。架构图一个技能一个节点，不再分关系图和层次图。另设发现与 Agent 配置页面。主界面不展示协议说明和运行日志；示例始终显式标记，不冒充用户内容；连接技能库不等于给 Agent 应用配置。
-- **数据边界：**架构图读取当前 Mode 的真实技能与明确维护的关联，不从软件依赖或分类猜测工作逻辑，不是 Workflow 或第二路由器。App 偏好留在本机，业务内容继续留在原文件。
-- **作用范围：**每次应用显示目标 Agent、实际位置、影响范围和变更预览。项目、当前用户的全部项目、DeepSeek Preset 分开表达；宿主不支持的范围不可伪装成可用。ASL 只管理自己的内容，不能宣称屏蔽了宿主原有全局技能。用户级能力和机器所有用户级能力不是同义词。
-- **组合与市场：**区分可迁移 Skill / ASL Mode 包与 DSH 专用 Bundle；市场收录不代表跨宿主兼容。发现、内容采用、原生依赖安装、账号连接、Mode 引用是不同操作。复杂 CLI / Agent Reach 显示真实依赖与配置缺口；不把任意市场命令直接当成可执行 Shell。
-- **交互实现参考：**借鉴 [CC Switch 的技能与 MCP 管理](https://github.com/farion1231/cc-switch/tree/main/src/components)、[Mermaid Live Editor 的图形查看交互](https://github.com/mermaid-js/mermaid-live-editor/tree/develop/src/lib)、[DSH Market 的目录与安装分离](https://github.com/dsh-market/dsh-market/tree/main/src)。保留必要许可；借用成熟组件，不复制它们整个后端或用户目录同步策略。
-
-实施顺序与验收：
-
-1. `workspace.py` / 管理接口 / 回归测试：补齐 Mode 与 Skill 的增改、移出和归档预览，检查引用影响、并发修改、失败恢复；所有写入测试使用隔离目录，不改真实技能库。
-2. `desktop/`：改为成熟组件驱动的桌面管理界面，接入真实库、能力图、编辑器和配置范围；用实际 4 个 Mode、37 个去重 Skill 检查，不用示例充当产品验收。
-3. 市场与连接：先贯通可核实的目录发现和本地采用；各宿主原生安装 / 配置按实际支持接线。每项分别记录“已实现 / 待接入”，不以打开官网冒充自动安装。
-4. 可用性验收：键盘、窄窗口、空态、失败重试、编辑后刷新、作用范围预览、冲突保护与导入往返；再同步本架构状态，分步提交。测试通过与宿主运行成功分别报告。
-
-| 对象 | 它是什么 | 它不是什么 | 由谁改变 |
-| --- | --- | --- | --- |
-| Harness System | 确定性核心、维护保护、访问面和宿主适配 | 第二个 Agent、第二调度器、业务 Mode | Harness 代码与确定性规则变更 |
-| ASL App（Windows 便携版） | Mode / Skill 管理、能力地图、包导入 / 分享、市场浏览、项目 / 用户级应用、本机检查与原生配置助手 | 另一个聊天 Agent、私有的第二份内容数据库 | 调用同一 Harness 核心，不另写业务真源 |
-| 可迁移环境包（首版已实现） | 选定 Mode 与完整 Skill 闭包的目录 / ZIP 快照；运行依赖协调待补 | 整机备份、凭据包、已安装的 Runtime | 导出自动生成；接收方采用后独立维护 |
-| Personal Environment | 用户本地 Git 管理的唯一运行真源 | 上游仓库的镜像、一次 Case、宿主缓存 | 用户授权下由当前 Host 经 Guards 修改 |
-| Skill | 可以独立承担责任的完整本地能力包 | Prompt 碎片、一个 Workflow 节点、裸 MCP/API | 用户明确指定引入时可直接本地化；其余不确定变化可先隔离 Trial |
-| Mode | 一种可反复进入的广域工作状态；选择显式 Skill 根 | Domain、固定顺序、个人能力全集、系统维护功能 | 用代表性 Case 验证最小 Mode diff |
-| Case | 本次任务的材料与产物的概念性称呼，可以就是现有项目 | 强制目录名、独立工程层、长期技能库 | 按用户指定的项目与交付位置保存；工具缓存遵循责任 Skill |
-| Candidate | 尚未决定是否采用的外部能力线索 | 必经审批状态、可以直接运行的正式能力 | 仅在来源或采用方向还不确定时记录 |
-| Trial | 与正式 Skill 隔离的可选试验能力 | 每次引入都必须经过的关卡 | 仅在安全、重合、运行方式或价值仍不确定时使用 |
-| Feedback | 用户明确表达、可能影响长期能力的证据 | 点击、沉默、耗时等含义不明的行为 | 只记录用户明确反馈 |
-| Archive | 拒绝、退出、被替代或迁移后的追溯证据 | 活动能力面、待执行队列 | 经影响检查后归档 |
-| Host Projection | 当前 Mode 在宿主原生目录中的生成视图 | 运行真源、兼容发行层 | Harness 从 Environment 确定性重建 |
-
-**Skill 自主性（用户确认）：** A、B 两个业务 Skill 自身的规则保持不动；有冲突时，由当前 Host 根据用户目标、具体 Skill 和宿主约束判断。Harness 不统一规定读取多少文件、必须全部加载参考材料或怎样执行业务，也不通过改写 Skill 解决语义分歧。“完整本地包”描述存储与交付完整性，不等于“所有内容必须进入每次上下文”。
-
-**持续保留的反馈边界：**保留 `SOURCE.md` 来源入口及上游追踪；Hermes 的技能与记忆关系图保留为参考，尚未实现。README / WORKSPACE 负责介绍和导航，采用路径统一见本文件 View 5 / 5C。当前文件结构以 SPEC 与校验器为准；App 和迁移包已开始实现，模型配置、原生依赖协调与培养增量仍是设计，详见 View 9。
-
-2026-09-09 补充：此前已按授权退掉业务 Skill 中失效的调度器、索引与旧 domain 调用要求，保留业务方法、质量标准和来源追溯。本次在此基础上调研 DeepSeek 插件与 EvoMap，修订总图和产品实施路线；不安装外部运行时，不修改业务 Skill、宿主设置或模型账号。
-
----
+见[对象、产品与运行边界](architecture/boundaries.md)。
 
 ## Master · 总架构图
 
-回答：一个独立 App 怎样管理、分享并培养工作环境，又怎样让不同 Agent 真正使用它？
-
-> **产品目标：切换的不是一组提示词，而是一套工作环境。** App 是用户入口；Environment 是可编辑、可带走的内容；Harness 是管理与适配底座；Codex、Claude Code、DeepSeek Harness 仍负责实际工作。下图的连线是所有权、数据与反馈关系，不是业务执行顺序。绿色为现有能力，橙色为本次补齐的设计、尚未实现的产品能力。
-
-```mermaid
-%%{init: {"theme":"base","themeVariables":{"fontFamily":"Microsoft YaHei","fontSize":"16px","clusterBkg":"#f8fafc","clusterBorder":"#cbd5e1"},"flowchart":{"nodeSpacing":35,"rankSpacing":55,"curve":"basis"}}}%%
-flowchart TB
-    USER["用户<br/>管理自己的工作环境，继续用熟悉的 Agent"]
-    APP["独立 ASL App · Windows 便携版<br/>本机整理提示词 / 模式 / 技能图 / 编辑 / 导入 / 更新 / Agent 配置<br/>本地文件可读写；完整跨机运行验收待补"]
-
-    subgraph SUPPLY["外部供给"]
-        SOURCES["GitHub / 公开插件目录 / KOL 推荐<br/>Agent Skill Library 装填版 / 他人环境包"]
-    end
-
-    subgraph MANAGE["Harness 管理机制 · 不是第二个 Agent"]
-        INTAKE["导入与安装协调 · 部分实现<br/>本机 / GitHub 发现 → 添加到 Mode<br/>配套内容提示；不自动安装或拆分"]
-        UPSTREAM["云端 Mode 与更新 · 已实现<br/>连接即浏览模式库及子模式，不先导入<br/>保存时建立完整本地副本；上游检查与差异更新"]
-        PORTABLE["可迁移包 · 内容往返已实现<br/>Mode + 完整 Skill + 指纹清单<br/>运行依赖安装与连接待补"]
-        CORE["已有 CLI 与保护<br/>扫描 / 校验 / 闭包 / 视图 / 单 Skill 同步<br/>路径、秘密、用户修改冲突、文件回滚与指纹"]
-        EDIT["内容管理 · 代码已测<br/>Mode 创建 / 修改 / 复制 / 归档<br/>完整技能包浏览与文件编辑 / 影响预览"]
-        STEWARD["现有 AI 的整理入口 · 提示词已实现<br/>按工作目的理解场景，读取授权本地文件<br/>沿用 / 调整 / 新建 Mode；不自动启动 CLI"]
-        SETUP["本机配置交接 · 代码已有<br/>Mode + 原始 Skill + 本机缺项<br/>启动原生 Claude / Codex，结束后复查"]
-        LOCAL["本机发现 · 已验证<br/>标准技能 / MCP 位置 + 已登记项目<br/>Mode 同名与同源分开；不扫描硬盘"]
-        MCPEDIT["原生 MCP 管理 · 已验证<br/>Claude / Codex 用户与项目范围<br/>逐条编辑 / 停用 / 版本检查 / 备份"]
-        CONNECTIONS["Agent 中的模式 · 配置级管理<br/>读取原生回执并核对实际文件<br/>查看 / 更新 / 停用；不影响非受管内容"]
-        LEARN["培养与推荐 · 待开发<br/>相关经验召回、合并、更正与撤回<br/>没有积分或随机变异调度器"]
-    end
-
-    subgraph ENV["用户本地 Environment · 当前运行与维护内容，可用 Git 管理"]
-        ROOT["Environment 文件<br/>空白版与装填版同结构<br/>不是 App 私有数据库"]
-        MODES["Mode · 工作目的与场景环境<br/>不是个人 / 职业；同一人有多个 Mode<br/>选择完整 Skill 子图，不保存固定执行顺序"]
-        SKILLS["完整 Skill 包 · 已有<br/>方法 / scripts / assets / references<br/>SOURCE / 必要原生依赖说明"]
-        CONTEXT["个人边界、资料与明确反馈<br/>PROFILE / Mode 说明 / 培养区<br/>经验关联与管理界面待完善"]
-        MAP["Mode 技能架构 · v0.4 开发已接入，验收见 View 9<br/>常用工作范式 + 通用能力 · 完整 Skill 是节点<br/>描述 / 成员 / 有含义的关联 → Mermaid；App / Agent 同源编辑"]
-        ROOT --> MODES
-        MODES -->|范式或通用能力归属覆盖全部成员| MAP
-        MODES -->|显式选择能力| SKILLS
-        ROOT --> CONTEXT
-        SKILLS --> MAP
-        CONTEXT -.关联待完善.-> MAP
-    end
-
-    subgraph NATIVE["本机依赖与账号 · 不随包分享"]
-        RUNTIME["原生包管理器 / MCP / Plugin<br/>安装可复用，Mode 可见范围单独控制"]
-        MODEL["Model 配置入口 · 待开发<br/>复用本机提供商与账号<br/>调用、登录和授权归宿主"]
-    end
-
-    subgraph HOSTS["宿主适配 · 投影代码已有，完整应用与实机验收待补"]
-        ADAPTER["同一环境，按宿主翻译<br/>不支持的能力明确提示"]
-        DSH["DeepSeek Harness<br/>Mode → Preset<br/>依赖 → Profile / Bundle"]
-        CC["Claude Code<br/>项目 / 当前用户的 Skills 与指令<br/>原生 Plugin / MCP / 模型配置"]
-        CX["Codex App<br/>项目 / 当前用户的 Skills 与指令<br/>原生 Plugin / MCP / 模型配置"]
-        WB["WorkBuddy<br/>项目 .codebuddy/skills + CODEBUDDY.md<br/>文件投影已测；原生会话待验收"]
-        FUTURE["Hermes / OpenClaw 等<br/>适配边界已预留<br/>尚未实现兼容"]
-        PROJECTION["投影、Preset 与配置回执<br/>派生物，不是内容真源"]
-        ADAPTER --> DSH
-        ADAPTER --> CC
-        ADAPTER --> CX
-        ADAPTER --> WB
-        ADAPTER -.后续.-> FUTURE
-        DSH --> PROJECTION
-        CC --> PROJECTION
-        CX --> PROJECTION
-        WB --> PROJECTION
-    end
-
-    HOST["当前 Host · 唯一业务执行者<br/>原生模型、工具、会话、权限和 Agent Loop"]
-    CASE["当前任务与交付<br/>素材 / 工作文件 / 产物"]
-    HOOK["已有原生 Hook 接线<br/>检查当前 Mode 与投影<br/>实际激活仍须验收"]
-    DSH_UI["DeepSeek 内的 ASL 管理入口 · 后续<br/>作为原生插件使用同一环境和管理机制"]
-
-    USER --> APP
-    APP -->|管理操作| INTAKE
-    APP -->|可取消读取，不锁住导航| LOCAL
-    LOCAL -->|复用已有内容，提示配置位置| INTAKE
-    APP -->|选定范围并确认| MCPEDIT
-    MCPEDIT -->|仅改原生声明，登录仍归宿主| RUNTIME
-    APP -->|来源与更新窗口| UPSTREAM
-    UPSTREAM -->|完整目录直接呈现；缓存不是工作区| APP
-    APP -->|按 Agent 查看真实配置| CONNECTIONS
-    PROJECTION -->|用户 / 项目 / Preset 回执| CONNECTIONS
-    CONNECTIONS -->|复用验证与受管修改| CORE
-    CONNECTIONS -.配置核对不等于真实任务成功.-> APP
-    SOURCES -->|云端版本基准，不在 App 硬编码 Mode| UPSTREAM
-    UPSTREAM -->|用户确认后，复用完整 Mode 包导入| PORTABLE
-    MODES -->|SOURCE 中的仓库、链接与提交| UPSTREAM
-    UPSTREAM -.有新提交时提醒，不自动覆盖.-> APP
-    APP -->|已授权的内容修改| EDIT
-    EDIT -->|验证 / 回滚 / 同步视图| CORE
-    EDIT -->|只修改所选内容| ROOT
-    APP -->|导入与分享| PORTABLE
-    APP --> MODEL
-    APP -->|检查并交给原生 AI 配置| SETUP
-    SETUP -->|安装 / 授权 / 实测仍由原生 Agent| RUNTIME
-    RUNTIME -.本机复查，不以会话退出冒充通过.-> SETUP
-    MAP -.校验后呈现；本地变更刷新.-> APP
-    APP -.复制提示词，由用户交给正在使用的 AI.-> STEWARD
-    SOURCES -->|选择采用| INTAKE
-    SOURCES -.发现与比较.-> STEWARD
-    INTAKE -->|完整本地化与绑定| ROOT
-    INTAKE -->|安装或复用| RUNTIME
-    ROOT -->|选中 Mode 的闭包| CORE
-    CORE --> ADAPTER
-    MODEL --> ADAPTER
-    RUNTIME -->|实际依赖| HOST
-    PROJECTION -->|宿主发现并加载| HOST
-    USER -->|正常工作| HOST
-    HOST --> CASE
-    HOST --> HOOK
-    HOOK -.复用现有检查.-> CORE
-    CASE -->|仅明确长期反馈| LEARN
-    LEARN --> STEWARD
-    STEWARD -->|最小变更| ROOT
-    ROOT -->|选择公开内容| PORTABLE
-    PORTABLE -.分享后可再采用.-> SOURCES
-    DSH_UI -.复用同一入口.-> INTAKE
-
-    classDef locked fill:#dbeafe,stroke:#2563eb,color:#1e3a8a,stroke-width:2px;
-    classDef done fill:#dcfce7,stroke:#16a34a,color:#14532d;
-    classDef pending fill:#ffedd5,stroke:#ea580c,color:#7c2d12;
-    classDef generated fill:#f3f4f6,stroke:#6b7280,color:#1f2937,stroke-dasharray:4 3;
-    classDef external fill:#f5f3ff,stroke:#7c3aed,color:#4c1d95;
-    class USER,HOST,ROOT,MODES locked;
-    class SKILLS,CORE,EDIT,STEWARD,CASE,SETUP,UPSTREAM,LOCAL,MCPEDIT,CONNECTIONS done;
-    class APP,INTAKE,PORTABLE,LEARN,CONTEXT,MODEL,ADAPTER,DSH,CC,CX,WB,FUTURE,HOOK,DSH_UI pending;
-    class PROJECTION,MAP generated;
-    class SOURCES,RUNTIME external;
-
-```
-
-**总图中的四个循环：**工作循环产出结果；安装循环把外部能力放进指定 Mode；迁移循环把同一环境交给另一台机器或另一种 Agent；培养循环把明确反馈变成适用范围更清楚的能力。四者互相连接，但不要求每次任务都走一遍。
-
-**不可混淆的边界：**
-
-- 空白 Harness 和 Agent Skill Library 使用同一环境结构，区别在内容，不维护两个架构分支。
-- 一个 Mode 按工作目的、场景和环境定义，不按人、职业或人设定义；一个人有多个 Mode。环境内可以存很多能力，进入某 Mode 只提供它选择的 Skill 子图，同一完整 Skill 可以被多个 Mode 引用；这不是操作系统级安全隔离。
-- 业务方法由完整本地 Skill 承载；插件执行代码、模型服务、登录与沙箱沿用宿主，不把基础设施硬包成伪业务 Skill。
-- App 管理内容与接入，不替 Host 回答用户或调度业务。语义冲突归 Host 与具体 Skill，确定性结构错误才交 CLI / Hook。
-- 云端仓库是已绑定 Mode 的上游版本基准；本地文件是当前运行和维护的副本，可以有明确本地修改。宿主投影可重建；分享包带选定内容和可选来源记录，不依赖分享者的电脑。云端检查不等于自动覆盖或把本地修改推回仓库。
-- “一切皆市场”的首期实现是**可分享的环境与能力目录**，复用 GitHub、已有插件市场和来源记录，不先造交易平台、中心账号或积分。
-- Mode、Model 分开：前者决定工作环境，后者决定哪个模型做事。切换 Mode 可以关联模型偏好，但不能假装所有宿主支持同一模型接口。
-
----
+见[Master 专项视图](architecture/00-master.md)。
 
 ## View 1 · 系统上下文图
 
-回答：ASL 在整个使用场景中处于什么位置，谁负责执行，什么是真源？
-
-```mermaid
-flowchart LR
-    USER["用户<br/>Goal · 材料 · 明确反馈 · 高影响授权"]
-    HOST["当前 Host · 唯一执行者<br/>Codex App / Claude Code / DeepSeek Harness"]
-    HARNESS["ASL Harness<br/>空白框架 · 校验 · 维护保护 · 投影"]
-    LIBRARY["Agent Skill Library<br/>装填后的业务 Environment 发行版"]
-    ENV[("Personal Environment<br/>用户本地 Git 运行真源")]
-    CASE["Case<br/>一次目标、材料、证据、产物与交付"]
-    EXTERNAL["外部能力来源<br/>Skill / Prompt / MCP / API / Agent / Model / Script"]
-    PROJECTION["Host Projection<br/>可删除、可重建"]
-
-    APP["独立 ASL App · 桌面预览版<br/>查看 / 内容迁移 / 宿主文件应用<br/>连接与培养待补"]
-    USER -->|管理自己的工作环境| APP
-    APP -->|调用同一底座| HARNESS
-    USER -->|提出目标与确认边界| HOST
-    HARNESS -->|初始化或维护| ENV
-    LIBRARY -->|选择、复制或 Fork| ENV
-    ENV -->|Profile + 当前 Mode + Skill Catalog| HOST
-    HOST -->|按需读取完整 Skill| ENV
-    HOST -->|完成真实工作| CASE
-    CASE -->|明确能力缺口或长期反馈| HOST
-    EXTERNAL -->|明确指定则直接本地化；不确定时可先 Candidate / Trial| ENV
-    ENV -->|确定性生成| PROJECTION
-    PROJECTION -->|宿主发现当前 Mode| HOST
-
-    classDef locked fill:#dbeafe,stroke:#2563eb,color:#1e3a8a,stroke-width:2px;
-    classDef done fill:#dcfce7,stroke:#16a34a,color:#14532d;
-    classDef generated fill:#f3f4f6,stroke:#6b7280,color:#1f2937,stroke-dasharray:4 3;
-    classDef source fill:#f5f3ff,stroke:#7c3aed,color:#4c1d95;
-    classDef pending fill:#ffedd5,stroke:#ea580c,color:#7c2d12;
-    class APP pending;
-    class USER,HOST,HARNESS,LIBRARY,ENV locked;
-    class CASE done;
-    class PROJECTION generated;
-    class EXTERNAL source;
-```
-
-关键边界：Harness 不替 Host 执行业务 Goal。外部业务能力通过责任 Skill 本地化；宿主已有模型、工具和插件执行机制无需再包一层。用户明确要求“找来并融入”时，可以检查相关来源后直接采用，不必先跑 Trial 或效果 Case。具体阅读范围不由 Harness 统一规定。
-
----
+见[View 1 专项视图](architecture/01-context.md)。
 
 ## View 2 · Harness 与 Environment 组件图
 
-回答：空白 Harness 内有什么，个人 Environment 内有什么，两者怎样分工？
-
-```mermaid
-flowchart TB
-    subgraph SYSTEM["Harness System · 始终存在 · 不是业务 Mode"]
-        CORE["Deterministic Core · 已实现<br/>scan / validate / resolve / render / project / verify / export"]
-        STEWARD["Environment Steward · 已实现系统契约<br/>按任务检查 / 关系判断 / 本地化 / 最小影响半径<br/>Runtime 边界 / 单 Mode 绑定 / CRUD 保护"]
-        ACCESS["Environment Access · 已实现最小访问面<br/>常驻摘要 / 按需读取 / WORKSPACE 视图"]
-        GUARDS["Deterministic Guards · 已实现<br/>结构 / 依赖 / 生命周期 / Secret 文件名 / 路径<br/>旧布局 / 用户文件碰撞 / 来源漂移"]
-        CORE --> GUARDS
-        STEWARD --> GUARDS
-    end
-
-    subgraph ENV["Personal Environment · 唯一运行真源"]
-        PROFILE["PROFILE.md<br/>跨 Mode 精简长期边界"]
-        SKILLS[("skills/<skill-id><br/>完整正式 Skill Pool")]
-        MODES[("modes/<mode-id><br/>业务工作场 / Skill 子图")]
-        LEARNING["candidates / trials / feedback / archive<br/>培养与追溯证据，不进入活动能力面"]
-        VIEW["WORKSPACE.md<br/>确定性派生的人机共读地图"]
-        GIT["Git<br/>历史、diff 审计和恢复"]
-        SKILLS -->|requires 硬依赖| SKILLS
-        MODES -->|显式 Skill 根| SKILLS
-        PROFILE -.摘要.-> VIEW
-        SKILLS -.能力地图.-> VIEW
-        MODES -.Mode 地图.-> VIEW
-        LEARNING -.状态摘要.-> VIEW
-        PROFILE --> GIT
-        SKILLS --> GIT
-        MODES --> GIT
-        LEARNING --> GIT
-    end
-
-    CORE --> ENV
-    ACCESS --> ENV
-    STEWARD -->|经 Guards 校验后修改| ENV
-
-    classDef locked fill:#dbeafe,stroke:#2563eb,color:#1e3a8a,stroke-width:2px;
-    classDef done fill:#dcfce7,stroke:#16a34a,color:#14532d;
-    class CORE,STEWARD,ACCESS,GUARDS,PROFILE,SKILLS,LEARNING,VIEW,GIT done;
-    class MODES locked;
-```
-
-这里没有管理 Mode。能力发现、培养、增删改查保护和记忆访问属于 Harness 系统层；内容创作、产品分析和投资研究才属于业务 Mode。
-
-Harness 的 Hook / Guard 只处理可确定的边界，不接管业务判断：
-
-| 级别 | 处理方式 | 典型对象 |
-| --- | --- | --- |
-| 硬阻断 | 拒绝相应写入或投影，返回具体错误 | 结构非法、正式 Skill / Candidate 无来源、依赖缺失/循环、Trial 不完整、Secret 文件名、路径逃逸、覆盖非受管文件、受管内容指纹不符、固定 Workflow/Run 回流 |
-| 软提醒 | 任务可继续，只提示应刷新或检查 | 缓存或可重建依赖、`WORKSPACE.md` 过期、宿主投影漂移、Candidate 未决定、上游出现新版本、两个 Skill 可能重合 |
-| Host + 用户判断 | 不伪装成确定性规则；当前 Host 起草方案，高影响动作由用户授权 | 是否需要新 Mode、候选是否值得采用、Skill 应合并还是独立、是否发布或外部写入 |
-
-这样既防止 Environment 漂移，也不会因为一个缺失字段、过期视图或语义不确定就阻断用户的普通 Goal。
-
----
+见[View 2 专项视图](architecture/02-components.md)。
 
 ## View 2B · 原生 Harness 边界与 Environment Sync CLI
 
-回答：ASL 怎样更像原生 Harness，而不是再造一个 Codex、Claude Code 或 DeepSeek Harness？两份 Environment 又怎样同步？
-
-```mermaid
-flowchart LR
-    subgraph HOST["Host-native Runtime · ASL 不复制"]
-        LOOP["Model / Agent Loop"]
-        SESSION["Session / Context"]
-        TOOLS["Tools / MCP / Plugins / Search"]
-        AUTH["Host Permissions / Credentials"]
-    end
-
-    subgraph ASL["ASL Harness · 本地能力环境层"]
-        VALIDATE["validate / resolve / guards"]
-        STATE["state · 已实现<br/>紧凑读视图，不建状态库"]
-        SYNC["environment.sync · 已实现<br/>原子导入 + SHA-256 记录"]
-        PROJECT["atomic project / verify / preset export"]
-        NEEDS["Runtime requirements<br/>从 Skill 说明派生 MCP / command / env 提示"]
-        HOOKS["Host Hook bridge · 已实现<br/>Codex / Claude Plugin + DeepSeek Preset<br/>不自建 Runtime"]
-        STEWARD["asl-environment<br/>Host-native 管理入口"]
-    end
-
-    subgraph ENVS["Independent Git Environments"]
-        SOURCE["Source Environment<br/>例如 Agent Skill Library"]
-        TARGET["Target Environment<br/>例如 Personal Environment"]
-        MODE["Target Mode<br/>可选显式绑定"]
-    end
-
-    SOURCE -->|check / sync one complete Skill| SYNC
-    SYNC -->|copy or update + Git diff| TARGET
-    SYNC -->|optional explicit reference| MODE
-    TARGET --> VALIDATE --> PROJECT
-    TARGET --> STATE
-    MODE --> VALIDATE
-    STEWARD --> SYNC
-    PROJECT -->|native Skill 目录 / 指令面 / Preset| HOST
-    TARGET --> NEEDS
-    NEEDS -->|宿主原生检查与配置| HOST
-    HOOKS -->|在真实生命周期点调用现有 CLI| VALIDATE
-    HOST --> HOOKS
-    HOST -->|唯一执行业务 Goal| TARGET
-
-    classDef native fill:#f5f3ff,stroke:#7c3aed,color:#4c1d95;
-    classDef done fill:#dcfce7,stroke:#16a34a,color:#14532d;
-    classDef optimize fill:#ffedd5,stroke:#ea580c,color:#7c2d12;
-    classDef truth fill:#dbeafe,stroke:#2563eb,color:#1e3a8a,stroke-width:2px;
-    class LOOP,SESSION,TOOLS,AUTH native;
-    class VALIDATE,STATE,SYNC,PROJECT,NEEDS,STEWARD,HOOKS done;
-    class SOURCE,TARGET,MODE truth;
-```
-
-“更原生”不是让 ASL 拥有自己的 Agent Loop、会话数据库、工具执行器、权限系统或插件 Runtime，而是让 ASL 通过每个 Host 已经认可的 Skill、指令文件、项目目录和 Preset 接口工作。办公和研究场景里最常见的是 Skill、Tools、MCP、搜索和插件；模型、沙箱、凭据与授权继续使用宿主默认能力。ASL 只补宿主没有统一解决的个人能力环境、Mode、来源、本地采用、确定性校验和投影。
-
-这套工作环境不是由一种技术单独完成，而是五个很薄的部分协作：
-
-| 部分 | 在 ASL 中负责什么 | 不负责什么 |
-| --- | --- | --- |
-| Git Environment | 保存 Profile、Skills、Modes、来源和明确反馈，是可复制的个人能力真源 | 不运行 Agent |
-| CLI | 安装、检查、同步、选择 Mode、生成或验证宿主视图 | 不理解业务、不调度工作流 |
-| Host Adapter | 把同一 Mode 翻译成目标 Agent 能原生发现的 Skill、规则和 Preset | 不复制宿主已有 Tool、Agent、权限和模型 |
-| Hook | 在会话开始、受管内容修改后或提交前调用现有 CLI 检查 | 不监控所有行为，不靠模型做 Review |
-| GitHub Actions / CI | clone 或提交后运行同一组校验，保证仓库版本可用 | 不进入本地会话，不替代 Hook 或 Host |
-
-以上是已有底座。产品入口已确定升级为独立 App：用户管理自己的多个工作环境，选择目标 Agent 并应用，或把培养过的环境分享出去。CLI 承担确定性操作，原生 Hook 提供检查时机，CI 守住仓库；它们是 App 复用的底层，不是要求普通用户自己操作的界面。
-
-已有单 Skill 同步接口如下；本次仅更新架构设计，不增加后台服务：
-
-```bash
-asl-harness environment.sync \
-  --source ./agent-skill-library \
-  --target ./personal-harness \
-  --skill x-post-card-studio \
-  --mode creator-studio
-```
-
-| 行为 | 契约 |
-| --- | --- |
-| 来源与目标 | 都必须是可通过 `workspace.validate` 的本地 Environment；CLI 不负责全网搜索或 Git clone |
-| 同步单位 | 一次同步一个完整 Skill package；不拆文件、不把 Prompt、脚本或 Runtime 裸同步 |
-| Mode | `--mode` 可选；提供时只修改目标 Environment 的一个明确 Mode，其他 Mode 不变 |
-| 相同内容 | 返回 no-op，不制造提交、投影或新版本号 |
-| 目标不存在 | 完整复制 Skill，并保留 `SOURCE.md`、运行依赖说明、scripts、references、assets 与测试 |
-| 目标已修改 | 默认拒绝静默覆盖并展示差异；只有用户显式选择替换时才更新 |
-| 检查模式 | `--check` 只报告将新增、更新、冲突或保持不变的内容，不写文件 |
-| 完成后 | 校验目标 Environment、刷新人机共读视图并输出来源/目标 HEAD、package SHA-256、受影响路径与 Git 状态；不自动 commit、push 或刷新所有宿主投影 |
-| 失败 | Skill、Mode 引用与 `WORKSPACE.md` 作为一次事务回滚，不留下只复制一半的 Environment |
-
-同步结束后，两份 Environment 仍是两个独立 Git 真源。再次运行命令可以显式吸收上游更新，但不会形成实时链接、共享 Skill 目录、后台 watcher 或自动升级关系。宿主投影仍由现有 `host.project` / `deepseek.preset.export` 单独负责。
-
-### Skill 运行依赖与跨 Agent 接入
-
-兼容信息留在责任 Skill 的正文和已有 package 文件内，不再保留独立连接层或空目录。跨 Agent 复用以完整 Skill、自带脚本、标准 MCP 服务为主。Skill 按需记录 MCP 名称、用途、检查方式、环境变量名称、宿主差异与缺失时处理。当前 Mode 的结构化配置只选择 Skill；后续 App 的可选模型偏好、内容关联与安装增量见 View 2E / 2F，不把设计中的配置说成目前可执行。
-
-当前接入说明可识别 `SKILL.md` 的依赖/环境检查章节和 `SOURCE.md` 的 Runtime dependencies 记录，只提示去哪里看，不是依赖已安装、已登录或可执行的证明。Host 在实际使用某 Skill 时依据它自己的检查方法确认就绪；不批量安装，不运行集中式依赖调度器。尚未实现统一的自动就绪诊断。
-
-Codex、Claude Code、DeepSeek Harness、OpenCode、Trae、ZCode 或其他 Agent 已经提供的模型、Tool、Agent、Plugin、沙箱和权限继续由各自管理。Harness 不复制它们，也不建立通用 Tool Registry。某个宿主能够原生接入 Skill 或 MCP 时，Adapter 只负责把同一份本地真源翻译到它认可的位置；不支持时给出可执行提示，不能伪装已经激活。GitHub Actions 不是交互式 Host，只复用 CLI 做仓库校验。
-
-### 最小 Hook 接线
-
-Hook 是宿主调用 Harness 检查的时机，不是新的工作流。会话开始、当前 Mode 相关文件写入后、停止前，复用当前 Mode 闭包校验与投影校验；全库 `workspace.validate` 留给维护与显式体检。候选、试验或无关 Skill 未写完不阻断日常 Mode。Codex 与 Claude Code 通过同一 Host Plugin 接线；DeepSeek Preset 装入官方 `@deepseek-ai/dsh-hooks-codex` 并通过命令参数指向自己的 Preset。没有 Hook 时可手动调用同一 CLI。
-
-Hook 在写入工具完成后报告当前 Mode 的确定性结构错误，要求 Host 修复；不是事前撤销器，也不证明错误一定由本次写入造成。普通业务内容、可选 MCP、过期视图和语义问题不参与硬阻断。删除、发布、付费、登录、外部写入和权限继续由宿主原生门禁处理。
-
----
+见[View 2B 专项视图](architecture/02b-runtime-sync.md)。
 
 ## View 2C · Host-native Hook 接线架构
 
-回答：Hook 具体装在哪里、怎样找到当前 Environment / Mode、调用什么命令，以及结果怎样回到当前 Agent？
-
-```mermaid
-flowchart LR
-    subgraph NATIVE["Host 原生生命周期 · ASL 不复制"]
-        START["SessionStart<br/>启动 / 恢复 / 压缩后"]
-        WRITE["PostToolUse<br/>文件写入工具完成后"]
-        STOP["Stop / turn-stopping<br/>本轮准备结束"]
-        COMMIT["显式全库体检 / 可选 pre-commit<br/>未自动安装 Environment 提交门禁"]
-    end
-
-    subgraph PACKAGE["ASL Host Package · 每个宿主安装一次"]
-        CONFIG["Hook 配置 · 已实现<br/>Codex / Claude Plugin hooks.json<br/>DeepSeek Preset 官方 bridge"]
-        ADAPTER["薄 Hook Adapter · 已实现<br/>解析宿主事件 · 不保存状态"]
-    end
-
-    subgraph PROJECT["当前项目 · host.project 已生成"]
-        MANIFEST[".asl/host-projections/&lt;host-id&gt;/current.json<br/>environment · mode · hostId"]
-        PRESET["DeepSeek Preset marker<br/>.asl-preset-projection.json"]
-    end
-
-    subgraph CLI["既有 Harness CLI · 唯一检查实现"]
-        STATE["当前 Mode 闭包校验"]
-        VALIDATE["workspace.validate"]
-        VERIFY["host.verify / deepseek.preset.verify"]
-    end
-
-    subgraph RESULT["统一结果语义"]
-        PASS["PASS<br/>静默继续"]
-        WARN["WARN<br/>补充紧凑上下文，不阻断 Goal"]
-        BLOCK["BLOCK<br/>写后报告当前 Mode 错误<br/>要求修复，不自动撤销"]
-    end
-
-    START --> CONFIG
-    WRITE --> CONFIG
-    STOP --> CONFIG
-    CONFIG --> ADAPTER
-    MANIFEST --> ADAPTER
-    PRESET -.仅 DeepSeek Preset.-> ADAPTER
-    ADAPTER --> STATE
-    ADAPTER --> VERIFY
-    COMMIT --> VALIDATE
-    COMMIT --> VERIFY
-    STATE --> WARN
-    VALIDATE --> PASS
-    VALIDATE --> WARN
-    VALIDATE --> BLOCK
-    VERIFY --> PASS
-    VERIFY --> WARN
-    VERIFY --> BLOCK
-
-    classDef native fill:#f5f3ff,stroke:#7c3aed,color:#4c1d95;
-    classDef done fill:#dcfce7,stroke:#16a34a,color:#14532d;
-    classDef optimize fill:#ffedd5,stroke:#ea580c,color:#7c2d12;
-    classDef generated fill:#f3f4f6,stroke:#6b7280,color:#1f2937,stroke-dasharray:4 3;
-    classDef blocked fill:#fee2e2,stroke:#dc2626,color:#7f1d1d;
-    class START,WRITE,STOP,COMMIT native;
-    class STATE,VALIDATE,VERIFY done;
-    class CONFIG,ADAPTER done;
-    class MANIFEST,PRESET generated;
-    class PASS done;
-    class WARN optimize;
-    class BLOCK blocked;
-```
-
-### 安装与激活边界
-
-Hook 不属于业务 Mode，也不复制到每个 Skill。`asl-environment-host` 作为 Harness 的宿主包安装一次：Codex 和 Claude Code 由包内原生 Hook 配置调用同一薄 Adapter。DeepSeek Harness 不再重复实现一份 TypeScript Adapter；`deepseek.preset.export` 把同一命令 Hook 写进 Mode Preset，并用官方 `@deepseek-ai/dsh-hooks-codex` 将它接到 Cordis 生命周期点。Adapter 自身没有数据库、队列、事件日志或 Agent Loop。
-
-项目入口从 cwd 向上查找 `.asl/host-projections/<host-id>/current.json`。DeepSeek Preset 导出时把已有 Preset 路径写入 Hook 命令的 `--preset` 参数，因此即使业务 cwd 在别处，也能读取 `.asl-preset-projection.json`；在 Preset 目录内也可直接发现该标记。没有项目标记时静默返回；显式指定的 Preset 标记缺失时提醒重建，不猜 Mode、不扫描电脑。仍只复用现有 environment、mode、hostId，不新增状态文件。
-
-### 事件到检查的固定映射
-
-| 原生时机 | Adapter 先判断什么 | 调用的既有命令 | 对当前 Agent 的结果 |
-| --- | --- | --- | --- |
-| `SessionStart`：启动、恢复、压缩后 | 项目标记或显式 Preset | 当前 Mode 闭包 + 对应 `verify` 函数 | 注入 Mode、Skill 数量和漂移提醒；失败不阻断启动 |
-| `PostToolUse`：明确文件写入完成后 | 目标是否在当前 Mode 的 Skill、Mode、Profile、WORKSPACE 或投影 | 当前 Mode 闭包 + 对应 `verify` 函数 | 当前 Mode 确定性错误返回退出码 2；无关 Skill、培养区和普通产物不检查 |
-| `Stop`：本轮准备结束 | 是否有 ASL 标记 | 一次当前 Mode 闭包 + 对应 `verify` 函数 | 只提醒，不循环阻止停止；没有跨事件状态、Shell 追踪或增量缓存 |
-| 显式全库体检 / 用户自接 `pre-commit` | 用户主动运行 | `workspace.validate` | 仍严格检查全部正式与培养结构；未自动安装 Git Hook，现有仓库 CI 只运行 Harness 测试 |
-
-不接 `UserPromptSubmit`、`PreToolUse`、`SubagentStart`、`SubagentStop`：意图识别和任务路由属于当前 Host；删除、Shell、发布与登录的授权属于宿主权限；子 Agent 继承项目表面即可。除非出现已经被真实任务证明无法覆盖的故障，否则不增加更多 Hook 点。
-
-### 单次事件处理时序
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant H as Host 原生 Hook
-    participant A as 薄 Adapter
-    participant M as Projection Manifest
-    participant C as Harness CLI
-    participant G as 当前 Agent
-
-    H->>A: 原生事件 + cwd + tool/path 信息
-    A->>M: 查找本宿主 current.json / Preset marker
-    alt 没有 ASL 标记
-        A-->>H: PASS · 静默退出
-    else 找到 ASL 标记
-        M-->>A: environment + mode + hostId
-        A->>A: 判断是否与本事件相关
-        alt 不涉及受管内容
-            A-->>H: PASS · 不启动 CLI
-        else 需要检查
-            A->>C: 当前 Mode 闭包 + 对应 verify 函数
-            C-->>A: JSON + exit code
-            alt 正常
-                A-->>H: PASS
-            else 提醒或无法确定
-                A-->>G: WARN · 简短问题与建议命令
-            else 写入后检查发现当前 Mode 确定性错误
-                A-->>G: BLOCK · 精确路径、错误码、修复动作
-            end
-        end
-    end
-```
-
-### 三宿主实现映射
-
-| Host | 原生安装面 | ASL 使用的事件 | 实现约束 |
-| --- | --- | --- | --- |
-| Codex App / CLI | `asl-environment-host` Plugin 的 `hooks/hooks.json` | `SessionStart`、写入工具的 `PostToolUse`、`Stop` | 使用 Codex 原生信任与 matcher；Hook 命令只调用薄 Adapter，不写 `config.toml`，不接管 PermissionRequest |
-| Claude Code | 同一宿主包的 Claude Plugin Hook | `SessionStart`、写入工具的 `PostToolUse`、`Stop` | 使用 Claude 原生项目目录与退出码语义；不安装全局后台进程，不改用户已有 Hook |
-| DeepSeek Harness | Mode Preset 内的 `@deepseek-ai/dsh-hooks-codex` | `agent/session-start`、`tools/post-execute`、`agent/turn-stopping` | `deepseek.preset.export` 写入专用 `asl-hooks.json`，命令显式指定 `deepseek-harness`；每个 Preset 在加载时绑定自己的配置，不依赖尚未实现的跨 Session 自动发现 |
-| 无 Hook 的 Agent | 无 | 无 | 用户或 CI 手动运行同一 CLI；Adapter 不伪装自动保护已经启用 |
-
-Codex 与 Claude Code 的 Hook 包装只负责把原生 stdin / 环境变量转换为 Adapter 参数；DeepSeek 的官方 bridge 把 Cordis typed event 转成同一套 Codex 命令 Hook 载荷。三者共享“定位投影 → 选择既有检查 → 映射 PASS / WARN / BLOCK”这条逻辑，没有新造跨宿主 Hook 语言。
-
-### 门禁与失败语义
-
-| 情况 | 结果 | 理由 |
-| --- | --- | --- |
-| 没有 ASL 标记、CLI 暂时不可用、可选 MCP 未登录 | PASS 或 WARN | 不能因为辅助 Harness 让普通工作无法开始 |
-| Environment 已改变但投影尚未刷新、视图过期 | WARN | 给出 `host.project` 或视图刷新命令，由当前 Agent 或用户决定何时执行 |
-| 当前 Mode 相关写入后发现非法引用、路径逃逸、Secret、损坏受管投影 | 退出码 2，要求修复 | 写后校验，不撤销已写内容，也不做语义裁决 |
-| 内容质量不好、是否创建 Mode、Skill 是否值得采用 | 不判定 | 属于业务与用户判断，不是机械 Hook 能证明的事实 |
-| Hook 自身超时、命令缺失或异常 | 依宿主原生 Hook 机制处理 | 尚未逐宿主验证全部异常语义，不能宣称统一 WARN 已验收 |
-
-Hook 不单独保存运行记录。Codex、Claude Code、Cordis 使用自己的 Hook / Session 日志；ASL 仍以现有 CLI JSON、Projection Manifest 和 Git diff 作为可追溯证据。实现依据以宿主原生接口为准：[Codex Hooks](https://developers.openai.com/codex/hooks)、[Claude Code Hooks](https://code.claude.com/docs/en/hooks)、[DeepSeek Harness Hook Bridge](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/hooks/hooks-claude-code/README.md) 与 [Cordis Plugin Primer](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/cordis-primer.md)。
-
-### 状态与操作记录
-
-`state` 只汇总当前 Environment 的 Git HEAD、Skill / Mode 数量、Mode 闭包规模、培养区、提醒和能力视图状态。导入命令的 stdout JSON 是导入记录；项目的 `current.json` 与 Preset 的 `.asl-preset-projection.json` 是导出记录。三者复用 Git 与现有 manifest，不增加事件日志、数据库、watcher 或第二状态树。
-
-`host.project --mode <id>` 切换的是项目磁盘上的 Skill 面和指令块，不保证正在运行的旧会话清除了旧上下文。Git HEAD 只记录来源；只有当前 Mode 的内容指纹变化才提醒重建。当前 Host 能唯一判断时可选择 Mode，实质歧义才询问用户，但完整的自然语言选 Mode 与会话刷新体验尚未验收。
+见[View 2C 专项视图](architecture/02c-host-hooks.md)。
 
 ## View 2D · App 入口与 Mode 可见状态（同步及配置入口已有，完整运行验收与培养待补）
 
-**用户不需要理解配置目录。** 打开 App 应先看到自己的工作场，以及每个工作场能做什么、有哪些资料和经验、哪个 Agent 能用、还缺什么连接。可以从空白环境开始，也可以导入已经培养过的 Mode；两者进入同一界面。
-
-### 层级、浏览与使用是不同关系
-
-侧栏以模式库为父层、真实 Mode 为子项；进入 Mode 后查看范式和完整技能。范式是对工作方式的整理，同一技能可以参加多个范式，不为显示层级复制 Skill 文件；通用技能独立列出。Agent 是使用目的地，不是技能类别或新的 Mode 所属层。
-
-```mermaid
-flowchart LR
-    LIB["模式库：本地 / 已连接 GitHub"] --> MODE["工作模式：按工作目的组织"]
-    MODE --> PAR["工作范式：已有经验与协作关系"]
-    PAR --> SKILL["完整 Skill 节点"]
-    MODE --> SHARED["通用 Skill：按需使用，不强制连线"]
-    MODE -.选择使用目的地.-> AGENT["Codex / Claude / DeepSeek / WorkBuddy"]
-    AGENT --> STATE["实际配置记录：查看 / 更新 / 停用"]
-    classDef content fill:#dcfce7,stroke:#16a34a,color:#14532d;
-    classDef boundary fill:#dbeafe,stroke:#2563eb,color:#1e3a8a;
-    class LIB,MODE,PAR,SKILL,SHARED content;
-    class AGENT,STATE boundary;
-```
-
-连接公开仓库后直接显示其中的 Mode、技能关系与原文；仅浏览不创建业务副本。用户选择“保存到本地”或“在 Agent 使用”时才保存：同源本地 Mode 优先复用，多份同源副本让用户选择；没有同源副本则采用按仓库隔离的本地目录。只同名不当作同源。App 偏好仅记住所连接的仓库与上次浏览位置，缓存快照不成为可编辑真源。普通 Skill 仓库仍显示技能添加入口，不伪造 Mode。
-
-本机发现复用宿主标准目录、已登记项目和现有投影回执中的 Environment 引用。活动窗口定时有限刷新，不做全盘遍历；“发现文件”“核对配置”“真实任务成功”分别表达。Agent 页面按宿主列出配置及作用范围，可回到原 Mode 查看、更新，或明确确认后停用。项目与 Preset 停用走 `host.disconnect --check` 及指纹确认：仅归档已验证的 ASL 副本，去除对应指令区块，保留原库和其他原生配置；用户级停用复用 `host.user.sync --remove`。修改过的受管文件提示检查，不直接覆盖或移除。
-
-界面保持固定导航与对齐的目录行；选中、悬停不改变缩进。复杂编辑和 Agent 配置进入独立页面。页面过渡仅作用于内容区，可立即继续操作；减少动态效果设置停用位移动效。参考 [Apple Design](https://github.com/emilkowalski/skills/tree/main/skills/apple-design) 的空间一致性与即时反馈，及 [OneTake](https://github.com/feitangyuan/onetake) 的连续性思路；不引入后者的非商业授权代码或电影式长转场。具体设计推导不作为产品内文案展示。
-
-**当前定义：一个 Skill 就是一个节点。** v0.4 用工作范式描述用途与协作方式；每个范式有名称、说明、技能成员及带含义的关系。图呈现已沉淀的组织逻辑，不是强制工作流。范式内一个完整技能只出现一次，多个关联连接同一节点；同一技能可参加不同范式，通用能力独立列在图外。名称和说明也放在图外，不制造类别节点或虚拟执行步骤。
-
-**使用 Mermaid 原生绘图，只有一个架构视图。** App 从当前 Mode 的真实技能及可选关系生成图，支持分支、汇合与回路；箭头表达已定义的关系，不触发执行。没有关系时，Mermaid 将独立技能紧凑排列，不伪造连线。取消“关系图 / 层次图”切换和展开目录；技能分类仍是独立的辅助清单，不再冒充逻辑架构。浅色画布、紧凑圆角节点、细线和少量强调色由 App 固定；提供平移、缩放、适应画布、放大及点选技能。布局由 Mermaid 负责，不维护第二套排线引擎。
-
-参考实现为 [Mermaid](https://github.com/mermaid-js/mermaid) 的渲染与主题能力，以及 [Mermaid Live Editor](https://github.com/mermaid-js/mermaid-live-editor/blob/develop/src/lib/util/panZoom.ts) 使用的 SVG 缩放方案。没有复制其完整编辑器、历史数据库、AI 对话或分享服务；Ponytail 收敛掉本轮自绘节点、React Flow 与直接 Dagre 依赖。
-
-**人和 Agent 编辑同一份本地定义。** App 的“编辑”列出当前 Mode 的所有技能，可修改节点显示名称、可选备注、图标、颜色，并添加、修改或移除技能之间的关联。加入 / 移出技能继续使用现有“添加技能”入口，不在图里制造虚拟技能。Agent 通过相同文件及核心检查修改；不新增场景数据库或运行层。原始 Skill 名称与正文不会因显示名称改变而被改写。
-
-| 本地字段 | 用户 / Agent 可以改什么 | App 的固定边界 |
-| --- | --- | --- |
-| `spec.skills` | Mode 的本地技能成员 | 核心检查完整闭包；图中每个成员对应一个真实 Skill 节点 |
-| `spec.architecture.nodes`（可选） | `skill` 引用，及可选 `title`、`note`、`icon`、`color` | 只保存显示覆盖；没有覆盖的技能仍显示。不得重复引用、引用其他 Mode 的技能或添加非技能节点；不接受 `parent`、另一个节点 `id` 或执行脚本 |
-| `spec.architecture.shared` | 当前 Mode 各范式按需使用的通用技能 | 不与范式成员重复，不强制连线；与范式成员共同覆盖完整技能闭包 |
-| `spec.architecture.paradigms` | 范式 ID、名称、工作说明、技能成员和关系 | 范式非空且全部引用本 Mode 技能；一个技能可参加多个范式，底层文件不复制 |
-| `paradigms[].edges` | `from`、`to` 引用该范式的技能，`label` 说明关联含义 | 两端不同、有序对不重复；允许反馈环。移出成员清理失效关联和空范式，不删除 Skill 包。旧版全局 edges 仅用于读取待升级定义 |
-| `spec.capabilities`（可选） | 类别 `title`、`skills`、`icon`、`color` | 仅用于“技能分类”清单；不产生架构节点、连线或执行顺序 |
-| `icon` / `color` | emoji、内置图标、基础 SVG；六位十六进制颜色 | SVG 拒绝脚本、事件、外链及任意 CSS。图标作为隔离图片；Mermaid 文本由固定投影转义，使用严格安全设置，不执行用户图代码 |
-
-不保留 `spec.presentation.layout` 或两套图类型配置；架构与成员保存在同一份 `mode.yaml`。新 Mode 必须具有结构定义，可由人或 Agent 编辑，不要求用户亲自画图。旧 Mode 可读取，明确提示待定义，不伪造范式。
-
-这些定义随 Mode 导入、导出和复制，不锁在 App 偏好中。App 的独立编辑页面先通过同一核心检查；不合法时给出错误并保留输入。直接改文件后，打开的 App 监听当前环境的 `modes/`、`skills/` 与 `PROFILE.md`，合并通知并重新读取；不做全盘扫描，不修改文件。编辑页面打开时延后刷新，原文件已改变则拒绝旧草稿覆盖。无效结构保留上次有效界面并提示修正，不伪装成已经生效。App 关闭后没有额外常驻监听服务。
-
-“交给 AI 整理”是提示词入口：用户可补充工作目的、勾选本机技能目录、添加允许参考的项目或记录目录，再复制给正在使用的 AI。它提供现有 Mode / Skill 文件路径与字段定义，按需读取，不把全库原文一次塞进上下文。全局入口可整理多个场景或建立新 Mode，图内入口只调整当前 Mode；空环境提供最小文件结构。附 `environment.catalog`、`skill.files`、`environment.edit --check` 和校验修正方式。便携版直接指向随包核心，避免误用旧 CLI。App 不自动启动模型、CLI 或整理任务，不默认读取私人日志；AI 直接修改本地文件后，App 监听或手动刷新呈现。复制提示词不代表 AI 已整理成功。
-
-**在工作模式里增减技能。** “添加技能”内提供本地库成员管理、GitHub 解析与本机技能扫描；从此入口发现的技能预选当前 Mode。移出 Mode 只解除引用，保留 Skill 文件。技能详情的“文件与结构”显示包内说明、脚本、参考资料和资产；可以查看及编辑不超过 1 MB 的 UTF-8 文本，二进制 / 大文件只显示文件信息并保留。保存经过完整包结构检查与过期指纹保护，不执行脚本，也不在此新增文件删除入口。Windows 纯 CRLF 文件编辑时保留其换行格式。
-
-**入口与本地维护：**首屏主入口“从这台电脑开始”提供上述整理提示词；连接模式库支持 GitHub、本地目录与分享包，先支持 Agent Skill Library 和现有 ASL 包，不扩建市场。不预装个人模式，也不注入开发者电脑的技能库路径。公开仓库固定一个提交后直接浏览真实 Mode、能力类别和完整技能闭包；选择保存或使用才导入。云端保存按仓库分开本地目录；已有同源 Mode 可复用。普通包仍可导入现有环境，空环境使用 App 用户目录下的 `workspace/`。取得整理提示词本身不创建业务文件。普通 Skill 仓库仍走选择技能、添加到现有 Mode 的入口，不把任意仓库猜成工作模式。
-
-**来源与更新窗口：**每个从云端导入的 Mode 在可选 `modes/<id>/SOURCE.md` 内保存一个受管区块：仓库、原始链接、已导入 commit。保留文件已有来源与许可文字；不增加数据库或每技能附属配置。该记录随 Mode 分享包一起迁移；`MODE.md` / `mode.yaml` 的业务语义不变。启动、运行期间每 15 分钟及从休眠恢复后检查上游；同链接的 Mode 合并请求，也可手动刷新。检查仅查询提交，不每次下载整库；界面区分没有新提交、上游新提交、网络失败，失败不影响本地使用。固定 commit 链接继续固定该版本，不擅自改跟默认分支。App 关闭后不启动额外常驻服务。
-
-**更新与本地修改：**“上游有新提交”不是“这个 Mode 已变化”的保证，用户查看 Mode 差异时才下载并生成实际包预览。预览显示变化的 Mode / Skill 与受影响模式，内容一致的部分不重写；同名差异默认不替换，用户明确勾选才采用云端版本。导入计划包含指纹，确认前本地内容或包发生变化要重看预览。不会自动三方合并、推送用户修改、删除上游已移除的本地技能，或连带刷新已应用的宿主；更新后需再次应用到所选 Agent。源码仓库删除 Mode 时也不静默删除本地副本。
-
-比较时区分正文变更、增加文件、本地独有文件、纯换行差异与仅 Mode 上游记录更新。CRLF / LF 差异不再触发替换冲突，也不重写本地文件；其他文本显示文件级差异，长差异明确截断，二进制 / 大文件提示本地核对。用于拒绝过期编辑的指纹仍按原始字节计算，不因为比较忽略换行而放松覆盖保护。
-
-**默认安装体验：**Codex / Claude Code 默认选择当前用户范围，自动定位宿主标准目录；项目配置入口直接选择文件夹，自定义用户目录收进高级设置。配置完成后进入对应 Agent 页核对记录，不自动弹出安装助手。DeepSeek 优先使用本机非 ASL 的标准基础 Preset，可展开更换；未发现时明确要求选择。新预设写入 `.dsh/.agent-presets/asl-<mode>/`，同名非受管预设不会覆盖。WorkBuddy 只支持项目范围。用户级安装不保证隔离宿主其他已有技能。
-
-**当前桌面版实际可以做：**连接现有技能库或内置示例，显示真实 Mode、完整技能与引用关系；创建、编辑、复制、归档 Mode，编辑 Skill、添加完整 Skill 并加入 Mode。能力类别可新增、改名、删除、重新归类，删除类别不删除技能。保存前显示涉及的模式，过期编辑拒绝覆盖，归档保留完整目录。还可预览并导入 / 导出 ASL 环境包；浏览 DeepSeek 社区插件目录、GitHub 搜索结果；扫描本机技能目录；粘贴 GitHub 链接后读取文件、原文与依赖声明，从卡片直接选择 Mode 添加。配套内容保留提醒，同名默认复用库内版本。选择项目可生成 Codex / Claude / WorkBuddy 文件投影，或基于已有 DeepSeek Preset 导出新 Preset。未检测的连接不显示为零，文件配置不等于会话生效。标准 Skill 不必具有 ASL 专用的“完成标准”标题；仅在导入副本补充来源，不改上游方法正文。复杂仓库的自主拆分、安装和对话式融合尚未实现。
-
-**归类不是自动匹配。** 产品展示与验收使用真实 Agent Skill Library，不把人工准备的演示分类当成 App 的理解能力。以下机制必须分开：
-
-| 用户看到什么 | 当前实际来源与检查 | 不代表什么 |
-| --- | --- | --- |
-| 一个 Mode 包含哪些技能 | 读取 `modes/<id>/mode.yaml` 的 `spec.skills`，再解析 Skill 的 `metadata.asl.requires`；核心检查技能存在、依赖完整与路径边界 | 不是 App 根据任务自动选好了技能；成员最初由人或被授权的 Agent 明确维护 |
-| 技能列表、直接加入 / 依赖带入 | 原样呈现核心返回的成员与依赖；架构图只画本地明确维护的技能关系，不把软件依赖转换成工作关系 | 不推测执行顺序，不用关键词改变成员 |
-| 全部技能与可选分类 | 全部技能读取 Mode 的 `paradigms` 与 `shared`；辅助类别读取 `spec.capabilities`，未定义则显示未分类 | 不根据关键词猜分类，不把手工定义说成 App 自动理解；定义随 Mode 分享，没有额外清单文件 |
-| 本机能否使用 | 检查原始依赖声明、工具路径、配置文件和受支持的体检结果 | 不把文件存在、目录存在或导出成功等同于实际任务成功 |
-
-例如真实 `creator-studio` 显式列出 19 个技能，包括 Agent Reach、宝玉配图及公众号排版；`product-lab` 列出 6 个技能，其中也有 Agent Reach。共享来自两份 Mode 的明确选择，不是 App 临时跨模式召回。当前没有“理解需求 → 自动归类 → 自动加入 Mode”的产品功能。内置小示例仅用于初次查看且只读；编辑前须导入为独立技能库，不在安装目录改示例。
-
-**当前用户同步：**应用弹窗可选“仅这个项目”或“我的所有项目”；后者不是整台机器所有用户。一个宿主选择一个 ASL 默认 Mode，但项目显式 Mode 与用户当前请求优先，宿主已有其他技能不会被屏蔽。预览新增、更新、移出与冲突；只管理自己复制的完整包，切换或停用不删原技能源。同名未受管内容或被修改的副本会拒绝覆盖。修改技能源后需主动再同步，不运行后台全盘监听器。
-
-**安装位置：**项目级选择项目文件夹，ASL 写入该项目的原生技能目录与指令文件；用户级显示当前 Agent 的真实用户技能目录，并允许另选文件夹。Codex 默认是 `~/.agents/skills`（共享原生目录，其他支持它的 Agent 也可能读取），Claude 默认是其配置目录下的 `skills`。`CODEX_HOME` / `CLAUDE_CONFIG_DIR` 用于识别宿主配置位置，不把项目路径当成用户配置。另选技能文件夹只改变 Skill 副本位置，原生指令仍在真实配置目录；界面显示“还需关联”，配置助手再核对宿主的原生关联方法。已有受管 Mode 时先停用原目录，避免静默留下两份启用副本。存放成功、原生可发现、实际可用是不同状态。
-
-安装交互参考 [Vercel Skills](https://github.com/vercel-labs/skills)：先选 Agent，再选项目 / 用户范围；`npx skills add` 的项目范围默认是执行命令的当前目录，App 则用文件选择器明确选择，不要求用户掌握终端。目录识别参考 [CC Switch 的技能同步实现](https://github.com/farion1231/cc-switch/blob/main/src-tauri/src/services/skill.rs)，但不引入另一套技能登记库。原生目录依据 [Codex host roots](https://github.com/openai/codex/blob/main/codex-rs/ext/skills/src/host_roots.rs) 与 [Claude 配置目录](https://code.claude.com/docs/en/claude-directory)；不将“只选 Codex”承诺成共享目录的跨 Agent 强隔离。
-
-**WorkBuddy 项目入口：**选择项目后，完整 Skill 写入该项目的 `.codebuddy/skills/`，Mode 指令写入 `.codebuddy/CODEBUDDY.md`，沿用已有投影校验和受管文件保护。原生目录与 [WorkBuddy 项目文档](https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Function-Description/Project) 及本机 5.1.0 CLI 的 SkillsProvider 已核对；不显示用户级安装选项，不接管 `.workbuddy-ai` 的账号或模型。项目记录可以保留，但不能据此声称 WorkBuddy 已执行过任务。
-
-**发现与添加的边界：**本机只扫描已知 Agent 技能目录或用户选择的目录，按真实路径去重；不扫描整块磁盘，不把同名当成同版本。GitHub 读取仓库 / 目录链接，先固定 commit，再只读解包；识别 ASL 仓库时默认只展示正式 `skills/`，不混入归档。每张技能卡片都有“添加到 Mode”，选择目标 Mode 和可选类别，预览影响后保存；“查看解析”只是辅助入口。脚本、终端命令、安装声明和共享依赖只触发配套内容提醒，不再隐藏添加按钮；只导入所选 Skill 目录，不自动复制目录外依赖、拆分仓库或运行安装脚本，既有路径、链接和结构校验仍保留。添加不等于可运行；连接 Agent 后仍需重新应用模式和检查运行环境。库中有同名 Skill 时默认复用库内版本，不覆盖已有修改；用户可以显式选择本次发现的版本替换，预览所有受影响 Mode。卡片显示库内版本所在的 Mode，点击名称进入管理；这不是两份内容相同的证明。解析是静态线索，不是完整语义理解、独立性证明或运行验收；当前不做对话导入 Agent。下载暂存不成为技能真源，不进入分享包；来源保留具体 commit 与许可记录。
-
-**配置这台电脑：**同步后检查 Mode 对应的原始依赖声明、工具路径与 MCP 名称，支持 Agent Reach 的渠道 doctor；不会把“存在”当作“可用”。用户可“复制配置提示词”交给自己的 Agent，不必启动后台进程；也可主动点击“打开原生助手”，使用当前电脑已安装的 Claude Code / Codex CLI 打开独立会话，完整任务材料留在 App 本机配置会话目录，继承原来的模型、账号与原生权限。助手阅读原始 Mode / Skill，按本机情况安装或复用依赖、处理连接并实际验证；App 可重新检查。配置助手当前只实现 Windows 入口，不迁移秘密、不自动升级宿主、不接管登录、不直接请求另一个模型 API。原生会话可能因版本、账号或网络失败；失败与“已打开 / 已结束”分开，不记录成“就绪”。
-
-```mermaid
-flowchart LR
-    UI["React 桌面界面<br/>模式 / 能力地图 / 编辑 / 发现 / 来源与更新 / Agent 配置"] --> IPC["受限操作桥<br/>原生文件选择 / 写入确认<br/>只允许既定管理操作"]
-    IPC --> CORE["既有 Python 核心<br/>开发版命令 / Windows 内置可执行文件"]
-    CORE --> ENV["本地 Environment<br/>唯一内容真源"]
-    CORE --> PACK["Mode 目录 / ZIP 快照"]
-    CORE --> HOST["Codex / Claude 项目及用户级文件<br/>WorkBuddy 项目文件 / DeepSeek Preset"]
-    CORE --> RESULT["真实 JSON 结果与文件级差异"]
-    ENV --> FIELDS["可选地图字段 + 完整技能文件<br/>同一核心校验 → 固定 UI 投影<br/>不要求用户先配置地图"]
-    FIELDS --> UI
-    ENV -.当前环境文件变更；只刷新显示.-> UI
-    UI --> GUIDE["生成当前 Mode 的 Agent 编辑说明<br/>沿用本地文件 / CLI；非内置 Agent"]
-    GUIDE -.用户交给自己的 Agent.-> ENV
-    IPC --> MARKET["公开市场只读查询<br/>DSH 目录 / GitHub 搜索<br/>不执行来源提供的安装字符串"]
-    IPC --> SCAN["本机目录 / GitHub 固定快照<br/>Skill 原文、文件、依赖声明解析"]
-    SCAN --> CHOICE["卡片直接添加到 Mode<br/>选择模式与类别 → 预览保存<br/>同名默认复用；配套内容提示"]
-    CHOICE --> CORE
-    SCAN --> REMOTE["符合协议的真实 Mode<br/>完整 Skill 闭包 + 可携带来源"]
-    REMOTE -->|连接即浏览；不写业务库| UI
-    REMOTE --> PACK
-    ENV --> ORIGIN["Mode SOURCE<br/>仓库 / 链接 / 已导入提交"]
-    ORIGIN --> POLL["App 启动及定时查上游<br/>同链接合并请求；失败不影响本地"]
-    POLL --> UI
-    UI -->|用户确认实际差异| CORE
-    IPC --> NATIVE["本机只读检测<br/>配置存在 / MCP 名称 / DSH 预设<br/>不是登录或实际加载的证明"]
-    NATIVE --> LOCAL["已知项目与本地 Mode<br/>发现 / 更新 / 导入共用<br/>不递归扫描整块硬盘"]
-    LOCAL --> CHOICE
-    IPC --> MCPEDIT["Claude / Codex 原生 MCP 编辑<br/>选用户或项目 → 确认后逐条写入<br/>检查文件变化、保留备份"]
-    MCPEDIT --> HOST
-    MCPEDIT --> RESULT
-    CORE --> CHECK["Mode 原文 / 完整 Skill 路径<br/>本机运行时 / MCP / 可选渠道体检"]
-    CHECK --> PROMPT["复制配置提示词<br/>用户交给自己的 Agent"]
-    PROMPT -.配置后复查.-> CHECK
-    IPC --> ASSIST["用户点击配置<br/>打开原生 Claude / Codex CLI<br/>沿用原生模型、权限与登录"]
-    CHECK --> ASSIST
-    ASSIST -.会话结束后用户复查.-> CHECK
-    CHECK --> UI
-    MARKET --> UI
-    NATIVE --> UI
-    RESULT --> UI
-    classDef done fill:#dcfce7,stroke:#16a34a,color:#14532d;
-    classDef generated fill:#f3f4f6,stroke:#6b7280,color:#1f2937;
-    class UI,IPC,CORE,ENV,FIELDS,GUIDE,MARKET,SCAN,CHOICE,NATIVE,LOCAL,MCPEDIT,CHECK,PROMPT,ASSIST,REMOTE,ORIGIN,POLL done;
-    class PACK,HOST,RESULT generated;
-```
-
-界面没有远程页面、Node 权限或任意 Shell 入口；主进程核对调用来源与用户选择的路径，业务执行仍归目标 Agent。无需一个常驻后端服务，也没有另建索引数据库。
-
-| 界面 | 展示与操作 | 不让用户承担什么 |
-| --- | --- | --- |
-| 工作环境 | Mode 卡片、工作范围、当前项目；进入、复制、编辑、分享 | 不把工作环境强行画成顺序步骤 |
-| 能力地图 | Mode 内 Skill、资料、明确经验；点开能看内容、来源、依赖和引用者 | 不展示后端事件树，不凭模型猜测生成关系 |
-| 添加能力 | 粘贴仓库链接或描述所需能力；选择目标 Mode；预览安装、连接与影响 | 不要求手写每 Skill YAML；明确要求安装不先跑业务效果试验 |
-| 模型与连接 | 识别宿主已有配置，选择可用模型，补缺失连接 | 不重新建立另一套账号或代理系统 |
-| 分享与更新 | 选择内容、查看排除项、导出；更新看本地修改与上游差异 | 不导出整台电脑配置，不自动盖掉个人调教 |
-| 培养记录 | 看见明确反馈改了哪里，接受、更正或撤回；按需寻找新能力 | 不把沉默、耗时或所有聊天变成永久记忆 |
-
-```mermaid
-flowchart LR
-    APP["独立 App · 当前入口已有<br/>选环境、Mode、目标 Agent"] --> APPLY["同一 Harness 核心<br/>内容预览 / 宿主文件应用"]
-    GOAL["Host 中自然语言请求"] --> STEWARD["已有管理 Skill<br/>按 Mode 范围判断，不建分类器"]
-    STEWARD --> APPLY
-    APPLY --> RECORD["本项目投影记录<br/>已配置的 Mode"]
-    APPLY --> NATIVE["宿主原生配置与能力面"]
-    RECORD --> BADGE["App 状态 / 可选 Claude 状态栏<br/>只显示已知状态"]
-    NATIVE --> SESSION["新会话实际加载<br/>不能从磁盘配置推断成功"]
-    SESSION -.可观察事实.-> BADGE
-    classDef done fill:#dcfce7,stroke:#16a34a,color:#14532d;
-    classDef pending fill:#ffedd5,stroke:#ea580c,color:#7c2d12;
-    classDef generated fill:#f3f4f6,stroke:#6b7280,color:#1f2937;
-    class STEWARD,APP,APPLY done;
-    class BADGE,SESSION pending;
-    class RECORD,NATIVE generated;
-
-```
-
-**显示不等于生效。** Ponytail 的本机状态栏通过插件标记展示级别，给 ASL 的启发是“让工作状态可见”，不是复制一个全局开关。ASL 从现有项目投影读取 Mode，不能再造一份互相打架的活动状态。Claude 可选追加原生 statusLine，保留已有状态栏；DeepSeek 使用原生 Preset 名称；Codex App 的同等常驻展示需实机验证。独立 App 是三者共同的管理入口，不依赖它们都有相同状态栏。[Ponytail 状态栏实现](https://github.com/DietrichGebert/ponytail/blob/main/hooks/ponytail-statusline.ps1)、[Claude 原生状态栏](https://code.claude.com/docs/en/statusline)。
-
-**旧会话不强行改造。** DeepSeek 已开始的会话不能换 Preset；Codex 插件安装后需要新会话加载。App 应提供“用此环境开始新会话”，让旧任务继续保留；宿主不提供启动接口时打开对应项目并给最短操作提示。可以携带用户选择的交接摘要，不声称迁移全部聊天历史或强行控制现有对话。[DeepSeek Preset 边界](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/preset/agent-presets/README.md)、[Codex 插件](https://learn.chatgpt.com/docs/plugins)。
-
----
+见[View 2D 专项视图](architecture/02d-app-navigation.md)。
 
 ## View 2E · 可迁移环境包与复杂能力安装（内容往返已实现，原生安装待实现）
 
-**分享的是“工作环境配方 + 用户选择的内容”，不是已安装电脑的备份。** 配方描述需要哪些能力以及怎样接到宿主；内容保留可编辑文件。接收者用自己的模型账号，在自己的电脑上装好实际依赖。
-
-### 当前可运行的最小包
-
-`mode.export`、`mode.inspect`、`mode.import` 已实现目录 / ZIP 往返。根目录采用 [Agent Plugins 1.0 的 manifest 与布局](https://agent-plugins.org/specification)：`plugin.json`、`skills/<id>/`；ASL 专有内容放入 `io.github.qihangzhang-272.asl/`，不污染通用字段。
-
-```text
-creator-studio.zip
-├── plugin.json                 # 标准元数据；ASL 扩展记录版本、Mode、文件哈希和执行位
-├── skills/<skill-id>/           # 仅当前 Mode 闭包，完整方法、来源、脚本与资产
-└── io.github.qihangzhang-272.asl/
-    ├── modes/creator-studio/    # MODE.md + mode.yaml
-    └── PROFILE.md              # 默认没有；明确 --include-profile 才加入
-```
-
-```sh
-asl-harness mode.export --workspace ./environment --mode creator-studio --output ./creator-studio.zip --check
-asl-harness mode.export --workspace ./environment --mode creator-studio --output ./creator-studio.zip
-asl-harness mode.inspect --source ./creator-studio.zip
-asl-harness mode.import --source ./creator-studio.zip --target ./received --check
-asl-harness mode.import --source ./creator-studio.zip --target ./received
-```
-
-- **内容不丢、默认少带：**依赖清单与脚本作为 Skill 内容保留；不打包 `.git`、`node_modules`、虚拟环境、缓存、其他 Mode、私人任务或 Mode 目录中的额外笔记。PROFILE 需显式选择，导入已有环境也不覆盖接收者自己的 PROFILE。导出预览列出文件、依赖描述和疑似本机路径，不偷偷改写技能。
-- **读已有声明，不另造配置：**包预览直接解析 `package.json`、`pyproject.toml`、`requirements.txt` 与 `mcp.json` / `.mcp.json`，显示基础直接依赖、MCP 服务名、环境变量名称和准备脚本名称；不返回账号值、服务地址或安装脚本正文。未支持的包管理格式与锁文件保留原文件供查看；动态、构建和可选依赖不冒充已完整解析。声明损坏只显示提醒，不阻断完整内容迁移。所有结果仍标为“未检测安装状态”，不执行 `postinstall` 或自行启动服务。
-- **预览与写入分开：**`--check` 不改目标；同名不同内容列为冲突，只有显式 `--replace` 才替换；报告受影响的其他 Mode。复用既有回滚保护，导入新目录先暂存，成功才落位；相同内容重复导入不制造变更。stdout JSON 是操作回执，不新增日志数据库。
-- **可核对不等于可信：**逐文件 SHA-256 检查缺失、篡改和夹带；拒绝越界路径、符号链接、大小写冲突及明显秘密。ZIP 限 10,000 文件 / 512 MiB 展开内容，避免无界解包。哈希不是签名，文本秘密扫描也不是隐私认证；导出者仍需检查分享内容。
-- **兼容范围不夸大：**这是 ASL 快照读写器，采用通用包装，不是完整 Agent Plugins 客户端认证。不直接把 ZIP 交给 DSH 或 Claude；导入为本地 Environment 后继续走现有宿主适配。当前未实现通用第三方插件采用、MCP 转换或原生运行依赖安装，`runtimeStatus` 明确是 `not-checked`。
-
-参考 [Hermes plugin_packs.py](https://github.com/NousResearch/hermes-agent/blob/main/hermes_cli/plugin_packs.py) 的预览、已有配置优先、秘密与权限不随包迁移；保留 ASL 本地完整内容，不照搬其只凭 Git 安装记录导出的限制。没有复制 Hermes 源码或加入其运行依赖。
-
-```mermaid
-flowchart LR
-    subgraph CONTENT["可分享内容"]
-        MODE["Mode 工作范围 / Skill 引用<br/>可选模型偏好与上下文关联"]
-        SKILL["完整 Skill 包<br/>方法 / 脚本 / 资源 / 来源"]
-        NOTES["明确选择的资料与经验"]
-        NEEDS["必要依赖配方<br/>复用上游 package / MCP / Plugin 描述"]
-    end
-    CONTENT --> EXPORT["导出预览<br/>相对路径、内容清单与哈希<br/>默认排除秘密和私人任务"]
-    EXPORT --> PACKAGE["环境包或 Git 仓库<br/>可导入、可分享，不含安装后的依赖目录"]
-    PACKAGE --> IMPORT["接收方 App<br/>选择目标 Mode 与 Agent<br/>识别已有内容、冲突与缺失项"]
-    IMPORT --> LOCAL["接收方自己的 Environment"]
-    IMPORT --> INSTALL["目标平台原生安装器<br/>解析依赖、安装或复用 Runtime"]
-    IMPORT --> ACCOUNT["本机已有连接或原生登录<br/>不从分享包获取密钥"]
-    LOCAL --> ADAPTER["宿主 Adapter<br/>只应用所选 Mode 的能力"]
-    INSTALL --> ADAPTER
-    ACCOUNT --> ADAPTER
-    ADAPTER --> STATUS["显示实际结果<br/>可用 / 待连接 / 部分不支持"]
-    classDef pending fill:#ffedd5,stroke:#ea580c,color:#7c2d12;
-    classDef boundary fill:#dbeafe,stroke:#2563eb,color:#1e3a8a;
-    classDef native fill:#f5f3ff,stroke:#7c3aed,color:#4c1d95;
-    class MODE,SKILL,NOTES,NEEDS,LOCAL boundary;
-    class EXPORT,PACKAGE,IMPORT,ADAPTER,STATUS pending;
-    class INSTALL,ACCOUNT native;
-
-```
-
-### 内容与安装怎样分开
-
-| 遇到的东西 | 放在哪里、怎样迁移 | 不做什么 |
-| --- | --- | --- |
-| 普通 Skill | 方法、脚本、资源、来源完整进入本地 Skill；Mode 显式引用 | 不只复制 SKILL.md，丢掉脚本和图片 |
-| Agent Reach 一类复杂能力 | 本地 Skill 说明负责业务用法；Python/Node 包、命令、MCP、登录需求复用原生声明和检查；App 编排安装与连接提示 | 不把 node_modules、venv、浏览器登录态打进分享包 |
-| DeepSeek Bundle | 保留包名、版本与必要配置，交 DSH 插件管理和包管理器处理；按需要装入所选 Profile | 不把 Cordis 专用代码说成可在所有 Agent 运行 |
-| 已有宿主 Plugin / MCP | 先检查目标宿主是否已有并可用；缺失才提议原生安装；项目相关配置关联责任 Skill | 不复刻宿主内置工具，不另造 Bindings 资产层 |
-| 个人资料与经验 | 原位置编辑，导出时明确选择；包内使用相对路径，导入后重建本地引用 | 不默认包含所有历史 Case、聊天、私有路径和账号 |
-| 模型 | 分享模型偏好及必要能力要求；接收方选择自己的提供商和账号 | 不分享 API Key，不承诺订阅账号可转成通用 API |
-
-不新增每 Skill 必填 sidecar。优先读取现成的 package.json、pyproject、MCP / Plugin manifest；只有无法表达的必要宿主差异，才补进责任 Skill 的说明或原生配置片段。**自动安装不能靠任意自然语言直接变成 shell 命令**：管理 Agent 可起草安装方案，但执行端只接受已支持的包管理、配置和连接操作。未知安装方式显示“需人工步骤”，不编造成功。新包包含安装脚本时显示其本机执行影响；用户指定采用不需要先证明业务效果。
-
-**同一个依赖可以装一次，但不因此在每个 Mode 都暴露。** 移除 Mode 中的能力先解除引用；仍有其他 Mode 使用的 Runtime 不随之卸载。对于只能全局启用的宿主插件，明确标为共享宿主能力，不能宣称已经实现 Mode 级强隔离。
-
-**最小协议增量：**沿用 Environment / Mode / Skill，只补可选的内容关联、模型偏好及宿主扩展信息；导出时自动产生版本化清单、相对路径、必要包版本、内容指纹及支持情况。业务 Mode 不增加 plane 或人工 revision 字段。当前 mode.yaml 的机器可读 spec 仍只有 skills；这些增量尚未进入校验器，不能按已支持字段使用。分享者本机的投影、绝对路径与登录配置不是协议内容。
-
-### DeepSeek 的天然优势与不能直接复用的部分
-
-- **Bundle 是可发布的插件包，Profile 是运行时装配配置，Preset 是会话工作环境。** ASL Mode 最接近 Preset；不把一个人的全部 Environment 或每一个 Mode 都等同于 Profile。Profile 能供多个 Preset 共用，只有原生依赖确实冲突时才考虑拆分。
-- 官方通过 npm 包中的 dsh.bundle.patch 贡献插件组合，Profile 的 bundle 列表和本地补丁完成装配；普通依赖包安装后不一定激活。配置行替换并非通用深合并，适配器需遵循原生语义。优先使用预构建发布包，减少用户本机编译。[官方发布与安装设计](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/develop/basic/publish.md)
-- Preset 可以复制完整目录并隔离每会话的能力组合，但复制后是快照，不自动吸收原版修改；插件热插拔也不等于已开始的会话可以随意换 Preset。ASL 的增量是跨宿主环境管理、差异更新和迁移，而不是重写 Cordis。[官方 Preset 设计](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/preset/agent-presets/README.md)
-- 社区市场将插件目录与 UI 分离，显示安装、兼容与更新状态。可借用其目录维护方式，但“被收录”不代表安全或业务质量认证；其配置备份可能含敏感信息，不能作为我们的默认分享格式。[dsh-market](https://github.com/dsh-market/dsh-market)、[社区插件目录](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin)
-- 本机社区 DSH Desktop 公开了 desktopProfiles 与 desktopPnpm。可以做一个原生 ASL 管理入口，但 Profile 切换会重启，不是静默热切；包操作接口也不自动替我们做回滚和结果验证。这些是该 Desktop 的接口，不是所有 DSH 发行版都有。[公开插件服务](https://github.com/anywhere-labs/deepseek-harness-desktop/blob/master/dsh-plugin-desktop/docs/plugin-services.zh.md)
-
-**本机投影与分享包已经分开。** `deepseek.preset.export` 继续生成带本机路径的 Preset；`mode.export` 不复制这些投影标记。已验证分享包导入另一个目录后重新投影到 Codex 项目，引用接收目录而非发送目录；这是文件接入验收，仍不等于新会话运行或复杂依赖已就绪。
-
----
+见[View 2E 专项视图](architecture/02e-portable-environment.md)。
 
 ## View 2F · 模型配置与跨宿主应用时序（设计，待实现）
 
-Mode 是“做什么工作、采用哪些能力”；Model 是“由哪个模型做”。用户在 App 里可以一起选，底层必须分清：
+见[View 2F 专项视图](architecture/02f-model-adaptation.md)。
 
-| 信息 | 归属 | 举例 |
-| --- | --- | --- |
-| 工作环境偏好 | Mode，可选随包分享 | 偏好某模型；确实需要看图或工具调用时说明 |
-| 提供商、接口、可用模型与账号引用 | 本机连接，复用宿主既有配置 | 本机 DeepSeek API 或 Claude Code 已配置的提供商 |
-| 当前会话实际模型 | 宿主会话，不靠 App 猜 | 未查询到就显示未知，不把“首选模型”标成“正在使用” |
+## View 2G · Agent CLI 与 App 同源管理
 
-```mermaid
-sequenceDiagram
-    actor U as 用户
-    participant A as ASL App（模型配置待开发）
-    participant E as 本地 Environment
-    participant C as Harness 核心与适配器
-    participant H as 目标宿主
-    U->>A: 选 Mode、目标 Agent 和本机可用模型
-    A->>E: 读取能力、上下文与偏好
-    A->>C: 生成配置和安装差异
-    C->>H: 检查宿主接口、现有插件与模型配置
-    H-->>C: 可观察状态 / 缺失项 / 不支持项
-    C-->>A: 哪些直接可用，哪些需要连接或重启
-    A-->>U: 展示必要变更及影响
-    U->>A: 应用选定变更
-    A->>C: 只修改受管范围
-    C->>H: 原生安装、配置与 Mode 投影
-    H-->>A: 原生登录或权限请求（有需要才出现）
-    C-->>A: 安装与应用结果，不等同于业务验收
-    A->>H: 支持时打开新会话，否则提供打开项目入口
-    H-->>A: 实际加载信息（接口可获得时）
-    A-->>U: 已应用 / 待连接 / 待重新载入 / 尚未核实
-
-```
-
-ASL 不代理模型推理，也不建立 API 网关。DeepSeek 官方自定义提供商支持多种 API 协议，凭据与普通设置分开；模型列表查询可能为空，某些 OAuth 提供商尚不能走同一路径。因此 App 必须按宿主适配，允许选择已有模型或手动填写受支持配置，不承诺任意套餐通用。[DeepSeek 模型配置](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/guide/providers.md)、[Claude Code 模型配置](https://code.claude.com/docs/en/model-config)。
-
-与 CC Switch 等已有配置工具共存时，每个配置项只能有一个明确维护方。默认识别并采用已有配置；修改前显示差异，发现外部修改先提示，不来回覆盖。未支持的某个可选能力只标注该项，不冻结整个工作环境。安装导致的外部副作用未必能完整撤销，界面应区分“文件配置已恢复”和“运行依赖需另行处理”。
-
----
+见[CLI、写入门控与框架/内容版边界](architecture/02g-agent-cli.md)。
 
 ## View 3 · 普通 Goal 的执行时序
 
-回答：用户只给一个目标时，系统怎样工作，什么时候会阻断？
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor U as 用户
-    participant H as 当前 Host
-    participant V as WORKSPACE / Profile
-    participant M as 当前 Mode Projection
-    participant S as Formal Skills
-    participant C as Current Case
-
-    U->>H: 提出 Goal，提供材料
-    H->>V: 读取能力地图和精简长期边界
-    H->>M: 选择最贴近的 Mode
-    alt Mode 存在实质歧义
-        H->>U: 只确认一次必要选择
-        U-->>H: 确认 Mode
-    end
-    H->>S: 按 Goal 加载需要的完整 Skill
-    Note over H,S: Mode 的 Skill 列表不是执行顺序
-    H->>C: 保存输入、证据、过程材料和 Artifact
-    H->>C: 对照本次 Goal / Benchmark 检查结果
-    alt 结果不足，但现有能力足够
-        H->>S: 返工责任 Skill 的本次输出
-        H->>C: 更新 Artifact
-    else 确认存在长期能力缺口
-        H-->>U: 说明缺口；当前任务可继续时先完成可完成部分
-        Note over H: 之后进入 Capability Cultivation Loop
-    else 达标或遇到诚实边界
-        H-->>U: 交付结果或说明无法完成的事实
-    end
-```
-
-普通 Goal 不要求 Session key、Run token 或固定节点状态。视图和缓存提醒不阻断；确定的结构、Secret、路径与覆盖问题由 Harness 拒绝，高影响授权由当前 Host 的原生权限边界处理。
-
----
+见[View 3 专项视图](architecture/03-task-execution.md)。
 
 ## View 4 · Skill / Mode 变更时序
 
-回答：Mode 和 Skill 的增删改查如何与普通内容分开，谁负责起草、校验和授权？
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor U as 用户
-    participant H as 当前 Host
-    participant E as Environment Steward
-    participant W as 隔离变更区
-    participant CLI as Harness Guards
-    participant G as Git Truth
-    participant P as Host Projections
-
-    U->>H: 明确反馈、采用要求或结构变更目标
-    H->>E: 判断最小影响半径与责任对象
-    alt 用户明确指定外部能力并要求融入
-        E->>W: 根据任务检查相关来源并起草正式本地 Skill
-        Note over H,W: 不强制 Candidate、Trial、示例或效果 Case
-    else 来源、重合、安全或运行方式仍不确定
-        E->>W: 建立可选 Candidate / Trial
-        H->>W: 只做解决该不确定性的最小检查
-    else 修改现有 Skill
-        E->>W: 起草正式 Skill 的最小 diff
-    else 修改 Mode
-        E->>W: 起草隔离的最小 Mode diff
-        H->>W: 用代表性 Case 检查能力面与边界
-    end
-    E->>CLI: 变更前检查结构、依赖、引用、路径与影响面
-    alt 删除、发布、外部写入或其他高影响动作
-        CLI-->>H: 返回结构和引用事实，不代替授权
-        H->>U: 列出路径、原因和影响
-        U-->>H: 授权或拒绝
-    end
-    CLI-->>E: 允许修改或返回确定错误
-    E->>G: 写入最小文件 diff
-    E->>CLI: 变更后重新校验
-    CLI->>P: 刷新受影响 Mode 的可重建投影
-    CLI->>G: 保留可审计结果
-```
-
-AI 根据任务与具体 Skill 判断阅读深度，并起草完整本地能力包。用户明确指定引入时，可以直接进入正式 Skill Pool；确定性结构校验和高影响授权仍保留，但不再用 Trial、示例或效果测试拖延采用。普通任务材料不能在没有明确长期意图时自动修改正式 Skill 或 Mode。
-
----
+见[View 4 专项视图](architecture/04-content-changes.md)。
 
 ## View 5 · 外部能力生命周期状态图
 
-回答：一个外部能力怎样进入本地，最终可能得到哪些处理结果？
-
-```mermaid
-stateDiagram-v2
-    [*] --> RequestType
-    RequestType --> Directed: 用户明确要求寻找并融入
-    RequestType --> GapConfirmed: Host 自己发现能力缺口
-    Directed --> SourceCheck: 检查相关来源与采用约束
-    SourceCheck --> Compare: 直接判断本地关系
-    GapConfirmed --> LocalCheck: 先查正式 Skill / Candidate / Trial / Archive
-    LocalCheck --> ExistingChange: 已有 Skill 可以修订
-    LocalCheck --> ExternalDiscovery: 本地确实不存在
-    ExternalDiscovery --> Uncertainty
-    Uncertainty --> Candidate: 来源或采用方向仍不确定
-    Uncertainty --> SourceCheck: 已有明确来源且可以直接本地化
-    Candidate --> Trial: 只有运行、安全、重合或价值需要隔离判断
-    Candidate --> SourceCheck: 不需要试运行即可决定
-    Trial --> Compare: 最小检查解决不确定性
-    ExistingChange --> Compare: 直接形成现有 Skill 最小 diff
-    Compare --> FormalSkill: 独立能力
-    Compare --> ExistingSkill: 吸收或合并
-    Compare --> Dependency: 建立 requires
-    Compare --> Variant: 保留明确质量 / 成本 / 平台变体
-    Compare --> Adapter: 只有宿主接线不同
-    Compare --> Archive: 重复 / 无增量 / 风险过高 / 无法验证
-    FormalSkill --> ModeDecision
-    ExistingSkill --> ModeDecision
-    Dependency --> ModeDecision
-    Variant --> ModeDecision
-    Adapter --> ModeDecision
-    ModeDecision --> StablePool: 进入 Skill Pool，但不自动进入任何 Mode
-    ModeDecision --> ModeUpdated: 明确加入需要它的业务 Mode
-    Archive --> [*]
-    StablePool --> [*]
-    ModeUpdated --> [*]
-```
-
-上游更新在没有用户明确采用时只形成新的 Candidate，不能自动覆盖本地正式 Skill。用户明确要求升级或引入时，可以在检查相关来源后直接修改本地真源，阅读方式由当前 Host 依据具体 Skill 决定。
-
-外部发现有两个入口：用户明确指定寻找或融入时立即执行；否则只有真实 Case 证明现有能力不够、正式 Skill 长期失效、上游发生重要变化，或安全问题要求替换时才进入。一次输出偷懒、一次模型错误和含义不明的行为不会自动触发搜索。
-
-| 查找顺序 | 去哪里看 | 这一层解决什么问题 |
-| --- | --- | --- |
-| 1 | 本地正式 Skill、Candidate、Trial、Archive | 避免重复搜索、重复安装和遗忘历史拒绝原因 |
-| 2 | 用户明确指定的仓库、作者、帖子或工具 | 尊重已知来源，不擅自换题 |
-| 3 | 公开真实使用反馈与可信从业者推荐 | 发现“有人实际用过”的候选，而不是只看宣传 |
-| 4 | GitHub 等代码仓库 | 检查关注度、维护活跃度、Issue、许可证、版本与实现体量 |
-| 5 | 官方文档、官方生态与已安装宿主能力 | 确认接口、支持范围、平台约束和是否已有原生能力 |
-
-对于 Host 主动发现的来源，这些信号只决定“值不值得进入 Candidate”，不自动决定采用；对于用户明确指定的来源，默认目标就是直接纳入。两条路径都先比较本地关系：重叠则吸收或合并，责任边界独立才成为新 Skill，只有硬依赖存在时才声明 `requires`，只有宿主接线不同才保留 Adapter。
-
----
+见[View 5 专项视图](architecture/05-capability-lifecycle.md)。
 
 ## View 5B · 复杂外部仓库拆解图（系统规则已实现，实例迁移按需）
 
-回答：类似 Agent Reach 这种同时包含 Runtime、路由、安装器、多个后端和 Skill 入口的仓库，怎样融入 ASL 而不复制整仓、不污染所有 Mode？
-
-> 本图的系统规则已经进入 Environment Steward。`environment.sync` 只负责在两个已合法的本地 Environment 之间显式同步完整 Skill，不负责搜索来源、自动拆仓或代替 Host 做语义关系判断。具体外部仓库是否迁移，不影响这套架构机制成立。
-
-```mermaid
-flowchart TB
-    SOURCE["外部仓库 / 本机已有工具 / 官方插件<br/>来源真相，不是本地运行真源"]
-    ACQUIRE["Source Acquisition<br/>用户明确指定：立即获取<br/>Host 主动发现：按缺口搜索"]
-    INVENTORY["完整仓库盘点<br/>能力入口 · Runtime · scripts/assets<br/>依赖 · 安装副作用 · 登录/Secret · 许可 · 更新方式"]
-    SHAPE{"仓库的能力形状"}
-
-    ONE["单一责任<br/>一个完整本地 Skill"]
-    UNIFIED["复杂 Runtime，但对 Agent 是统一责任<br/>一个 Owner Skill<br/>内部保留路由与多个后端"]
-    MULTI["多个可独立调用、完成标准不同的责任<br/>拆成多个正式 Skill<br/>共同来源，但不复制方法正文"]
-    ADAPTER["业务语义相同，仅宿主接线不同<br/>一个 Skill + 运行依赖说明"]
-    ABSORB["与现有 Skill 重合<br/>吸收 / 合并 / requires / 明确变体"]
-
-    RUNTIME["Runtime Installation<br/>按宿主只安装一份<br/>版本和命令写入来源/使用说明"]
-    SECRETS["Host-owned State<br/>Cookie · API Key · 浏览器登录态 · Proxy<br/>永不复制进 Skill 或 Mode"]
-    POOL[("Formal Skill Pool<br/>每项责任只保存一份本地真源")]
-    MODE["指定或当前 Mode<br/>只增加 Skill 根引用"]
-    OTHER["其他 Mode<br/>不会因为安装而自动获得能力"]
-    PROJECT["Host Projection<br/>投影 Skill 闭包，不重复安装 Runtime"]
-
-    SOURCE --> ACQUIRE --> INVENTORY --> SHAPE
-    SHAPE -->|一个责任| ONE
-    SHAPE -->|统一入口 + 多后端| UNIFIED
-    SHAPE -->|多个独立责任| MULTI
-    SHAPE -->|仅接线不同| ADAPTER
-    SHAPE -->|本地已有 Owner| ABSORB
-    ONE --> POOL
-    UNIFIED --> POOL
-    MULTI --> POOL
-    ADAPTER --> POOL
-    ABSORB --> POOL
-    INVENTORY --> RUNTIME
-    RUNTIME -.读取但不持有.-> SECRETS
-    POOL -->|显式绑定| MODE
-    POOL -.不自动绑定.-> OTHER
-    MODE --> PROJECT
-
-    classDef locked fill:#dbeafe,stroke:#2563eb,color:#1e3a8a,stroke-width:2px;
-    classDef done fill:#dcfce7,stroke:#16a34a,color:#14532d;
-    classDef generated fill:#f3f4f6,stroke:#6b7280,color:#1f2937,stroke-dasharray:4 3;
-    classDef source fill:#f5f3ff,stroke:#7c3aed,color:#4c1d95;
-    class SOURCE source;
-    class POOL,MODE,OTHER locked;
-    class ACQUIRE,INVENTORY,SHAPE,ONE,UNIFIED,MULTI,ADAPTER,ABSORB,RUNTIME done;
-    class SECRETS,PROJECT generated;
-```
-
-### Agent Reach 应该怎样映射
-
-| 外部仓库里的内容 | ASL 中的位置 | 原因 |
-| --- | --- | --- |
-| Python CLI / library、channel 路由、doctor、installer | 一份宿主 Runtime；由 `agent-reach` Skill 说明如何安装和检查 | 这是统一的网络访问底座，不应复制到每个 Mode |
-| 面向 Agent 的使用入口、平台选择、失败与回退规则 | `skills/agent-reach/SKILL.md` | 对 Agent 是一项完整的“公开网络发现与读取”能力 |
-| 上游地址、观察到的 commit、许可、本地改动 | `skills/agent-reach/SOURCE.md` | 本地 Skill 是运行真源，上游只用于追溯和升级 |
-| Twitter、GitHub、YouTube、小红书等后端 | `agent-reach` 内部路由，不拆成 Mode，也默认不拆成十几个 Skill | 它们共享同一责任和统一入口，只是访问表面不同 |
-| Cookie、API Key、Proxy、浏览器登录态 | Codex / Claude / DeepSeek 的宿主设施 | Secret 和用户登录状态不能进入 Skill、Mode 或 Git |
-| 四个业务 Mode 的使用权 | 每个 Mode 各自显式引用同一份 `agent-reach` | 一份能力、多处复用；Mode 不复制代码，也不隐式继承 |
-
-如果复杂仓库确实包含多个可以独立交付、完成标准不同的能力，才拆成多个正式 Skill。仓库目录多、脚本多或支持平台多，本身都不是拆分理由。
-
----
+见[View 5B 专项视图](architecture/05b-complex-repositories.md)。
 
 ## View 5C · 外部能力安装与单 Mode 绑定时序图（系统规则已实现，实例迁移按需）
 
-回答：用户直接说“去找这个技能，融入当前 Mode”时，Host、Harness、Runtime 和 Mode 分别做什么？
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor U as 用户
-    participant H as 当前 Host
-    participant S as 外部来源
-    participant E as Environment Steward
-    participant R as Host Runtime
-    participant F as Formal Skill Pool
-    participant M as 指定 / 当前 Mode
-    participant G as Deterministic Guards
-    participant P as Host Projection
-
-    U->>H: 寻找某外部能力并融入当前或指定 Mode
-    H->>S: 直接搜索并获取完整来源
-    H->>E: 盘点能力入口、Runtime、依赖、副作用、许可与本地重合
-    Note over H,E: 用户已经明确采用方向，不强制 Candidate、Trial、示例或效果 Case
-    E->>E: 决定 adopt / absorb / merge / requires / variant / adapter
-    alt 需要安装 Runtime 或系统依赖
-        E->>R: 生成一次性安装计划与影响清单
-        alt 涉及登录、Secret、系统级安装、后台服务或外部写入
-            H->>U: 只确认对应高影响动作
-            U-->>H: 授权、亲自完成登录，或拒绝
-        end
-        H->>R: 在宿主环境安装或复用一份 Runtime
-    end
-    E->>F: 写入或合并完整本地 Skill + SOURCE.md
-    alt 用户明确指定 Mode，或当前 Mode 无歧义
-        E->>M: 只增加该 Skill 根引用
-    else Mode 存在实质歧义
-        H->>U: 只问一次要绑定哪个 Mode
-        U-->>H: 指定 Mode 或只进入 Skill Pool
-        E->>M: 按选择更新，其他 Mode 不变
-    end
-    E->>G: 运行静态结构、引用、路径、Secret 与投影碰撞校验
-    Note over E,G: 这是结构校验，不是效果测试
-    G->>P: 刷新这个 Mode 的可重建投影
-    H-->>U: 汇报来源、安装位置、Skill 关系、绑定 Mode 和需要的登录/配置
-```
-
-### 建议的硬门槛
-
-| 门槛 | 必须保证 | 不应强制 |
-| --- | --- | --- |
-| 来源 | 保存可追溯 URL/路径、观察到的版本或 commit；不能假装知道未知版本 | 必须先建立 Candidate |
-| 来源检查 | 根据具体 Skill 与任务检查相关说明、依赖、许可和安装副作用；不统一规定全部加载 | 跑作者提供的全部测试 |
-| 本地能力 | 形成完整 `SKILL.md`；外部实现不能作为裸 Prompt/MCP/API 在业务中途偷跑 | 必须先跑示例或效果 benchmark |
-| 重合关系 | 在 adopt、absorb、merge、requires、variant、adapter 中明确一个关系；同一责任只有一个 Owner | 因为仓库作者不同就保留重复 Skill |
-| 安装安全 | Secret、Cookie、登录态不入 Git；系统安装、后台服务、外部写入和用户登录单独确认 | 因为缺少非关键配置就阻断整个 Goal |
-| Mode 绑定 | 只修改用户指定或无歧义的当前 Mode；其他 Mode 不自动获得能力 | 安装后自动加入全部 Mode |
-| 静态校验 | Skill/Mode 结构、依赖、路径、引用和宿主投影必须可解析 | 用真实 Case 证明写作、研究或业务效果后才允许采用 |
-
-### 搜索入口与 Bootstrap
-
-外部搜索优先使用当前 Host 已经可用的网络与代码仓库能力；如果 `agent-reach` 已安装，可以把它作为统一发现层。如果正在寻找或修复的恰好就是 `agent-reach`，Harness 不能形成“没有 Agent Reach 就不能寻找 Agent Reach”的死锁，此时直接使用 Host 原生 Web、GitHub、Git 或浏览器能力。
-
-### 本地化重构的两条路线
-
-| 路线 | 什么时候用 | 可以做什么 | 必须保留什么 |
-| --- | --- | --- | --- |
-| 派生式本地化 | 实际复制或修改了上游文字、代码、脚本、模板或独特资产 | 去掉个人触发词、绝对路径和上游工作区假设；按本地 Skill 契约重组 | 原作者、来源、commit、许可、第三方声明和本地修改 |
-| Clean-room 重构 | 只确认“这个用户需求值得解决”，不需要上游实现 | 重新定义能力责任；从官方接口或许可清楚的公共基础能力独立实现 | 本地设计依据；不得把未复制的内容伪装成上游派生，也不得暗中搬运受限实现 |
-
-两条路线都可以去作者耦合，但不能把“删除可调用界面里的个人品牌”误解为“删除实际使用过的来源”。没有复制实现时，外部个人仓库只是一份需求与组织方式的调研样本；复制了实现时，它的许可边界继续生效。
-
----
+见[View 5C 专项视图](architecture/05c-installation-binding.md)。
 
 ## View 6 · Mode 是能力子图，不是 Workflow
 
-### 工作范式的结构与增删边界（v0.4）
-
-Mode 是一个工作环境，范式是环境里积累的常用配合方式。通用能力服务这个 Mode，不是跨 Mode 的隐式召回。全部技能页面按这些真实定义分组，分类和图不再由前端关键词推断。
-
-```mermaid
-flowchart LR
-    FILE["mode.yaml<br/>技能引用 + 范式 + 通用能力"]:::locked
-    HUMAN["App 独立编辑页<br/>目录 / Markdown / 范式编辑"]:::done
-    AGENT["当前 Agent<br/>按协议编辑文件或 CLI"]:::locked
-    CHECK["确定性校验<br/>归属完整 / 引用有效 / 关系有说明<br/>安全显示字段 / 并发与路径边界"]:::done
-    MAP["范式分栏 + Mermaid<br/>每技能一节点；通用能力独立区"]:::generated
-    HOST["宿主投影<br/>范式说明与通用能力清单"]:::generated
-    REMOVE["移出成员<br/>清理分类、节点、范式成员和边<br/>不删除 Skill 文件"]:::done
-    HUMAN --> CHECK
-    AGENT --> CHECK
-    CHECK --> FILE
-    FILE --> MAP
-    FILE --> HOST
-    FILE --> REMOVE
-    REMOVE --> CHECK
-    classDef locked fill:#dbeafe,stroke:#2563eb,color:#1e3a8a;
-    classDef done fill:#dcfce7,stroke:#16a34a,color:#14532d;
-    classDef generated fill:#f3f4f6,stroke:#6b7280,color:#1f2937;
-```
-
-图中的边只是工作关系；允许分支、汇合、树和反馈环。软件 `requires` 的依赖检查仍独立存在，不能拿软件依赖替代工作经验。没有明确关联时不凭空补线。新增业务范式、修改显示名称、移除分类都只改内容文件，不生成组件、脚本或数据库字段。
-
-v0.4 新建要求覆盖闭包成员；添加成员必须选范式或通用能力。旧 v0.3 可读但标记待定义。删除范式时若使成员无归属，编辑器要求重新归属后再保存；移出技能自动清理失效引用。纯通用工具 Mode 可以没有业务范式。
-
-回答：不同 Mode 如何共享 Skill，又为什么不会跨 Mode 隐式调用？
-
-**范围提示：**本图只说明 Mode 与 Skill 的成员关系，没有表达 Mode 内不同工作场景的逻辑架构。用户要求的“场景如何组织、技能如何协作”仍需补充；不能把本图或可展开的分类树当成完整工作架构。相关缺口统一记录在 View 2D。
-
-```mermaid
-flowchart TB
-    AR["agent-reach<br/>共享底层研究能力"]
-    DIAGRAM["baoyu-diagram<br/>共享结构表达能力"]
-    VALUATION["investment-valuation-returns<br/>共享估值能力"]
-
-    CREATOR["creator-studio<br/>业务 Mode"]
-    PRODUCT["product-lab<br/>业务 Mode"]
-    INVEST["investment-desk<br/>业务 Mode"]
-    CAPITAL["capital-markets-desk<br/>业务 Mode"]
-
-    WRITING["public-account-writing-style"]
-    LAYOUT["qihang-wechat-layout"]
-    PUBLISH["baoyu-post-to-wechat"]
-    PRODUCT_JUDGMENT["ai-product-analyzer"]
-    INVEST_RESEARCH["investment-research"]
-    IC_MEMO["investment-ic-memo-writer"]
-    COMPANY["financial-company-profile"]
-    COVERAGE["public-equity-coverage-writer"]
-
-    CREATOR --> AR
-    CREATOR --> WRITING
-    CREATOR --> LAYOUT
-    CREATOR --> PUBLISH
-    PRODUCT --> AR
-    PRODUCT --> PRODUCT_JUDGMENT
-    PRODUCT --> DIAGRAM
-    INVEST --> AR
-    INVEST --> INVEST_RESEARCH
-    INVEST --> VALUATION
-    INVEST --> IC_MEMO
-    CAPITAL --> AR
-    CAPITAL --> COMPANY
-    CAPITAL --> VALUATION
-    CAPITAL --> COVERAGE
-
-    classDef mode fill:#dbeafe,stroke:#2563eb,color:#1e3a8a,stroke-width:2px;
-    classDef shared fill:#dcfce7,stroke:#16a34a,color:#14532d;
-    classDef skill fill:#f3f4f6,stroke:#6b7280,color:#1f2937;
-    class CREATOR,PRODUCT,INVEST,CAPITAL mode;
-    class AR,DIAGRAM,VALUATION shared;
-    class WRITING,LAYOUT,PUBLISH,PRODUCT_JUDGMENT,INVEST_RESEARCH,IC_MEMO,COMPANY,COVERAGE skill;
-```
-
-蓝色节点是 Mode，其他节点是完整 Skill。箭头表示“这个 Mode 能看见这项能力”，不表示先后顺序。同一个正式 Skill 可以被多个 Mode 显式选择，但只保存一份正文。
-
----
+见[View 6 专项视图](architecture/06-mode-skill-architecture.md)。
 
 ## View 7 · 演化影响半径决策图
 
-回答：收到明确反馈后，应该改当前 Case、Skill、Mode 还是整个 Environment？
-
-```mermaid
-flowchart TD
-    F["用户明确反馈或明确长期改变要求"] --> Q1{"只影响本次材料、表达或交付吗？"}
-    Q1 -->|是| CASE["Case<br/>返工当前 Artifact，不修改长期能力"]
-    Q1 -->|否| Q2{"能否归因于一项可复用能力？"}
-    Q2 -->|是| SKILL["Skill<br/>用户明确要求时直接改；仍有不确定性时才使用 Trial"]
-    Q2 -->|否| Q3{"是否涉及多项 Skill 的可见范围、上下文、权限或产物表面？"}
-    Q3 -->|是| MODE["Mode<br/>最小修改一个业务工作场，再刷新受影响投影"]
-    Q3 -->|否| Q4{"用户是否明确改变跨 Mode 身份、偏好、治理边界或整体组织方式？"}
-    Q4 -->|是| ENV["Environment<br/>修改 Profile 或总体结构，并检查所有受影响 Mode"]
-    Q4 -->|否| STOP["不升级长期真源<br/>保留在 Case 或 Feedback，等待更多真实证据"]
-
-    classDef locked fill:#dbeafe,stroke:#2563eb,color:#1e3a8a,stroke-width:2px;
-    classDef done fill:#dcfce7,stroke:#16a34a,color:#14532d;
-    class F,Q1,Q2,Q3,Q4 locked;
-    class CASE,SKILL,MODE,ENV,STOP done;
-```
-
-原则是最小范围优先。向上升级必须说明为什么较小一层已经不够，不能从点击、耗时、沉默或一次模型错误推断长期偏好。
-
----
+见[View 7 专项视图](architecture/07-change-radius.md)。
 
 ## View 7B · Mode 新建、修改与退出决策图
 
-回答：什么时候应该创建 Mode，什么时候只改现有 Mode，什么时候根本不应该碰 Mode？
-
-```mermaid
-flowchart TD
-    START["真实 Case 或用户明确要求暴露工作场问题"] --> Q1{"问题能否归因于一个 Skill？"}
-    Q1 -->|是| SKILL["直接修改责任 Skill<br/>仍有不确定性时才使用 Trial；不改 Mode"]
-    Q1 -->|否| Q2{"是否同时涉及多项 Skill 的可见范围、长期上下文、权限或产物表面？"}
-    Q2 -->|否| CASE["留在 Case<br/>不制造长期结构"]
-    Q2 -->|是| Q3{"已有 Mode 是否代表同一种长期工作状态？"}
-    Q3 -->|是| MODIFY["修改现有 Mode<br/>只保存最小 Skill 根和必要边界 diff"]
-    Q3 -->|否| Q4{"是否已经在多个代表性 Case 中重复出现，并需要独立进入/退出？"}
-    Q4 -->|否| WAIT["不新建 Mode<br/>继续以 Case / Feedback 收集证据"]
-    Q4 -->|是| CREATE["新建业务 Mode<br/>定义 Goal 范围、上下文、权限、产物表面和 Skill 根"]
-    MODIFY --> VERIFY["代表性 Case 验证 + Guards + 刷新受影响投影"]
-    CREATE --> VERIFY
-    VERIFY --> Q5{"与现有 Mode 的边界仍然清晰吗？"}
-    Q5 -->|是| KEEP["保留独立 Mode"]
-    Q5 -->|否| MERGE["合并或退出 Mode<br/>先检查引用和宿主投影，再删除旧定义"]
-
-    classDef locked fill:#dbeafe,stroke:#2563eb,color:#1e3a8a,stroke-width:2px;
-    classDef done fill:#dcfce7,stroke:#16a34a,color:#14532d;
-    classDef optimize fill:#ffedd5,stroke:#ea580c,color:#7c2d12;
-    class START,Q1,Q2,Q3,Q4,Q5 locked;
-    class SKILL,CASE,WAIT,KEEP done;
-    class MODIFY,CREATE,VERIFY,MERGE optimize;
-```
-
-Mode 的判断单位是“长期工作状态”，不是主题名、项目名或一次任务。系统机制即使经常使用，也不能因此被包装成 Mode。
-
----
+见[View 7B 专项视图](architecture/07b-mode-evolution.md)。
 
 ## View 7C · 工作环境怎样培养：EvoMap 的借鉴与边界（设计，待实现）
 
-**这里的“培养”不是训练模型权重，而是持续改进工作环境：选对能力、记住适用经验、减少无用规则，并让这些改进能被带走。** EvoMap 值得借鉴的是“经验怎样形成可复用资产”，而不是把其完整进化 Runtime 再安装成 ASL 的第二调度器。
-
-### 官网、研究、代码分别说明了什么
-
-| 证据层 | 实际核对内容 | 对 ASL 的意义与限制 |
-| --- | --- | --- |
-| 官网功能与主张 | EvoMap 将能力经验发布、查找和复用组织成网络；GEP 区分策略、执行经验与演化记录。市场评分结合多个平台信号 | 借鉴可发现、可追溯、能反馈的能力供给；不把市场热度当个人适用性，也不自动上传私人环境 |
-| 当前 Evolver 仓库 | 查看主分支 31b0691 的文件；selector、memoryGraph、solidify 等核心模块已混淆，所查历史快照也未取得可读实现 | 不能宣称完整审计了当前核心算法，或已复现服务端排名；本轮未运行 Evolver |
-| 可读导出实现 | portable.js 将选定经验文件打包，生成统计与逐文件 SHA-256 清单；该文件只实现导出 | 可借鉴“内容自描述 + 可核对”，但它不等于 ASL 环境跨宿主导入实现 |
-| 可读选择测试 | selector 与 memoryGraph 测试表达了相关性、记忆偏好、禁止项和重复失败抑制等预期；本轮阅读关键断言，未运行测试 | 说明设计意图，不代替当前源码验证；值得借用“不相关时不要强选”，不照搬阈值或随机探索 |
-| AutoResearch 可读代码 | seed_ranking.py 保留未打分状态、返回评分覆盖情况，不把失败候选编成正常得分 | ASL 推荐可以说“尚未判断”，不能用默认高分营造优质市场 |
-| Research 实验 | 策略经验可能改善特定科学编程任务；组合多条经验并不总比单条更好。LongWoF 的部分经验来自参考答案蒸馏 | 不把“规则更多”当进步；不能把含参考答案的成绩包装成自主学习或未知任务泛化 |
-
-核对入口：[官网 Research](https://evomap.ai/research)、[GEP 定义](https://evomap.ai/wiki/16-gep-protocol)、[Evolver 源码](https://github.com/EvoMap/evolver/tree/31b0691acd97ba18878019312e646f1f2d970d43)、[导出代码](https://github.com/EvoMap/evolver/blob/31b0691acd97ba18878019312e646f1f2d970d43/src/gep/portable.js)、[选择测试](https://github.com/EvoMap/evolver/blob/31b0691acd97ba18878019312e646f1f2d970d43/test/selector.test.js)、[AutoResearch 排序实现](https://github.com/EvoMap/AutoResearch/blob/main/src/seed_ranking.py)。
-
-Research 的可借鉴结论，不等于独立验证的产品效果：[策略经验论文](https://arxiv.org/html/2604.15097v1) 的实验对象主要是科学编程；[LongWoF 报告](https://evomap.ai/research/longwof-bench) 披露 778 项任务中，252 项经验来自成功轨迹、526 项使用参考答案回退蒸馏。两者都不能直接证明我们的公众号写作或全部办公任务会更好。[AutoResearch 研究说明](https://evomap.ai/research/autoresearch-evidence-loop) 对“本地检查通过不等于目标完成”的区分可保留，但不因此要求每次装 Skill 都跑多模型实验。
-
-### 我们采用怎样的培养逻辑
-
-```mermaid
-flowchart LR
-    REQUEST["用户明确反馈<br/>或主动要求寻找更好能力"] --> SCOPE["已有 Host 管理入口<br/>先判影响范围"]
-    SCOPE -->|仅本次结果| CASE["修改当前 Case<br/>不制造长期规则"]
-    SCOPE -->|可复用的明确经验| FIND["在当前 Mode 内找相关 Skill 与经验<br/>不相关就不召回"]
-    FIND --> CHANGE["起草最小变更<br/>合并 / 更正 / 替换<br/>不默认不断追加"]
-    CHANGE --> OWN["落到责任 Skill、Mode 或 PROFILE<br/>由影响范围决定，不造 Gene 执行层"]
-    OWN --> MAP["本地可编辑记录 + 关系视图<br/>用户看得见、能撤回、可选择分享"]
-    MAP --> USE["后续真实任务按需使用"]
-    USE -->|新的明确反馈| REQUEST
-    REQUEST -->|缺少能力，需要外部供给| SEARCH["查本地 → 搜推荐与上游<br/>相关性、维护状态、依赖与重合"]
-    SEARCH -->|用户选择采用| INTAKE["直接进入既有安装路径<br/>不强制效果试验"]
-    INTAKE --> OWN
-    USE -.只有声称变好才需效果证据.-> CHECK["可选的新任务对照<br/>不把原文复述或训练样例当泛化"]
-    CHECK -.带限定范围呈现.-> MAP
-    classDef existing fill:#dcfce7,stroke:#16a34a,color:#14532d;
-    classDef pending fill:#ffedd5,stroke:#ea580c,color:#7c2d12;
-    classDef boundary fill:#dbeafe,stroke:#2563eb,color:#1e3a8a;
-    class REQUEST,CASE boundary;
-    class SCOPE,INTAKE existing;
-    class FIND,CHANGE,OWN,MAP,USE,SEARCH,CHECK pending;
-
-```
-
-**算法建议保持可解释，而不是先造总评分：**
-
-- **找能力时，先看适不适用，再看好不好。** Mode 范围、任务相关性、宿主兼容和依赖是首要条件；KOL 推荐、Stars、维护活跃度是发现线索。缺少信息明确标注，热门能力也不能越过 Mode 自动安装。
-- **找经验时，先找同一类问题。** 优先当前 Mode / 责任 Skill 的明确经验，再按需要搜索用户允许使用的材料。记录“适用情境、有效做法、不适用情况、反馈依据”即可，这些可以是现有文档中的简短内容，不强制新文件或新执行单位。
-- **改能力时，优先替换与合并，不无限累加。** 一次写作返工不推导出全环境新禁令；某个 API 临时掉线只记本次连接状态，不因此惩罚写作 Skill。明确反馈支持持久修改；客观诊断、沉默和运行耗时不自动成为个人偏好。
-- **判断进步时，看新任务是否更好，不看改动有多少。** 只在用户要求评价“培养效果”时，选未用于改写的代表性任务做前后比较；评价者、预算和停止条件事先明确。安装验收、结构测试、业务效果是不同证据，不互相冒充。
-
-**图结构可以有，图数据库先不需要。** Mode 与 Skill 的包含关系、Skill 的明确依赖、资料与经验的关联，已经能形成一张能力图；Mode 本身就把多种能力和上下文组合成一组关系，不需要为了“超图”再建运行节点系统。App 从真实文件生成视图，推测关系只能显示为建议。长期经验先本地 Markdown 与普通搜索；确有检索规模问题再增加可重建 RAG 索引，索引不是记忆真源。
-
-**与市场结合：分享培养后的环境，不分享用户的隐私轨迹。** 用户可以发布一个 Mode 的精选能力和可公开经验；接收者本地采用后继续培养。上游更新展示差异，不覆盖个人改动。首期不自动加入 EvoMap Hub，不引入积分、繁殖、随机变异或全天候自修改机制；也不要求把现有 Skill 变成 GEP 才能运行。
-
----
+见[View 7C 专项视图](architecture/07c-learning.md)。
 
 ## View 8 · 三宿主部署与投影图
 
-回答：同一份 Environment 怎样接入 Codex、Claude Code 和 DeepSeek Harness？
-
-```mermaid
-flowchart LR
-    ENV[("Selected local Environment<br/>Personal 或 Agent Skill Library<br/>Profile + Modes + Formal Skills<br/>Skill 内按需记录运行依赖")]
-    RESOLVE["Harness Core<br/>validate + resolve Mode Skill closure"]
-    MANIFEST["Managed Manifest v2<br/>操作类型 + Git HEAD + 内容指纹<br/>受管说明 + 原子回滚"]
-
-    subgraph CODEX["Codex App"]
-        CA[".agents/skills/<skill><br/>完整 Skill package"]
-        CI["AGENTS.md managed block"]
-    end
-
-    subgraph CLAUDE["Claude Code"]
-        CS[".claude/skills/<skill><br/>完整 Skill package"]
-        CC["CLAUDE.md managed block"]
-    end
-
-    subgraph DSH["DeepSeek Harness"]
-        DP["Project projection<br/>完整 Skill package<br/>.dsh/skills + AGENTS.md"]
-        BASE["Known-good Agent Preset<br/>Tools + Plugins"]
-        PRESET["Mode Agent Preset<br/>Persona + Mode Skill closure"]
-        SHARED["Profile / Bundle<br/>模型、存储、沙箱、凭据等宿主设施"]
-        BASE --> PRESET
-        SHARED --> BASE
-    end
-
-    ENV --> RESOLVE --> MANIFEST
-    MANIFEST --> CA
-    MANIFEST --> CI
-    MANIFEST --> CS
-    MANIFEST --> CC
-    MANIFEST --> DP
-    RESOLVE -->|只替换 Persona 与 Skill 面| PRESET
-
-    classDef truth fill:#dbeafe,stroke:#2563eb,color:#1e3a8a,stroke-width:2px;
-    classDef done fill:#dcfce7,stroke:#16a34a,color:#14532d;
-    classDef generated fill:#f3f4f6,stroke:#6b7280,color:#1f2937,stroke-dasharray:4 3;
-    class ENV truth;
-    class RESOLVE done;
-    class MANIFEST,CA,CI,CS,CC,DP,PRESET generated;
-```
-
-Codex 与 Claude 使用项目原生 Skill 目录和规则文件。DeepSeek 额外区分宿主级 Profile / Bundle 与会话级 Agent Preset；ASL Mode 对应 Agent Preset，不对应 Profile。三个 Host 都继续拥有自己的 Agent Loop、会话、工具、模型和授权，ASL 不复制这些 Runtime 能力，只生成它们能够原生发现的环境表面。投影切换会先在同盘临时区完成，再替换旧受管表面；失败时恢复旧投影。复制型投影与 Preset 逐 Skill 校验 SHA-256，链接型投影继续用 Environment 总指纹检查漂移。
-
-MCP 的可移植性高于宿主 Plugin，因此当前架构优先让 Skill 声明 MCP 运行需要，再由 Host 使用自己的 MCP 配置和登录方式满足它。Hook 也采用相同原则：Harness 提供同一组 CLI 校验，Adapter 只负责接到 Codex、Claude 或 Cordis 的真实生命周期事件。未来接入其他 Agent 时复用这份 Adapter 契约，不修改 Environment 数据模型。
-
-| 接入面 | Codex App / CLI | Claude Code | DeepSeek Harness | 其他 Agent / CI |
-| --- | --- | --- | --- | --- |
-| Skill | `.agents/skills/` + `AGENTS.md`，已实现 | `.claude/skills/` + `CLAUDE.md`，已实现 | `.dsh/skills/` 或 Agent Preset，已实现 | 有原生 Skill 目录时增加薄 Adapter |
-| MCP | 使用 Codex 原生 MCP 配置、安装与登录 | 使用 Claude 原生 MCP 配置、安装与登录 | 使用 Cordis Profile / MCP client plugin | 支持 MCP 的 Host 复用同一服务；不支持则明确提示 |
-| Hook | Plugin 接线代码已有；本轮未验收 App 原生调用 | 历史有 SessionStart 触发记录；本轮未重做真实会话 | v3 导出已固定 Preset 定位并校验配置；本机旧 Preset 尚未重建 | 没有 Hook 时手动调用 CLI；不宣称所有宿主已激活 |
-| Tool / Agent / 权限 | 完全归 Codex | 完全归 Claude Code | 完全归 DeepSeek Harness | 完全归目标 Host |
-
----
+见[View 8 专项视图](architecture/08-host-projections.md)。
 
 ## View 9 · 当前项目状态
+
+### 2026-10-02 桌面替换与限定范围发布
+
+- **本机安装：**0.5.5 已安装到 `%LOCALAPPDATA%\Programs\ASL Workspace\0.5.5\`，桌面 `ASL Workspace.lnk` 已改指该目录中的 EXE。安装目录、candidate2 与发行 ZIP 的 411 个文件逐项 SHA-256 一致。旧 0.5.4 保留；原入口及偏好备份在工作区 `.local/backups/asl-desktop-entry-0.5.5-20261002-040517/`。切换时没有运行中的旧窗口，没有强杀或改动真实技能、宿主配置。
+- **本轮复验：**核心全量 **228 passed / 5 skipped**，桌面 **179 passed / 0 failed**。已安装 EXE 的冻结 CLI 坏图拒写、修复反馈、修正后实际渲染、原文回读及参数错误 JSON 通过；隔离 GUI 三组通过，无 renderer 错误，实际版本 0.5.5。证据在 `.local/validation/asl-library-20261001/frozen-cli-1790928214499/`、`app-cli-1790928243597/result.json`。
+- **发布范围：**用户确认只发布 App、CLI 与入口文档。Harness 发布检出与开发真源的 170 个受管源文件逐项一致；Agent Skill Library 只发布 `README.md`、`README_EN.md` 的 CLI 入口。公开库 12 项既有业务修改保留本地，Personal Environment 不上传；当前内容版 ZIP 含这些未授权发布的业务修改，本轮不上传它。
+- **远端状态：**桌面入口已替换；Git 提交、正常推送和 App 预览版 Release 正在进行，完成后在本段记录可核对链接。未签名；真实宿主会话、跨电脑和任意 Mermaid 全语法可视编辑仍未完成。
+
+### 2026-10-01 Agent / App 同源 CLI 与架构分块（核心 0.4.4，App 0.5.5）
+
+- **本轮实现：**复用现有 `asl-harness`，`cli.describe` 从真实命令与操作字段生成机器契约；现有 26 个命令，新增完整 `mode.files`，与 `skill.files` 共用安全文件读取。参数错误同样返回 JSON 和非零退出码。Agent 与 App 显式选择同一本地 Environment，普通编辑只提交一次核心验收；不另建服务、数据库或后台模型。已有 Mermaid 进入原生编辑，成员分组管理不再维护第二份关系图。
+- **写入门禁：**正式采用前在私有候选中检查结构、引用、路径、Secret 与 Mermaid 实际渲染；协作锁与源/目标指纹复查保护受控写入。最终复制字节必须匹配已验收候选。渲染反馈指向原始可编辑文件或 ZIP 内成员，不再指向已销毁的临时目录。完整 Mode 导出/导入保留图、脚本、参考资料、二进制和许可，拒绝恢复路径碰撞；旧包兼容。MODE / SKILL 主文保存修复 Windows CRLF 重复转换。脚本只读取、保存，不执行。
+- **Agent 指引：**框架管理 Skill 已从“先改正式文件再验证”改为契约发现、指纹读取、候选提交与反馈重试；多文件先在库外草稿验收并重新导出采用。写 Skill 元数据校验及独立只读行为前向复验通过。原生 MCP 等工具不要求再包装一层 Skill；未授权宿主更新或 Git 提交不会自动执行。没有改业务 Skill 或真实账号。
+- **架构收束：**专项内容分为 `docs/architecture/` 下 20 个文件，新增 View 2G；总览保留导航、旧锚点与本唯一状态区。Master、组件、内容变更和 App 专项图同步同源入口，未复制第二套真源或完成数字。26 张专项 Mermaid 图经实际离线渲染通过，协议文档检查 22 Markdown / 0 YAML 通过；框架与内容版 README 同步管理入口。
+- **验收：**最终串行核心全量 **228 passed / 5 skipped**，桌面 **179 passed**。独立审查针对性 **89 passed / 3 skipped**，另五项原始复现通过，当前受控 CLI 链未发现未解决 P0/P1。candidate2 EXE 实际 App **0.5.5**、核心 **0.4.4**；冻结 CLI 的坏图拒写、定位反馈、修正重提、原文回读和参数错误 JSON 通过。隔离 EXE GUI **3 + 8 + 11 组通过**、无 renderer 错误，含 12 种图型、节点与连线编辑、文件侧栏、成员管理不改原图、仓库内返回、DeepSeek 旧配置升级及云端连接移除。旧 GUI 首次因等待已替换的完整报错文案失败；核对短提示与机器回执后更新断言，重跑全部通过，不隐去失败记录。
+- **真实内容检查：**两个真实 Environment 均经最终冻结核心只读校验，各 **37 Skill / 4 Mode**，生成视图一致；既有缓存警告保留，没有清理、覆盖或刷新宿主投影。内容 ZIP 来自当前 Agent Skill Library 本地内容，不是 Personal Environment；所有入包文件与当前源逐字节核对。公开库与个人库仍各自独立演进。
+- **当时交付状态：**已生成 App 和内容版 ZIP，均逐文件 SHA-256 核对。机械发布检出已同步，纳入范围 **170 个文件**逐项一致（117 个复制更新、53 个原已一致、0 删除），没有在两处独立设计。该检出只同步源文件，未安装渲染依赖；含图 CLI 验收可使用已验收的 App 随包运行时。当时日常桌面入口仍为已安装的 **0.5.4**；**0.5.5 尚未安装、重启、签名或远端发布**。后续部署与远端状态以上方 2026-10-02 记录为准，不把本地同步和打包称为远端发布。
+- **证据：**冻结 CLI 为 `.local/validation/asl-library-20261001/frozen-cli-1790844611017/`；最终 GUI 为 `asl-library-20261001/app-cli-1790844653044/result.json`、`asl-library-20260929/native-edit-1790844672280/result.json`、`asl-library-20260929/run-1790844897977/result.json`，均在工作区 `.local/validation/` 下。内容 staging 为 `asl-library-20261001/release-1790844960762/`；不是另一份运行真源。
+- **发行文件：**`deliverables/ASL-Workspace-0.5.5-Windows-x64.zip`，411 文件、175,354,629 字节，SHA-256 `7AD4556D7298C305BC265EE6DA72EB0A230BC29AB68478155E329EA5F4C4F682`。`deliverables/Agent-Skill-Library-2026-10-01.zip`，486 文件、2,891,577 字节，SHA-256 `F4DDC4234F1003208F4197353D36E2D0B2B4334837BF13CA6A2E16D950C1B5EC`。内容版解压后是可选择的完整 Environment，不内嵌第二份核心；Windows App 包可离线提供完整核心及渲染器。
+- **边界：**协作锁不拦截任意直接磁盘写入，不承诺断电恢复、所有读者快照或多文件原子可见。错误反馈交给当前调用 Agent，不自动联系未知宿主或启动第二模型。全语法渲染不等于任意图型双向拖拽；自动语义组织、全部冷启动加速、真实宿主会话及跨电脑验收仍未完成。Vite 大分块提醒保留，旧全局 CLI 也未自动替换。
+
+### 2026-09-30 点击即编辑与原位置更新（App 0.5.4，本机交付）
+
+- **本轮实现：**节点文字直接在 SVG 原位置编辑，无弹出文本框；连线备注同样原位修改。回车、离焦、Esc 与中文组合输入分别处理。保留官方布局，不使用自绘节点替代。主侧栏与技能侧栏可拖动并记住宽度；移除重复“连接模式库”和仓库整理按钮，添加库统一进“发现”。云端右键移除只去掉连接，已采用文件保留。仓库 README 与技能网格按 Taste 改版原则改善留白、层级，保留用户认可的浅蓝风格。
+- **DeepSeek 原因与修复：**本机四个 ASL 配置确认为 v2，而新核心此前只认 v3，导致旧版被误判为损坏。现在仅对完整、可核对的已知 v2 提供升级；结构或受管文件损坏仍不可覆盖。Mode 成员变化按来源更新处理，不误判旧安装快照非法。更新绑定原回执中的宿主、目录、Mode 与来源；升级保留旧目录备份。Creator Studio 的本机位置为 `C:\Users\Administrator\.dsh\.agent-presets\asl-creator-studio`，来源为 Personal Harness；本轮不改这四个真实配置或账号。
+- **最终包验收：**桌面 Node **172 passed**；核心针对 DeepSeek、Mode 与 Mermaid 门控的 Python **62 项通过**，不是重新运行核心全部测试。生产构建及冻结核心中文写入通过。candidate2 EXE 实际版本 **0.5.4**，隔离 GUI **8 + 11 组通过**，包含单击原位编辑、Esc / 离焦 / 中文组合输入、节点与连线增删、宽度及内容重开持久性、12 种原生 Mermaid 图、旧配置原位升级与备份、云端移除且本地内容不变；无 renderer 错误。证据为工作区 `.local/validation/asl-library-20260929/native-edit-1790756350283/result.json`、`run-1790756350304/result.json`。总架构 25 张图经实际渲染通过；协议文档校验 21 Markdown / 0 YAML 通过。Vite 大分块提醒仍在，不把重复浏览缓存命中当成全部冷启动性能已达标。
+- **体验补验与修复：**保存期间保留刚改的新文字，不先闪回旧值；写入失败恢复原标签并呈现错误。candidate1 的附加 GUI 检查先遇到 Windows 换行规范化差异，随后遇到保存完成而 SVG 尚在异步重绘的断言；核对原文无丢失，补齐真实重绘等待。candidate2 全部通过。旧候选 ZIP 留在其构建目录，不作为交付。
+- **尚未完成：**任意 Mermaid 全语法可视编辑、自由拖动、自动理解技能关系、真实宿主会话与跨电脑验收。时序等图型支持原生渲染和原文修改，不宣称节点操作全部双向可用。真实本机 v2 配置仍待用户点击升级；图示是示例，不冒充真实 Mode 的业务架构。
+- **交付状态：**已按用户保存后授权正常关闭 0.5.2，桌面快捷方式切换到 `%LOCALAPPDATA%\Programs\ASL Workspace\0.5.4\ASL Workspace.exe` 并启动。旧版程序保留，原入口及偏好备份在 `.local/backups/asl-desktop-entry-0.5.4-20260930/`；不强杀、不清缓存、不改真实技能库或账号。尚未提交、推送或同步公开检出；未签名。
+- **发行文件：**`deliverables/ASL-Workspace-0.5.4-Windows-x64.zip`，175,334,674 字节、404 个文件，逐文件 SHA-256 与已验收 candidate2 及安装目录一致，不含个人库和账号配置。ZIP SHA-256：`6E6969021D1860A6FB27CC6FC3ADD51504FB90A1A23FE773A62787B928F68B9A`。
+
+### 2026-09-30 原生图可视修改与按需技能侧栏（App 0.5.3，历史候选）
+
+- **本轮实现：**不采用三张生成图；中心继续官方 Mermaid 渲染，移除额外卡片外壳。基础流程图节点文字、连线备注、连接与移出操作直接修改同一代码块；图中节点可打开完整技能文件侧栏，正文及脚本可双击编辑。面板出现时保留可读字号，可滚动或手动适应宽度。
+- **边界修复：**SVG 随容器更新后不再丢失点击事件；连线按渲染器标识关联原文，不按画面顺序猜测；双击不再被第一次单击展开侧栏打断；切页取消保留文件和图草稿；删掉当前代码块后仍编辑正确的剩余图。初始文件读取不锁住导航，标题导图排除 YAML 元数据。
+- **开发验收：**隔离的真实 Agent Skill Library 副本，原生编辑 GUI 5 组通过；含节点/连线增删、取消导航、Markdown 和脚本写入、重新读取、960 px 窄窗。既有仓库浏览及坏图反馈 GUI 8 组通过，均无 renderer 错误。证据：工作区 `.local/validation/asl-library-20260929/native-edit-1790746493245/result.json`、`run-1790746503638/result.json` 与截图。脚本只读写、不运行；未改真实技能库。
+- **最终包验收：**桌面 Node **164 passed**；生产构建及冻结核心中文写入通过。candidate2 EXE 实际版本 **0.5.3**，隔离 GUI **6 + 8 组通过**、无 renderer 错误，新增关闭重开后的内容持久性检查。证据：`native-edit-1790747129248/result.json`、`run-1790747129261/result.json`。总架构 **25 张图**实际渲染通过；协议文档校验 **21 Markdown / 0 YAML** 通过。Python 未改，渲染门控针对性回归 **8 项通过**；本轮不把上一轮核心全套测试数字当成重新运行。Vite 大分块警告仍存在。
+- **收尾复现与修复：**candidate1 界面回归后发现一个孤立的校验错误窗口；调用方退出、结果管道关闭时，Electron 输出错误未处理。新增真实进程回归先复现 12 秒不退出，再验证取消后非零退出；candidate2 同项通过，最终进程核查无残留校验器。渲染成功回传等待输出完成，不把中断当成功；不改真实用户 App 的退出策略。candidate1 旧包移回其构建目录保留，不再作为交付包。
+- **明确未做：**任意 Mermaid 语法的图形编辑、自由摆放、自动理解 Skill 业务关系。未支持的语法保留原文编辑与原生渲染，不扁平化、不静默转换；基础编辑仅覆盖独立节点及独立边语句。Skill 包安装、Mode 成员变更与图示编辑不混用。右侧修改仅针对可编辑文本文件，二进制或超限文件不伪装为可编辑。
+- **当时交付状态：**0.5.3 候选回归通过，当时桌面仍为 0.5.2；后续口述修正进入上述 0.5.4，0.5.3 未切换为桌面入口。尚未提交、推送或同步发布检出；未签名。包中不携带个人技能库与账号设置。
+- **发行文件：**`deliverables/ASL-Workspace-0.5.3-Windows-x64.zip`，175,329,984 字节、404 个文件；逐文件 SHA-256 与已验收 candidate2 目录一致。ZIP SHA-256：`AF1EA43CB3CED0DA7031A95C4BABA8B673C8B0F9F7A91B4BA98F073E2F703787`。
+
+### 2026-09-30 原生 Mermaid、反馈重写与仓库内浏览（App 0.5.2，上一轮本机交付）
+
+- **已进入交付包：**仓库 README 独立读取，不等待完整技能扫描；仓库列表、技能详情和返回留在来源上下文。页面内复用仓库报告；切页面不重复触发本机 Mode 扫描。范式阅读改用官方 Mermaid，原文编辑与实时预览共用离线渲染实现。已有 v0.4 关系转图时保留备注与条件，不额外制造节点。普通文档只有标题时显示文档结构，不推测不存在的业务关系。
+- **写入闭环已测：**编辑和导入实际渲染后才写入，CLI 回传结构化修正反馈；Agent 指引要求重写并重试。最终冻结核心经过“坏图提交 → 文件未改 → 读取反馈 → 修正并重提 → 成功保存”，没有调用另一模型。渲染期间如另一 Agent 改了目标或来源，停止覆盖并要求重读；包导入同样保护。新环境的指引要求库外草稿验收后采用。直接绕过接口改文件不能主动通知未知宿主，不能称为所有 Agent 都会自动重写。
+- **确定性验证：**桌面 Node 155 passed；核心 Python 168 passed / 4 skipped（平台或符号链接条件）。最终候选 EXE 的隔离 GUI 8 项通过，无 renderer 错误，覆盖仓库内列表与返回、原生图、编辑失败反馈与修正保存、960 px 窄窗。两个真实 Environment 均通过最终冻结核心的只读 `workspace.validate`。协议检查 21 Markdown / 0 YAML 通过；总架构 25 张图经同一离线渲染器实际生成 SVG。
+- **重复浏览性能：**0.5.1 与 0.5.2 candidate1 各 10 次交替、相同 450 ms 模拟网络且各预热一次，仓库重复打开 p75 从 1214.7 ms 降至 390.8 ms（约 67.8%）；包括预热的仓库扫描调用从 11 次降至 1 次。最终 candidate2 仅补关系条件保留，并重新完成 GUI 回归，未重做这组 A/B。该结果只说明重复浏览路径，不能推断冷启动或真实网络加速。
+- **真实联网检查：**Taste 仓库 README 1.454 秒、13 个技能的完整解析 11.457 秒；列表、详情与返回保持当前仓库，无 renderer 错误。较早一次完整解析曾在 60 秒超时，后续诊断与完整 UI 重试均通过，未稳定复现或证明根因；首次联网波动仍是边界，不宣称所有加载已根治。
+- **本轮边界修复：**独立验收进程不依赖宿主用户配置目录，修复隔离环境无 APPDATA 时出现系统错误窗口、界面一直等待的问题；校验不继承宿主 Node 启动钩子。普通无图文档不受图文档大小限制。CLI、Mode 文本、Skill 文件及 SOURCE、整包采用走同一门控；已有不相关内容不因语义推测被阻断。
+- **本机交付：**`deliverables/ASL-Workspace-0.5.2-Windows-x64.zip`，175,326,035 字节、404 个文件，逐文件哈希与 candidate2 一致；SHA-256 `D021BEBDC395CF43D79D8ABE1B7CF91B481AA379BDC99F61283BB720AB1BE0D5`。经用户明确确认后正常关闭 0.5.1，安装到 `%LOCALAPPDATA%/Programs/ASL Workspace/0.5.2`，更新桌面入口并打开新版，已核对运行路径。旧版本与入口备份保留；包不包含个人技能库、账号或偏好。尚未签名、未提交推送、未上传 GitHub Release，发布检出未同步；真实业务库与宿主账号配置未改。
+- **证据：**工作区 `.local/validation/asl-library-20260929/`：最终 EXE GUI 为 `run-1790744171970/result.json`，A/B 为 `release-1790695301878/result.json`，真实联网 UI 为 `release-1790743972815/result.json`，诊断复试为 `live-1790743924383/result.json`；各 GUI 目录留有截图。测试中的修正重提验证 Agent 接口，不等于已验收模型自动修图质量。
+- **该轮边界：**三张视觉探索后来被用户否决，改用上述原生图与按需技能侧栏，不采用生成稿布局。任意 Mermaid 与旧成员画布的双向可视编辑、跨电脑及真实宿主会话仍未完成；不把现有 Mode 都描述成已补齐业务架构。
+
+### 2026-09-29 外部生态整理与日常入口修复（App 0.5.1，本机交付）
+
+已复现：桌面快捷方式与运行进程仍为 0.2.1；它读取当前 Personal Harness 报 `MODE_INVALID`，0.5.0 冻结核心读取同一目录通过。更新源码和生成 ZIP 不等于更新用户的日常入口。
+
+本轮按已有产品方向补齐，不新增执行器或业务数据库。以下是已实施范围，不等于全产品、所有宿主已完备：
+
+1. 普通 GitHub 仓库、Skill 包、`AGENTS.md` / `CLAUDE.md` 与插件声明 → 识别文件线索 →「交给 AI 整理」携带来源、版本、本地只读目录、写入目标和当前 ASL 协议。校验后回到 App；没有 ASL Mode 不再是死路。验证：无 Skill 仓库、复杂包、错误模式、手工修改提示词与整理结果读取。
+2. 本机技能发现先呈现已知结果，后台更新；重复进入与编辑模式复用结果，明确扫描时间。缓存不成为业务真源，采用时仍检查实际文件。验证：重开、强制刷新、目录变化、损坏缓存与取消读取。
+3. 用户界面不再称 DeepSeek「预设」；全部技能默认去重，保留按场景查看。错误提供整理修复入口。验证：真实库、窄窗口、空态与独立编辑页。
+4. 回归、打包、核对入口后，按用户本轮「已保存，验收后更新并重启」授权正常关闭 0.2.1，桌面快捷方式已指向并启动安装目录中的 0.5.1；旧版原目录保留。未改个人业务内容或 Agent 账号配置。
+
+- **真源落实：**公共库与本地 Mode 分开管理。正在查看的云端库在非编辑状态每 5 分钟检查并刷新，回到窗口后按间隔补查；采用到本地的 Mode 不随它覆盖。提示词中的来源是只读资料，写入目标另行明确；整理结果经核心校验才读取。公共库仍使用解析缓存，未实现完全无本地缓存或推送式实时连接。现有数据库业务接口开放是产品原则，不代表本轮新增或完成了数据库适配层。
+- **本机发现：**启动时并行预读，上次发现结果跨页面和重开复用，再后台扫描标准目录与已登记项目；不是全盘遍历。缓存损坏、记录结构错误或越界路径不会授予导入权限；采用时仍读真实包。默认显示 12 项、可继续展开和搜索，重复来源用已有规则合并；全部技能默认只列一份去重清单，不按范式重复整表。首次扫描及首次启动仍有等待，未宣称秒开。
+- **验证：**桌面 Node 150 passed；核心 Python 160 passed / 4 skipped，跳过项仍为平台或符号链接条件。无登录 shell 的一次 Node 回归误用损坏的 PATH Python（`No pyvenv.cfg file`），明确指定 `ASL_PYTHON=E:/Anaconda/python.exe` 后全量通过；这不是打包核心依赖外部 Python。协议检查 21 Markdown / 0 YAML；本文 24 张 Mermaid 图解析通过。最终冻结核心的中文保存通过；安装后读取两个真实 Environment 均为 4 Mode / 37 Skill、校验 ok、生成视图一致；既有可重建内容警告仍保留，未清理。
+- **窗口验收：**最终 candidate2 在隔离偏好及真实库副本中通过 22 项原交互回归和 7 项新增路径，无 renderer 错误。新增覆盖去重清单、发现分页搜索、无 Skill 仓库的 ASL 提示词、编辑后真实剪贴板回读、错误结构拦截和修复返回、目录探测不返回时仍可编辑退出，以及云端定期刷新不写本地 Mode。外部仓库网络报告在这组窗口测试中使用夹具；核心写入和读取是真实隔离文件，Agent 修改由测试模拟，没有让模型实际完成陌生仓库适配。配置 / 提示词 / 画布固定文字 97 / 68 / 56 字符，只对这三个抽查状态成立。
+- **性能边界：**最终窗口回归期间并行运行其他验证，启动到模式列表约 7.2 秒，配置首屏约 269 ms；这是单次运行记录，不是隔离基准。可编辑提示词不再等待可选目录发现，但读取协议仍约 2.9 秒。大分块构建警告仍在，冷启动、规模化技能清单与长期运行仍需专项优化。
+- **交付与入口：**安装位置 `C:\Users\Administrator\AppData\Local\Programs\ASL Workspace\0.5.1`；桌面 `ASL Workspace.lnk` 已核对指向该位置，运行进程均为该版本。旧入口与原偏好备份位于工作区 `.local/backups/asl-desktop-entry-20260929/`，旧 0.2.1 未删除。安装目录 300 个文件与候选逐项哈希一致。便携包 `deliverables/ASL-Workspace-0.5.1-Windows-x64.zip`：173,831,441 字节，300 个文件，SHA-256 `AC19E2CC468867FD6F6AB0D65D31F0BD14906E93074A0742AB6030462A78413B`；ZIP 全项、13 个入口模块与前端资源均核对一致，只带通用示例和依赖许可，不带个人库、账号或偏好。
+- **证据与剩余边界：**窗口证据为工作区 `.local/validation/asl-ux-20260927/run-1790689752319/` 与 `.local/validation/asl-ux-20260929/run-1790689763400/`。App 未签名，未上传 Release，未提交或同步发布检出（开发 HEAD `cebd549`，发布检出 HEAD `5a66f52`，既有未提交变更保留）。真实宿主业务会话、跨电脑、任意复杂技能依赖配置、所有目标宿主适配及全 App 全状态体验仍未验收；选择吸收来源更新不等于自动覆盖本地 Mode。
+
+### 此前记录：2026-09-27 导航、分类与直接编辑修复（Codex 直接实施）
+
+用户确认保留浅蓝玻璃视觉；本轮不派发 DSH，只收敛交互与数据身份。此前 candidate5 的有限验收没有覆盖本次反馈的路径，不能据此认定产品完整。
+
+- **根因与修复：**restoreView 空选择误回首个模式；工作模式按钮不清选择；切库等待期保留旧库；架构组件继承上个 Mode 的 shared 标签；未知架构回退成通用列表；配置依赖全量 native 扫描；编辑器第三栏和文档展开打断画布；节点文字更新丢失测量尺寸导致闪隐；连线完成按钮事件冒泡导致重新选中。打包复验进一步发现：后台刷新时返回列表没有记入偏好，立刻退出也可能早于已有写入队列完成；现在允许刷新期间记住用户导航，正常退出等待队列落盘。分别在对应现有模块修复，不新增调度器或数据库。
+- **分类与内容：**两份真实 Product Lab mode.yaml 同步为仅 Agent Reach 属于 shared，材料归档进入研究范式；其余业务 Skill 未改。协议 §5.1 说明未分类不等于通用、库路径与 Mode ID 共同定位。两个 Environment 的其他既有差异和未提交 Skill 保留，不做全量覆盖。
+- **验证：**桌面 142 项自动测试通过；协议校验 21 个 Markdown / 0 YAML；两库用新包的冻结核心执行 workspace.validate 均 ok 且生成视图一致；本文 23 张 Mermaid 图解析通过。candidate8 的真实 EXE 在隔离偏好及两份真实库副本中完成 22 项窗口检查，无 renderer 错误：列表与返回、慢请求退出、同名不串库、配置首屏、可编辑提示词、节点和边原位编辑、磁吸连线、右键移出与撤销、滚动、画布与文档保留草稿、900 px 窄窗、新建 Mode、重复来源选择与完整技能包导入、重开恢复、失败重试均通过。配置 / 提示词 / 画布三个焦点界面固定可见文字分别 97 / 62 / 56 字符；只排除真实内容、名称、路径，不据此声称所有页面均满足预算。
+- **性能：**按 [花叔闪电](https://github.com/alchaincyf/huashu-flash) 的先测量、移出关键路径、交替对照原则执行桌面适配。candidate5 / candidate6 同机同库各 10 次，配置到可选择 Agent 的 p50 / p75 / p95：1077 / 1133 / 1561 ms → 453 / 500 / 533 ms；启动到真实架构可见：3248 / 3538 / 4251 ms → 3077 / 3348 / 3601 ms。系统负载未隔离，部分轮次有并行验收，作为本机方向性对照，不声称纯净基准或跨电脑指标。没有把骨架屏计作可用；启动仍需数秒。candidate7 / candidate8 后续修原位完成事件、配置重复内容和退出偏好保存，最终包没有重新完成 10 对性能测量，不把中间包指标写成最终包基准，不新增缓存数据库。
+- **交付：**最终候选为 `.local/builds/asl-0.5.0-candidate8-20260927/ASL Workspace/ASL Workspace.exe`；`deliverables/ASL-Workspace-0.5.0-Windows-x64-r3.zip` 为完整便携目录，173,131,399 字节（约 165.1 MiB）、296 个文件，SHA-256 `1F52D020A5AB508A8D4C8463CCE2F6A14185FD1845EFD7A193F30B5FCFB80A85`。ZIP 每个文件与 candidate8 哈希一致；12 个入口和前端 dist 与开发真源一致，冻结核心通过中文保存。只携带通用示例及依赖许可，不含个人技能库、真实账号、用户偏好或测试夹具。candidate7 的重开恢复未通过，不作为交付；旧包保留、不覆盖、不删除。
+- **证据：**工作区 .local/validation/asl-ux-20260927/，包含验收清单、真实失败截图、performance-1790519210955、最终 EXE 回归 run-1790520393610、打包逐项校验脚本。实现仍在开发真源；发布检出和 GitHub 未同步。未修改真实 Agent 账号 / MCP，未删除缓存或用户文件，未替换已运行旧版。
+- **未完成：**本轮真实宿主业务会话、跨电脑、任意复杂图、全应用所有状态文字预算、冷启动秒开和签名发行仍未验收；不将“位置已检测”标成“运行成功”。
+
+### 此前记录：2026-09-27 节点编辑与整理入口修订（candidate5 / r2，非本轮最新交付）
+
+本轮由 DeepSeek Harness 改代码与文档，Codex 独立验收并复跑；分工只说明职责。下列只写已发生的真实结果，不把实施中当完成。版本为 App 0.5.0 / Harness 0.4.2，协议仍为 `asl-wep/v0.4.0`；DSH 侧实施由 Codex 独立复验，打包 GUI 验收 17/17 通过。构建候选包与关闭旧版是两件独立的事：旧版经用户明确授权后正常关闭（不是强杀）；candidate4 由独立构建产生，17 项通过后又在后续连续切页重开中捕获到未处理的 EPERM 异常，因此不再作为最终交付。最终候选为 candidate5，交付 ZIP 由它逐项哈希核对产生。全程未签名、未上传 Release、未提交推送，也未替换用户正在运行的 App 文件或修改真实宿主配置。
+
+| 顺序 | 本轮改动 | 独立验证 | 结论 |
+| --- | --- | --- | --- |
+| 1 | 整理入口为独立页面；完整提示词可改并按修改内容复制 | 提示词独立页已去掉全局导航；隔离 Electron GUI 中迟到向导可退出、向导失败可退出；完整提示词编辑后真实系统剪贴板回读通过 | 独立验证通过 |
+| 2 | 同一编辑工作区新建 Mode、移出技能、编辑范式 | 创建模式、仅改名保存、移出仅解除引用、完整本地包导入均通过 | 独立验证通过 |
+| 3 | 节点拖动、四向连接点、连线备注与条件、保存重开 | 四向磁吸点、节点拖动、保存重开、900px 减少动态效果与三栏实显、02/04/06 三处真实几何通过；唯一一次真实拖动由 `agent-reach` 右点命中 `ai-product-analyzer` 左点，前后同一 viewport transform、edgeCount 1 | 独立验证通过；标签与引线几何已修：SVG 零 viewport、盒边框、徽标宽高、row-gap；偏移引线不穿节点，04 的短条件与 06 的 Agent 改为长条件后都贴本线。candidate3 曾有一次连线失败，最初 fit 时坐标未稳定是线索而非已证实根因；不据此宣称修复所有图，任意复杂图仍未验收 |
+| 4 | App 与 Agent 共用 mode.yaml，Agent 改完可刷新 | Agent CLI 编辑实时刷新、连线备注与条件、协议保存通过 | 独立验证通过 |
+| 5 | 库身份与版本核对；架构状态同步 | 此前核验：两库四份 mode.yaml 哈希一致；workspace.validate 两库 ok、生成视图一致；只测隔离副本，不改真实配置 | 此前核验通过；既有 Skill 差异与脏文件保留，不自动覆盖 |
+
+- **桌面与构建：**最新 `npm test` 139 passed / 0 failed / 0 skipped（较上轮新增 5 项），最新 production build 成功；CSS 79.33 kB、JS 652.78 kB，Vite >500 kB 大分块警告仍在，不能说没有警告。
+- **Core 回归（长、短两种 basetemp）：**此前由 `E:\Anaconda\python.exe` 执行，长 basetemp 与短 basetemp 均 159 passed / 0 failed / 4 skipped，跳过项仍为平台 / 符号链接权限；这是此前核验结果，本轮没有重复跑，不冒称本次重跑。此前 20 项长路径失败已修复：使用更浅的临时目录、Windows I/O extended path、停用归档长路径；修复不修改系统权限。
+- **打包：**最终候选与最新真实打包 EXE 位于 `.local/builds/asl-0.5.0-candidate5-20260927/ASL Workspace/ASL Workspace.exe`，是真实浅蓝版；冻结核心的中文输入与保存验收成功。candidate4 虽 17 项通过，但后续 `navigation-1790497325335` 连续切页重开捕获 2 次 `libraries.json.tmp` → `libraries.json` 的 EPERM 未处理异常，原无后缀 ZIP 不再作为最终交付，只保留为先前候选。未签名，未替换用户正在运行的 App。
+- **交付 ZIP：**`deliverables/ASL-Workspace-0.5.0-Windows-x64-r2.zip`，173,130,201 字节（约 165.1 MiB），296 个文件，SHA-256 `61A7A182EF9133C3FF4560CA4408CF067F633F7557431050288352DACD63A2B7`。ZIP 内全部 296 个文件与最终候选 candidate5 逐一比较哈希相同，12 个入口和 3 个 dist 文件与开发源码哈希相同。包内不含个人 Skill 库、真实账号、用户偏好或测试 / 探针文件，内置仅为明确的通用示例。未签名、未上传 GitHub Release、未提交推送、未替换旧版文件、未改真实宿主配置；旧无后缀 ZIP 仅保留为先前候选，不删除。
+- **Electron GUI：**最新 packaged run 为 `.local/validation/asl-node-editor-20260926/runs/run-20260927082557977-hzxci`，17 项检查 17 通过，renderer errors 为空，字数与三处几何结果同上轮不变。覆盖：迟到 / 失败向导可退出、完整提示词编辑与真实剪贴板回读、四向磁吸点、节点拖动、保存重开、仅改名、新建 Mode、连线备注与条件、协议保存、完整包导入不运行脚本、移出仅解引用、Agent CLI 修改后刷新、900px 减少动态效果与三栏实显、文字预算及 02/04/06 三处真实几何。
+- **连线实测：**`connection.json` 记录本轮唯一一次实际拖动：源 `agent-reach` 右侧连接点命中 `ai-product-analyzer` 左侧，拖动前后是同一 viewport transform，命中节点正确、edgeCount 1；只等待坐标稳定一次，没有重拖或注入假边。此前 candidate3 有一次连线失败，最初 fit 时坐标未稳定是线索而非已证实根因；这条只说明本次交互，不扩大为修复所有图。
+- **连续切页验收：**`.local/validation/asl-node-editor-20260926/navigation-1790497571539/result.json` 记录 3 个会话，每会话 4 轮切页 / 进编辑再返回，其中包含 2 次关闭重开；`pass=true`、`errors=[]`，每次最终 `notice=[]`、`page=agents`、`mode=creator-studio` 恢复且未溢出。本条只覆盖上述切页与重开路径。
+- **EPERM 修复：**本轮 DSH 在 `library.cjs` 只给 rename 增加 3 次有界锁重试（EPERM / EACCES / EBUSY，10 / 20 ms 间隔；永久错误仍抛出并保留原文件），并在 `App.jsx` 三处 `selectSource(null)` 补错误显示。没有新增锁或数据库。具体占用者未查明，只是本机并发读同一文件时可复现该机制，不能写成已确定由杀毒或某个进程造成。
+- **剪贴板：**经用户明确授权后正常关闭旧版（不是强杀）；之后 Win32 `OpenClipboard` 成功，实际复制多轮通过。拒绝访问的根因不能归罪旧 App，当前不再阻塞交付。没有修改真实宿主配置或权限，也没有替换旧 App 文件；所有写测试都在隔离副本中完成。
+- **视觉抽查：**02 / 04 / 06 三处真实几何通过；主控实际看过蓝版 02 / 06 / 07 / 08 截图，确认图标签已修 SVG 零 viewport、盒边框 / 徽标宽高 / row-gap，偏移引线不穿节点。900px 窗口左 168 / 画布 442 / 右 208 均在窗口内。只这些范围，不宣称任意复杂图已验收。
+- **额外只读抽查：**蓝版 `.local/validation/asl-node-editor-20260926/blue-review-1790496748876` 的全部技能、发现页与 Agent 配置加载态无水平溢出、无 renderer 异常；Agent 配置加载完成后的切页与重开结果见上方连续切页验收；这是只读抽查，不算真实宿主可用性验收。
+- **文字预算：**整理页 53、主模式页加侧栏 85、现有编辑页 88、新建 77、窄窗口 66、来源与更新整个窗口 92 固定字；白名单只排除真实名字 / 内容 / 路径，导航和固定 placeholder 仍计入。只这些页面通过验收，不宣称全 App 所有状态均 ≤100。
+- **协议范围：**增量仍限于可选 `architecture.layout` 与边的可选 `condition` / `sourceHandle` / `targetHandle`；协议仍为 `asl-wep/v0.4.0`，布局不决定执行顺序，条件是人跟 Agent 读的文本，不触发执行。App 画布为 React Flow（`@xyflow/react` 12.12.0）统一节点画布，阅读视图与编辑页共用 `GraphCanvas`；文档图仍用 Mermaid，只是文档绘图。一个完整 Skill 一个节点，不新增调度层或第二套分类入口。
+- **待办：**任意复杂图、跨电脑、真实宿主会话、全 App 每种状态的文字预算与签名发行仍未完成。
 
 <!-- ASL:PROJECT STATUS START -->
 
@@ -1565,21 +363,21 @@ MCP 的可移植性高于宿主 Plugin，因此当前架构优先让 Skill 声�
 
 上一轮交付为 `ASL-Workspace-Windows-2026-09-12-cloud-mode.zip`。仍是未签名 Windows 便携预览版，需要完整解压；只随附只读示例，不打包真实技能库、验收环境或账号。更新检查只在 App 打开期间运行，关闭后没有额外后台服务；已经应用到 Agent 的内容需要用户重新应用。
 
-**2026-09-12 本地内容与技能架构的前次开发验收：**Python **115 项通过、3 项跳过**，桌面 **44 项通过**，Vite 生产构建通过。图已改成 Mermaid 原生渲染，一个完整技能一个节点，取消场景模块节点和关系图 / 层次图切换。该实现现已进入上方 0.2.0 便携版；此前 `ASL-Workspace-Windows-2026-09-12-local-editor-v2.zip` 不包含此实现，不作为当前交付。真实 Agent Skill Library 的隔离副本有 4 Mode / 37 Skill；Creator Studio 的 19 个技能用于图及编辑验收，示意关系为副本内人工准备，不冒充原库已沉淀或 App 自动推断的关系。原库、个人工作区与原生用户技能未修改。
+**2026-09-12 本地内容与技能架构的历史验收（历史记录）：**Python **115 项通过、3 项跳过**，桌面 **44 项通过**，Vite 生产构建通过。该轮把图改成 Mermaid 原生渲染，一个完整技能一个节点，取消场景模块节点和关系图 / 层次图切换；该实现进入 0.2.0，随后版本曾改用 React Flow。当前取舍以 View 9 最上方记录为准。此前 `ASL-Workspace-Windows-2026-09-12-local-editor-v2.zip` 不包含此实现，不作为当前交付。真实 Agent Skill Library 的隔离副本有 4 Mode / 37 Skill；Creator Studio 的 19 个技能用于图及编辑验收，示意关系为副本内人工准备，不冒充原库已沉淀或 App 自动推断的关系。原库、个人工作区与原生用户技能未修改。
 
 | 本次用户要求 | 实际验证 | 没有声称实现的部分 |
 | --- | --- | --- |
 | 本地差异说明 | 对照本机原库和既有 GitHub 快照：29 个包仅换行不同，440 个文件为 CRLF / LF 差异；真正内容变更是 5 个 Skill 的 10 个文件。GUI 预览忽略换行、展开真实文本差异；取消后本地内容保留 | 不把真实业务修改归零，不自动覆盖、合并或回推 |
 | 在 Mode 内管理技能 | 本地成员添加再移出，Skill 文件仍在；普通 GitHub 仓库解析 13 个 Skill，预选当前 Mode 后导入 brandkit；ASL 仓库解析正式区 37 个 Skill；便携版扫描真实用户目录返回 148 个包位置 | 数量是本机当时结果，不是去重能力数量；导入原生确认在隔离路径使用夹具，不执行第三方脚本 |
 | 完整技能编辑 | 宝玉漫画包的 41 个文件可见，脚本保存后回读一致；无效 SKILL.md 被拒绝；并发本地修改不替换正在编辑的草稿，过期保存拒绝覆盖；CRLF 保存有回归测试 | 二进制和超过 1 MB 的文件暂只列出；没有完整 IDE、文件创建 / 删除或脚本执行器 |
-| 技能架构图 | Mermaid 节点与真实技能一一对应；分支、汇合、回路、无关系节点可见；App 可改名称、备注、外观与关联；回路添加 / 移除、保存回读、放大 / 复位 / 点选已检查；字段随 Mode 分享有测试 | 不要求填写方法，不增加模块节点，不自动理解场景，不改变执行顺序；图的美观仍需用户确认，不以测试代替审美验收 |
+| 技能架构图（历史记录，Mermaid 版） | 当时 Mermaid 节点与真实技能一一对应；分支、汇合、回路、无关系节点可见；App 可改名称、备注、外观与关联；回路添加 / 移除、保存回读、放大 / 复位 / 点选已检查；字段随 Mode 分享有测试 | 本条仅说明当时的实现，不代表现版；不自动理解场景，不改变执行顺序；图的美观仍需用户确认，不以测试代替审美验收 |
 | Agent 本地修改可见 | 改 Mode 标题后界面刷新；写入无效地图时显示错误并保留上次有效界面，修正后恢复；复制的 Agent 说明包含当前 Mode 与约束。便携版指明自身核心，避免误用旧全局 CLI | 这是本地编辑和检查接口，不是自动理解、自动分类或内置导入 Agent |
 
-本轮用 Mermaid 原生布局与连线替换自绘卡片、展开分类和两种图切换；空关系使用原生独立节点排列，不造虚假连接。图在固定浅色界面中缩放查看，编辑器独立维护节点显示与关联。完整文件编辑与本地刷新沿用已有实现；文件读取或保存期间暂停切换和关闭，避免回读落到另一文件。地图不是必填，更不是强制节点流程。
+**历史记录（2026-09-12）：**当时用 Mermaid 原生布局与连线替换自绘卡片、展开分类和两种图切换；空关系使用独立节点排列，不造虚假连接。图在固定浅色界面中缩放查看，编辑器独立维护节点显示与关联。完整文件编辑与本地刷新沿用已有实现；文件读取或保存期间暂停切换和关闭，避免回读落到另一文件。当时地图非必填；当前 v0.4 与本地 Mermaid 规则见上方专项视图。
 
 **原生 AI 配置尚未通过端到端验收。** 已用同一 `setup_brief` 给本机两种 CLI 下发独立项目配置夹具，未冒用业务结果：Codex CLI 0.124.0 返回当前 `gpt-6-astra` 需要更新 CLI；Claude Code 2.1.227 原生账号状态为已登录，但模型调用返回 ConnectionRefused。未自动升级用户 CLI、切换账号或修改系统代理。Windows 交接器本身已通过真实 PowerShell 启动和失败回执测试；这仅验证参数传递及状态，不证明 AI 已完成安装。不同电脑迁移、Agent Reach 渠道登录、全部 MCP 实际任务仍待成功验收。本机 Agent Reach doctor 可读出 15 个渠道的自报状态，其中 LinkedIn 未连接、雪球有警告；自报通过也不代替业务实测。
 
-早期参考了生图与 CC Switch 的管理分区；其中 React Flow 和可展开分组不再用于当前架构图。现在参考 Mermaid 及 Mermaid Live Editor，只复用渲染、主题和缩放，不复制完整在线编辑器或增加后台服务。此前 DeepSeek 审查请求遇到 429，没有取得第三方审查结论；本轮不将它写作已通过。
+早期参考了生图与 CC Switch 的管理分区。Mermaid、React Flow 的历史切换不定义当前技术真源，当前实现以上方最新记录为准；不复制完整在线编辑器或增加后台服务。此前 DeepSeek 审查请求遇到 429，没有取得第三方审查结论，不将它写作已通过。
 
 Windows 便携版在本机成功构建并启动；移除子进程 PATH 与系统 Python 路径后，内置核心仍可返回真实 Mode 与 Skill。展开目录实测约 387 MiB（主要为 Electron），不是“小体积应用”的证据；目前只有未签名预览构建，没有安装器、自动更新、另一台干净电脑验收或正式二进制发行。脚本保留 Electron / Chromium 许可并收集 Python / PyYAML 许可；正式二进制发布前仍须核对所选 Python 发行版的全部附带库许可。
 
@@ -1588,7 +386,7 @@ Windows 便携版在本机成功构建并启动；移除子进程 PATH 与系统
 | 状态 | 模块 | 当前事实 | 尚缺的增量 |
 | --- | --- | --- | --- |
 | 🟢 已实现 | Environment 与 Mode | Personal / 公开 Skill Library 各 37 Skill、4 Mode；完整包与 SOURCE 留在本地；可选 `spec.capabilities` 保存分类，`spec.architecture` 保存技能显示与关联 | 没有地图也可使用；跨资料 / 记忆关联与模型偏好未加入 |
-| 🟢 代码已测 | Harness CLI | 23 个命令；本轮新增 `environment.discover`、`mcp.discover`、`mcp.inspect`、`mcp.edit`；文件编辑仍走原入口 | 不重写 Agent Loop；旧版全局 CLI 需更新或使用 App 随包核心 |
+| 🟢 代码已测 | Harness CLI | 核心 0.4.4，26 个命令；`cli.describe` 返回真实契约，Mode / Skill 完整文件可读，编辑、同步与导入共用候选门禁 | 不重写 Agent Loop；旧版全局 CLI 需更新或使用 App 随包核心；纯 Python 安装不等于带齐 Mermaid 渲染器 |
 | 🟢 本机已测 | 本机发现与 MCP 编辑 | 标准目录和已登记项目有界发现；Claude / Codex 原生作用域管理；读取取消、重复识别、隔离配置增改删及并发保护已测 | 未登记目录需选择；发现配置不等于登录或连接成功；不管理所有宿主的插件内部 MCP |
 | 🟢 本机已测 | 用户级同步 | Codex / Claude 原生用户目录、预览、切换 / 停用、冲突保护与原子回滚；Codex GUI 写入链在隔离 home 已完成 | 全局原生其他技能仍可用，不是强沙箱；来源改变后需主动刷新；不自动接管已有同名技能 |
 | 🟢 代码已测 | 局部保护 | 日常投影 / Hook 只检查当前 Mode 闭包；用户改动冲突不被静默覆盖 | 不相关候选不能阻断日常工作；不承担业务规则语义裁判 |
@@ -1596,9 +394,9 @@ Windows 便携版在本机成功构建并启动；移除子进程 PATH 与系统
 | 🟢 已收敛 | Skill 自主性与旧入口 | Harness 不要求统一全包加载；A/B 业务规则保持；已定位旧调度器与 domain 调用要求退出活动面 | 继续保留来源历史，不借产品化再造全局调度规则 |
 | 🟠 部分实现 | 复杂依赖 | Mode 对应工具路径、原生依赖声明、MCP 名称、Agent Reach doctor、本机配置材料与原生 AI 交接入口已有 | 原生 AI 在本机版本 / 网络问题下未完成配置夹具；任意脚本、版本约束与可选渠道仍由助手读原文判断；不把存在标为就绪 |
 | 🟠 待真实宿主验收 | 三宿主投影与 Hook | 函数有测试；本机 DSH Desktop 为 2.0.4，内置官方包 0.1.2-alpha.1；已核对其 Preset 切换限制 | 新会话、切 Mode、真实连接与 Hook 异常仍待实机验证；不能称三宿主成熟 |
-| 🟠 待刷新 | 本机旧部署 | 四个 ASL Preset 仍属旧投影；本轮未重建 | 检查用户局部修改后，只更新选定生成面 |
+| 🟠 待用户升级 | 本机旧部署 | 四个 DeepSeek ASL 配置仍为 v2；已识别并提供原位置升级入口，隔离副本升级及备份已测 | 本轮未改真实配置；检测不等于会话已实际调用 |
 | 🟢 本机已测 | 云端 Mode 与更新窗口 | GitHub 读取真实 Mode；保存完整本地副本、随包来源、启动 / 15 分钟检查、显式更新、过期预览保护 | 只检查上游提交，差异以导入预览为准；无关仓库提交不等于 Mode 改变；不自动覆盖本地或重应用 Agent |
-| 🟠 部分实现 | 独立 App | 0.2.1 Windows 便携预览版已发布；Electron + React + Mermaid；一个技能一个节点的架构、关联编辑、整包文件编辑、Mode 内增减、提示词整理、本地刷新与重开恢复；保留云端导入、更新和宿主配置 | 真实 Mode 的关系须由人或授权 Agent 维护，不能宣称自动理解；复杂融合、原生 AI 配置成功实测、跨电脑、签名发行仍未完成 |
+| 🟠 部分实现 | 独立 App | 本机入口已切换为 0.5.5，安装文件与已验收发行包一致。原生图及文件编辑、侧栏、云端移除和原位置更新已测；已有 Mermaid 的成员管理不再另写关系画布，没有原生图时才保留旧成员画布 | 真实 Mode 的关系须由人或授权 Agent 维护，不能宣称自动理解；冷启动、复杂融合、任意图双向拖拽、跨电脑、真实宿主会话、全部目标宿主、全 App 全状态体验及签名发行仍未完成；三张生成稿不采用，远端状态见本 View 最新记录 |
 | 🟠 部分实现 | 可迁移环境协议 | Mode 与完整 Skill 已可往返；新目录导入及重新投影已测；接收端可检查本机并交给原生助手 | 未做另一台电脑或新宿主会话成功验收；不承诺 MCP 任意格式自动转换或迁移登录 |
 | 🟠 设计已修订 | Model 配置 | View 2F 定义 Mode 偏好、本机路由、实际会话模型的边界 | 尚无统一配置界面；不能切任意宿主现有会话 |
 | 🟠 设计已修订 | 经验培养 | View 7C 记录 EvoMap 证据与轻量采用方案；本地可编辑、明确反馈优先 | 尚无推荐 / 经验合并界面和效果证据；不宣称“已自进化” |
@@ -1620,7 +418,7 @@ Windows 便携版在本机成功构建并启动；移除子进程 PATH 与系统
 
 这些是实现推进顺序，不是业务工作流。协议、App 与适配器围绕同一个真实操作闭环推进，不先造一个巨大的抽象协议，也不把可分享和模型配置拖成遥远的附加功能。
 
-**当前工程形式：**独立桌面 App 使用 Electron + React + Vite，图标来自 Lucide，技能架构使用 Mermaid 与 SVG 缩放。复用成熟组件，不新增常驻 API 服务或数据库。`desktop/bridge.cjs` 把受限管理操作转成 CLI 参数，编辑内容通过 stdin 传入；`management.py` 执行内容管理并生成空环境 / 已有模式的整理提示词。整理入口只复制提示词，不调用 `assistant.cjs`。`user_projection.py` 维护受管用户副本与同步记录；`readiness.py` 读原始 Skill 及机器条件；现有配置页的 `assistant.cjs` 才用固定程序和数据参数启动原生 CLI，任务文件与结束回执留在 App 本机目录，不存原生输出或密钥。`library.cjs` 在同一偏好文件保存最近环境、各环境的界面位置、来源与配置项目引用，串行写入避免并发丢失。`native.cjs` 汇总只读宿主检测，`native_mcp.py` 统一读取和逐条编辑原生 MCP，`local_modes.py` 识别已登记的本地环境；`market.cjs` 只读发现，`repository.cjs` 维护可迁移来源记录，`repository-import.cjs` 下载和解析完整仓库包。`read-requests.cjs` / `useReadTasks.jsx` 隔离可取消读取，不干预写入确认。Windows 构建内置 Python 核心；DSH 内的原生管理插件仍为后续入口。
+**当前工程形式：**独立 App 使用 Electron + React + Vite，图标来自 Lucide。阅读及图文编辑共用 `mermaid-render.mjs`；`MermaidEdit.jsx` 只对受支持流程图语句做原文修改，`SkillFiles.jsx` 在独立编辑页和按需侧栏间复用。Python `mermaid.py` 调用 App 随包的离线渲染页，真实渲染后才允许写入。已有原生图的成员管理不再呈现第二份关系画布；没有原生图时保留 React Flow / Dagre 与可选 `architecture.layout`，不承担任意 Mermaid 图的双向编辑。`desktop/bridge.cjs` 将受限管理操作转为 CLI 参数和 stdin；`management.py` 负责编辑、指纹检查和 Agent 整理指引，`commands.py` 将错误细节返回调用者，不启动重写模型。其余职责不变：`user_projection.py` 管理受管副本，`readiness.py` 检查原生依赖，`library.cjs` 保存非业务偏好，`repository-import.cjs` 读取 README 并解析来源，`read-requests.cjs` / `useReadTasks.jsx` 管理可取消读取。Agent 可直接使用同一 CLI 管理环境，App 提示词交接保留为兼容入口；原生配置助手仍是独立的显式操作。Windows 包含 Python 核心，不新增常驻 API 或数据库；DSH 原生管理插件仍未交付。
 
 这个选择的理由是减少重写：现有核心是 Python，而 DSH / 桌面 UI 生态主要是 JavaScript / TypeScript。仅做 DSH 插件会失去独立跨宿主管理能力；直接 Fork CC Switch 会继承本任务不需要的提供商与代理业务；先引入 Rust 后端也不会消除现有 Python 核心。先用一条产品路径验证，再决定是否有必要更换技术。
 

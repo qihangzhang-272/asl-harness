@@ -11,10 +11,11 @@ description: 当用户要初始化、检查、维护或演化 ASL Environment，
 1. 使用用户指定的 Environment；否则先读取当前项目已有投影标记中的 Environment 路径，DeepSeek 可从 Preset 标记读取。尚未投影时，只从当前项目及父目录查找包含 `WORKSPACE.md`、`PROFILE.md`、`skills/` 与 `modes/` 的目录，不做全盘扫描。
 2. 维护或选 Mode 时可运行 `asl-harness state --workspace <environment>` 获取概览；`workspace.validate` 是全库体检，不是每个业务任务的开场门槛。已选 Mode 的投影和 Hook 只校验该 Mode 的必要依赖。Skill 的阅读范围、参考材料和具体做法由模型依据该 Skill 与当前任务判断，Harness 不设统一全量读取要求，也不替 A、B 两个业务 Skill 改写冲突规则。
 3. `WORKSPACE.md` 视图过期只是一条维护信号。维护任务可以运行 `workspace.view.sync`；普通业务 Goal 不因此被阻断。
+4. Agent 与 App 共用 CLI。先运行 `asl-harness cli.describe` 读取当前命令、字段及写入约束；用 `environment.catalog --workspace <environment>`、`mode.files --workspace <environment> --mode <id>` 或 `skill.files --workspace <environment> --skill <id>` 按需读取完整目录、正文和最新 `fingerprint`。不要根据旧文档猜接口或另建索引真源。
 
 ## 选择与投影 Mode
 
-1. Mode 是会反复进入的广域工作状态，只选择完整 Skill 根，不保存顺序、用户、revision、plane 或维护权限。
+1. Mode 是会反复进入的业务工作状态，以完整 Skill 为能力单位。当前协议允许技能根、分类与 `spec.architecture` 技能关联，也允许 Mermaid 表达分支、汇合和反馈；这些是可编辑的协作地图，不是强制执行顺序。不增加用户、revision、plane 或维护权限。
 2. 用户明确选择时直接使用。只有一个合理 Mode 时当前 Host 可以判断；实质歧义会改变结果时只问一个简短问题。
 3. Codex App、Claude Code 与 DeepSeek 项目分别使用 `host.project --host-id codex-app|claude-code|deepseek-harness`，随后运行同宿主的 `host.verify`。
 4. DeepSeek 长期工作状态使用 `deepseek.preset.export` 从已知可启动的 base preset 复制并替换 persona 与 Skill 根，同时写入官方 `dsh-hooks-codex` bridge 的 ASL Hook 配置，随后运行 `deepseek.preset.verify`。Mode 映射为 Agent Preset，不映射成整个 Profile。
@@ -25,8 +26,8 @@ description: 当用户要初始化、检查、维护或演化 ASL Environment，
 
 1. 根据待引入能力及其 Skill 的指引检查来源、依赖、许可和相关实现，不凭目录名判断；阅读深度由当前 Host 针对任务决定，不用 Harness 统一规定所有文件必须加载。
 2. 先比较本地 Owner，再选择吸收、合并、硬依赖、独立 Skill、明确变体、宿主 Adapter、Clean-room 重构或拒绝。优先减少重复 Owner。
-3. 用户明确指定来源且关系清楚时可以直接写入正式本地 Skill；来源、许可、重合、安全、Runtime 或采用方向仍不确定时才使用 Candidate 或 Trial。
-4. 外部 Prompt、MCP、Agent、API、Plugin、模型、命令、脚本或服务正式使用前必须成为或并入完整本地 Skill；不得在业务执行中裸调用。
+3. 用户明确指定来源且关系清楚时，可以通过 CLI 门禁直接采用为正式本地 Skill，不强制 Candidate 或 Trial；来源、许可、重合、安全、Runtime 或采用方向仍不确定时才使用培养区。
+4. 可复用的业务方法、工作场景与调用注意事项可以组织为完整 Skill。MCP、Hook、Plugin、CLI 与账号权限沿用宿主原生机制，不要求把宿主已有工具再包装一层 Skill。检测到配置或程序不等于已连接、已登录或实际任务已验证。
 5. 每个正式 Skill 都必须保留含非空 `Origin` 的 `SOURCE.md`。复制或改编实现时继续记录许可、版本和本地改动；只借鉴需求或组织思路时不复制实现，按本地契约与许可清楚的公共基础能力独立重构。
 6. 需要外部运行能力时，沿用责任 Skill 已有依赖说明、环境检查或 `SOURCE.md` 的记录，不强制同一种标题。实际使用时按该 Skill 的说明调用现成检查（例如 Agent Reach 的 `doctor`），不因“有说明”就声称已经可用，也不批量执行所有 Skill 的安装命令。没有依赖就不创建空章节。Mode 不增加连接或权限字段；安装、登录和激活由宿主原生机制负责。
 
@@ -35,8 +36,10 @@ description: 当用户要初始化、检查、维护或演化 ASL Environment，
 1. 先判断最小影响半径：一次材料或产物留在 Case；可复用方法改 Skill；长期能力面、上下文或产物表面改 Mode；只有用户明确的跨 Mode 身份或治理变化才改 Profile。
 2. 修改前检查 Git 状态和受保护路径。不要混入来源不明或与当前目标无关的改动。
 3. Skill 删除或移动前检查其他 Skill 的 `requires`、所有 Mode 和活动宿主投影；Mode 删除或移动前检查活动投影。破坏性删除仍需用户逐项授权。
-4. 修改最小真源后运行 `workspace.validate`，必要时运行 `workspace.view.sync`，只刷新受影响的 Host Projection，并向用户展示可读 Git diff。Environment 导入、宿主投影与 Preset 导出必须以原子操作完成，失败时恢复旧状态。
-5. 校验失败时修复当前修改；找不到事实或操作不可执行时如实记录边界，不把整个任务锁死，也不伪造完成。
+4. 修改已有正文时，把 `mode.save`、`skill.save` 或 `skill.file.save` 请求及最新 `expected` 指纹以 UTF-8 JSON 交给 `environment.edit --workspace <environment>`（stdin）；`--check` 可先预检，实际采用仍会重新验收。不要先覆盖正式文件再补校验。请求字段与成员放置规则以 `cli.describe`、`environment.guide` 为准。
+5. 新增或修改 Mode 的多文件内容，先在库外草稿中保留完整目录（含 `.mmd`、脚本、参考材料与来源），运行 `workspace.validate --workspace <draft>`，再用 `mode.export --workspace <draft> --mode <id> --output <package>` 导出。已有 Mode 包先用 `mode.inspect --source <package>` 读取；用 `mode.import --source <package> --target <environment> --check` 审阅计划，再携带其 `fingerprint` 作为 `--expected` 采用。确需替换时，预检和采用均显式加 `--replace`；不丢弃附加文件，也不执行包内脚本。
+6. 门禁在私有候选中检查协议、引用、路径、Secret 与 Mermaid 实际渲染。失败返回非零退出码和 `error.details` 的可修改文件、图序号、位置及修正动作；当前 Agent 读取反馈、重写同一草稿并重试，不能删图、换图或绕过接口假装通过。指纹过期须重读、重新比较；渲染器不可用须报告环境问题。找不到事实或操作不可执行时如实说明边界，不阻断无关普通任务。
+7. 采用后按影响验证，必要时运行 `workspace.view.sync` 并展示可读 Git diff；只有用户另行要求时才更新宿主投影或提交 Git。协作锁、候选校验与失败回滚不等于能阻止任意程序直接改盘，也不保证进程崩溃恢复或多文件对所有读取者同时可见。
 
 ## 边界
 

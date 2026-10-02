@@ -418,7 +418,7 @@ ASL 适合已经开始长期使用 Agent Skills，并遇到下列情况的人或
 <details>
 <summary><strong>Mode 会不会变成另一种 Workflow？</strong></summary>
 
-不会。Mode 不保存顺序、分支、状态或执行器。它只选择当前场景需要的完整 Skill，具体路径仍由宿主 Agent 根据任务决定。
+不会。Mode 选择当前场景需要的完整 Skill，也可描述协作、分支、汇合与反馈。图示不是执行器，不强制任务路线；具体工作仍由宿主 Agent 根据任务决定。
 
 </details>
 
@@ -454,14 +454,42 @@ Harness 只管理带有 ASL 归属记录的投影内容。如果目标路径存�
 
 | Command | Purpose |
 | --- | --- |
+| `cli.describe` | 机器读取当前命令、编辑字段、协议版本与渲染器可用性；不扫描或修改库 |
+| `environment.discover` | 在指定目录和其直接子目录发现本地 Mode，不遍历磁盘 |
+| `skill.scan` / `skill.unpack` | 静态发现本地技能包，或将 ZIP 解包到新的草稿目录；不执行脚本 |
+| `environment.catalog` | 读取所选本地库的 Mode、Skill、成员关系、来源与内容指纹 |
+| `mode.files` / `skill.files` | 枚举完整包并按相对路径读取正文、协议、Mermaid 或脚本 |
+| `environment.edit` | 从 stdin 接收 JSON，预检或采用内容修改；既有内容需新鲜指纹 |
+| `environment.guide` | 读取当前库的编辑边界与兼容提示词，不启动模型 |
 | `state` | 查看 Environment、Mode、Skill、Git 与投影状态 |
 | `workspace.validate` | 校验 Environment、Skill 依赖与 Mode |
 | `workspace.view.sync` | 重建人和 Agent 共读的能力地图 |
 | `environment.sync` | 在两份 Environment 之间同步一个完整 Skill |
+| `mode.inspect` / `mode.import` / `mode.export` | 预览、采用或分享完整 Mode 包；本地 Mode 不随云端覆盖 |
 | `host.project` | 把一个 Mode 投影到当前项目 |
 | `host.verify` | 检查宿主投影完整性和来源漂移 |
+| `host.user.sync` / `host.disconnect` | 预检、更新或解除 ASL 自己管理的宿主配置，不覆盖非受管文件 |
+| `host.setup.inspect` | 检查当前宿主与运行需要，不安装依赖或登录 |
 | `deepseek.preset.export` | 从已知可运行基础导出 Mode Preset |
 | `deepseek.preset.verify` | 校验 DeepSeek Agent Preset |
+| `mcp.discover` / `mcp.inspect` / `mcp.edit` | 读取或编辑宿主原生 MCP 配置；能力与范围以 `cli.describe` 为准 |
+
+App 是同一 CLI 的本地阅读与编辑界面，不是另一份内容真源。集中的是入口，不是把不同 Environment 合并成数据库。Agent 先运行 `cli.describe`，再指定 `--workspace` 或 `--target`；不默认扫描全部对话或修改账号。
+
+```shell
+asl-harness cli.describe
+asl-harness environment.catalog --workspace <本地库>
+asl-harness mode.files --workspace <本地库> --mode <模式ID> --file MODE.md
+asl-harness skill.files --workspace <本地库> --skill <技能ID> --file scripts/main.py
+asl-harness environment.edit --workspace <本地库> --check < request.json
+asl-harness environment.edit --workspace <本地库> < request.json
+```
+
+最后两条是 shell 的 stdin 重定向写法；PowerShell 可用 `Get-Content -Raw -Encoding UTF8 request.json | asl-harness environment.edit --workspace <本地库> --check`，采用时移除 `--check`。`request.json` 的操作与允许字段由 `cli.describe.editOperations` 生成；常用的 `mode.save` 管成员、范式与正文，`skill.file.save` 管已有包文件。移出成员只解除引用，归档不等于删除源文件。
+
+除 `--help` 外，命令结果和参数错误均为 UTF-8 JSON：成功 `ok: true` / 退出码 0；失败 `ok: false, error: {code, message, details?}` / 退出码 2。坏图会返回文件、图序号、起始行和修正动作；Agent 读取反馈后改同一草稿并重新提交。过期指纹须重读，不可覆盖新内容。二进制与超过 1 MB 的文件列为不可文本编辑。
+
+带 Mermaid 的采用必须真实离线渲染通过。`cli.describe.renderer.available` 仅表示检测到渲染程序，不等于已经验证它可运行：当前独立 Python 安装仍需桌面依赖中的 Electron，便携版 CLI 使用随 App 提供的渲染器。直接用编辑器改正式文件会绕过 CLI 门控；此路径无法自动唤回未知宿主里的 Agent，不能声称受控。
 
 </details>
 
