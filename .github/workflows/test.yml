@@ -33,9 +33,12 @@ jobs:
         working-directory: desktop
       - run: node node_modules/electron/install.js
         working-directory: desktop
-      - name: Check Linux renderer startup
+      - name: Prepare Linux renderer sandbox
         if: runner.os == 'Linux'
-        run: xvfb-run -a desktop/node_modules/electron/dist/electron --version
+        run: |
+          sudo chown root:root desktop/node_modules/electron/dist/chrome-sandbox
+          sudo chmod 4755 desktop/node_modules/electron/dist/chrome-sandbox
+          xvfb-run -a desktop/node_modules/electron/dist/electron --version
       # Write-gate tests need the real offline renderer on both operating systems.
       - run: ${{ runner.os == 'Linux' && 'xvfb-run -a ' || '' }}python -m pytest
       - run: ${{ runner.os == 'Linux' && 'xvfb-run -a ' || '' }}npm test
