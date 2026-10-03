@@ -128,23 +128,16 @@
 
 <!-- ASL:PROJECT STATUS START -->
 
-### 本轮验收通过，待发行 · Mermaid 结构编辑 · 2026-10-02
+### 已交付版本 · 2026-10-02 · Windows App 0.5.8 / CLI 0.4.5
 
-- 用户确认拖拽改变 Mermaid 结构，不新增自由坐标副本。已补时序参与者/消息重排、消息/备注/条件改字、思维导图完整子树移动和移除、状态图显式名称编辑；复杂语法仍走原文。新增范围见 [View 2D](architecture/02d-app-navigation.md)。
-- 修复背景刷新替换回调导致拖拽被取消、刷新提示推动画板约 70 像素、编辑后缩放复位；删除已退出主视图的旧右侧技能栏组件与专属样式。未删除历史包、缓存或业务文件。
-- 完整 Python **229 passed / 5 skipped**、Node **173 passed / 0 failed**；开发及最终 **0.5.8 EXE** 的原有 13 组 GUI 操作及新增 9 组结构编辑操作均通过。新增图源测试覆盖重复标签、CRLF、跨分支拒绝、根节点/祖先环保护和动态参与者限制。Python 初跑因测试临时路径过长触发 Windows 路径上限，改用短临时根后完整重跑通过；5 项跳过是 Windows 符号链接权限与 POSIX 权限位差异。两次 EXE 截图在背景刷新期间超时，未计为通过；测试等待刷新及返回动效完成后，两套最终回归通过，无 renderer 错误。最终证据：`.local/validation/asl-release-0.5.8-20261002/asl-e2e-ZNHMoB/`、`asl-e2e-VRWJnn/`。冻结 CLI 对真实库校验通过：37 Skills / 4 Modes / 6 张图实际渲染、生成视图一致。桌面、GitHub CI 和公开发行待同步，仍为下述 0.5.7。
-- `humanizer-zh` 是用户明确要求的本地正式技能，已融入 Creator Studio，本轮不删除也不自动上传其业务修改。“账号设置”指宿主登录凭据、API Key、模型端点，不是技能内容；本轮未更改这些设置。
-
-### 已交付版本 · 2026-10-02 · Windows App 0.5.7 / CLI 0.4.5
-
-- **桌面已替换并启动：**用户保存确认后，正常关闭 0.5.6；最终路径修复重新打包、复验并经再次确认后正常重启。桌面快捷方式指向 `%LOCALAPPDATA%\Programs\ASL Workspace\0.5.7\ASL Workspace.exe`，已核对最终包进程和主窗口。旧版本、原快捷方式、中间候选与内容迁移恢复材料保留。没有修改技能内容或 Agent 账号配置。
-- **唯一本地库：**活动内容仍为 `libraries/agent-skill-library`，37 Skills / 4 Modes；旧 Personal / 写作检出已归档。云端库是独立来源，本地 Mode 不被上游直接覆盖。本轮只发布框架、App、CLI、测试和入口文档，未批准的业务修改不上传。
-- **编辑与导航收敛：**新建、旧格式与原生 Mermaid 共用一个工作台；删除旧 React Flow 画布及其专用布局、三个直接运行依赖。保留技能成员、依赖闭包、范式归属、原文、指纹与写入门控。技能内容在主区域呈现，原图悬浮；库路径参与身份，切库不串库；仓库 Markdown 的同仓语言链接留在 App。二轮删除无效路由包装、未使用参数和不可达样式，不新增框架。
-- **验收：**完整 Python **229 passed / 5 skipped**；Node **165 passed / 0 failed**。初次 Python 执行因验收输出父目录未创建而 setup 失败，创建后完整重跑通过；删除无用参数后修正一项旧源码断言，完整 Node 重跑通过。Windows CI 发现真实短路径与规范路径混用导致 README 被误判越界；本地别名目录测试先复现，再在解包入口统一真实路径，未削弱越界保护。生产构建及冻结核心中文写入成功，重打的最终 **0.5.7 EXE** 隔离 GUI **13 组操作**通过、无 renderer 错误；包含新建、撤销重做、右键添加、离页保护、保存回读、完整技能、坏图拒写、时序/状态/思维导图、旧格式归属导航及仅打开不写盘。最终包证据：`.local/validation/asl-release-0.5.7-20261002/asl-e2e-Egg4jx/`。真实本地库冻结 CLI 校验通过，6 张内容图实际渲染、生成视图一致；26 张专项架构图用同一渲染器通过。缓存排除提示仍按事实报告，不删除业务目录中的缓存。
-- **发行完整性：**最终候选、ZIP 与安装目录 **402 个文件逐项 SHA-256 一致**。`deliverables/ASL-Workspace-0.5.7-Windows-x64.zip` 为 **175,280,771 字节**，SHA-256 `94237FC4EDE618EF24F6DD4EB06642DCCBACE0A806CA860266619FC0FDD5AE2E`。未签名 Windows x64 便携预览版；保留整个解压文件夹。DOMPurify 升为 3.4.16，本轮 npm audit **0 告警**，不等于全系统安全认证。README 构建命令改为安装项目声明依赖，补齐原先漏掉的依赖链。
-- **GitHub 状态：**App / CLI 实现已推送，最终路径修复提交 `02fd1df` 的 [Windows / Linux CI](https://github.com/qihangzhang-272/asl-harness/actions/runs/37019734398) 均通过，Windows 含隔离 GUI 验收；内容库入口与验收依赖提交 `701bcff` 的[仓库门控](https://github.com/qihangzhang-272/agent-skill-library/actions/runs/37019077208)通过。修复了此前先测后构建导致渲染器缺失的问题；Linux 使用 CI 专用 SUID 沙箱与 Xvfb，不绕过沙箱。[0.5.7 预览发行](https://github.com/qihangzhang-272/asl-harness/releases/tag/app-v0.5.7)已公开，标签对应已验收实现 `02fd1df`；远端 ZIP 的 digest、字节数与上述本地最终包一致。
-- **性能与清理边界：**此前对称预热的 A/B 各十次测得示例库就绪 p50 **372→358 ms**、p95 **377→374 ms**，图展示基本持平；不是冷机或真实网络承诺。[方法与完整结果](../perf/报告.md)。此前经精确授权清理 21 个旧目录，约 **8.91 GiB 普通文件逻辑长度**；本轮不扩大删除到历史 ZIP、测试残留、迁移备份或业务文件。
-- **尚未完成：**任意 Mermaid 图型的全语法双向可视编辑仍未实现，复杂图经原文修改；基础流程图才支持既有无损编辑范围。大型库/冷启动/真实网络性能、Linux GUI、宿主账号登录与真实业务运行不在本轮通过范围。CI 与可复跑桌面入口见[桌面验收](../desktop/e2e/README.md)。
+- **桌面已更新并打开：**用户保存确认及最终 EXE 验收后，快捷方式切到 `%LOCALAPPDATA%\Programs\ASL Workspace\0.5.8\ASL Workspace.exe`；核对进程路径、主窗口和唯一本地库。切换时旧窗口已退出，无强制终止。0.5.7、历史包及原快捷方式备份保留；没有修改技能或 Agent 账号配置。
+- **结构编辑：**沿用原生 Mermaid、原位文字编辑和既有保存门控。时序参与者左右重排、同一条件分支内消息调整顺序，消息/备注/条件改字；思维导图完整子树移动、Shift 同级重排、右键添加子技能及移除分支；状态图显式节点名称可原位修改。工作台保留撤销重做。拖拽改变原文结构，由 Mermaid 自动排版，不新增自由坐标副本，细分范围见 [View 2D](architecture/02d-app-navigation.md) 与 [View 6](architecture/06-mode-skill-architecture.md)。
+- **稳定性与收敛：**修复后台刷新替换回调导致拖拽取消、刷新提示推动画板约 70 像素、编辑后缩放复位；删除已退出主视图的旧右侧技能栏组件及专属样式。Ponytail 审查复用现有渲染、历史和校验链，不新增依赖、服务或第二画布引擎；未扩大删除到缓存、备份和业务文件。
+- **本地验收：**Python **229 passed / 5 skipped**、Node **173 passed / 0 failed**；开发与最终 EXE 均通过原有 13 组及新增 9 组 GUI 操作，无 renderer 错误。覆盖原文回读、坏图拒写、分支边界、重复标签、CRLF、根节点/祖先环保护与动态参与者限制。Python 初跑因测试临时路径过长失败，改用短临时根后完整通过；5 项跳过是 Windows 符号链接权限与 POSIX 权限位差异。两次 EXE 截图在背景刷新期间超时，未计为通过；测试等待刷新及回位动效完成后最终回归通过，证据为 `.local/validation/asl-release-0.5.8-20261002/asl-e2e-ZNHMoB/`、`asl-e2e-VRWJnn/`。
+- **GitHub 与 CI：**实现 `2b7af38` 已推送，[Windows / Linux CI](https://github.com/qihangzhang-272/asl-harness/actions/runs/37088941523) 均通过：两平台 Python 232 通过 / 2 跳过，Windows Node 173 通过，Linux Node 171 通过 / 2 跳过，Windows 两套 GUI 通过；依赖审计 0 告警，不代表全系统安全认证。[0.5.8 预览发行](https://github.com/qihangzhang-272/asl-harness/releases/tag/app-v0.5.8)已公开，标签指向上述已验收实现；远端 ZIP 的 digest 与字节数均和本地最终包一致。
+- **发行完整性：**候选、ZIP 与安装目录 **402 个文件逐项 SHA-256 一致**。`deliverables/ASL-Workspace-0.5.8-Windows-x64.zip` 为 **175,285,159 字节**，SHA-256 `8A0911B874D006FDC3B6A3E980A95642020475154B72F3D605BF08226B85835A`。Windows x64 未签名便携预览版，保留整个解压文件夹。
+- **内容与账号边界：**唯一活动库仍为 `libraries/agent-skill-library`，冻结 CLI 校验 **37 Skills / 4 Modes / 6 张图实际渲染，生成视图一致**；保留既有 3 个云端连接。公共来源与本地 Mode 分离，不自动覆盖本地。用户明确引入的 `humanizer-zh` 已在 Creator Studio，本轮不删除、不自动上传业务修改。“账号设置”指宿主登录凭据、API Key 和模型端点，不是技能内容；本轮均未更改。
+- **未宣称完成的范围：**任意 Mermaid 图型的全语法可视编辑仍未实现；跨条件分支移动、动态参与者/激活状态相关结构调整及其他无法准确映射的语法保留原文编辑。状态图当前只增加显式名称编辑，不支持任意拖动改转移。大型库/冷启动/真实网络性能、Linux GUI、宿主登录及真实业务运行不在本轮验收范围。此前性能测量和清理回执见历史，不重复套用为本轮提升。
 
 <!-- ASL:PROJECT STATUS END -->
 
