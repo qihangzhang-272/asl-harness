@@ -2,6 +2,17 @@
 
 冻结记录，不代表当前实现。当前事实只看[架构总览 View 9](../asl-architecture-views.md#view-9--当前项目状态)。保留原始措辞和证据，用于追溯。
 
+### 已交付版本 · 2026-10-02 · Windows App 0.5.8 / CLI 0.4.5
+
+- **桌面已更新并打开：**用户保存确认及最终 EXE 验收后，快捷方式切到 `%LOCALAPPDATA%\Programs\ASL Workspace\0.5.8\ASL Workspace.exe`；核对进程路径、主窗口和唯一本地库。切换时旧窗口已退出，无强制终止。0.5.7、历史包及原快捷方式备份保留；没有修改技能或 Agent 账号配置。
+- **结构编辑：**沿用原生 Mermaid、原位文字编辑和既有保存门控。时序参与者左右重排、同一条件分支内消息调整顺序，消息/备注/条件改字；思维导图完整子树移动、Shift 同级重排、右键添加子技能及移除分支；状态图显式节点名称可原位修改。工作台保留撤销重做。拖拽改变原文结构，由 Mermaid 自动排版，不新增自由坐标副本，细分范围见 [View 2D](../architecture/02d-app-navigation.md) 与 [View 6](../architecture/06-mode-skill-architecture.md)。
+- **稳定性与收敛：**修复后台刷新替换回调导致拖拽取消、刷新提示推动画板约 70 像素、编辑后缩放复位；删除已退出主视图的旧右侧技能栏组件及专属样式。Ponytail 审查复用现有渲染、历史和校验链，不新增依赖、服务或第二画布引擎；未扩大删除到缓存、备份和业务文件。
+- **本地验收：**Python **229 passed / 5 skipped**、Node **173 passed / 0 failed**；开发与最终 EXE 均通过原有 13 组及新增 9 组 GUI 操作，无 renderer 错误。覆盖原文回读、坏图拒写、分支边界、重复标签、CRLF、根节点/祖先环保护与动态参与者限制。Python 初跑因测试临时路径过长失败，改用短临时根后完整通过；5 项跳过是 Windows 符号链接权限与 POSIX 权限位差异。两次 EXE 截图在背景刷新期间超时，未计为通过；测试等待刷新及回位动效完成后最终回归通过，证据为 `.local/validation/asl-release-0.5.8-20261002/asl-e2e-ZNHMoB/`、`asl-e2e-VRWJnn/`。
+- **GitHub 与 CI：**实现 `2b7af38` 已推送，[Windows / Linux CI](https://github.com/qihangzhang-272/asl-harness/actions/runs/37088941523) 均通过：两平台 Python 232 通过 / 2 跳过，Windows Node 173 通过，Linux Node 171 通过 / 2 跳过，Windows 两套 GUI 通过；依赖审计 0 告警，不代表全系统安全认证。[0.5.8 预览发行](https://github.com/qihangzhang-272/asl-harness/releases/tag/app-v0.5.8)已公开，标签指向上述已验收实现；远端 ZIP 的 digest 与字节数均和本地最终包一致。
+- **发行完整性：**候选、ZIP 与安装目录 **402 个文件逐项 SHA-256 一致**。`deliverables/ASL-Workspace-0.5.8-Windows-x64.zip` 为 **175,285,159 字节**，SHA-256 `8A0911B874D006FDC3B6A3E980A95642020475154B72F3D605BF08226B85835A`。Windows x64 未签名便携预览版，保留整个解压文件夹。
+- **内容与账号边界：**唯一活动库仍为 `libraries/agent-skill-library`，冻结 CLI 校验 **37 Skills / 4 Modes / 6 张图实际渲染，生成视图一致**；保留既有 3 个云端连接。公共来源与本地 Mode 分离，不自动覆盖本地。用户明确引入的 `humanizer-zh` 已在 Creator Studio，本轮不删除、不自动上传业务修改。“账号设置”指宿主登录凭据、API Key 和模型端点，不是技能内容；本轮均未更改。
+- **未宣称完成的范围：**任意 Mermaid 图型的全语法可视编辑仍未实现；跨条件分支移动、动态参与者/激活状态相关结构调整及其他无法准确映射的语法保留原文编辑。状态图当前只增加显式名称编辑，不支持任意拖动改转移。大型库/冷启动/真实网络性能、Linux GUI、宿主登录及真实业务运行不在本轮验收范围。此前性能测量和清理回执见历史，不重复套用为本轮提升。
+
 ### 已交付版本 · 2026-10-02 · Windows App 0.5.7 / CLI 0.4.5
 
 - **桌面已替换并启动：**用户保存确认后，正常关闭 0.5.6；最终路径修复重新打包、复验并经再次确认后正常重启。桌面快捷方式指向 `%LOCALAPPDATA%\Programs\ASL Workspace\0.5.7\ASL Workspace.exe`，已核对最终包进程和主窗口。旧版本、原快捷方式、中间候选与内容迁移恢复材料保留。没有修改技能内容或 Agent 账号配置。
