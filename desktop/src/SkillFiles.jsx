@@ -38,7 +38,7 @@ export default function SkillFiles({ item, Dialog, readFile, saveFile, onClose, 
             onClick={()=>leave(()=>setFile(entry.path))}><FileText size={13}/><span>{entry.path.includes('/') ? entry.path.slice(entry.path.indexOf('/')+1) : entry.path}</span></button>)}
         </details>)}
       </nav>
-      <section className="package-document" onDoubleClick={event=>{if(!event.target.closest('button,a,input,textarea'))edit();}}>
+      <section className="package-document" onDoubleClick={event=>{if(!event.target.closest('button,a,input,textarea,.mermaid-viewport'))edit();}}>
         <header><span title={file}>{file}</span><div className="tabs"><button disabled={busy} className={!editing?'active':''} onClick={()=>setEditing(false)}>预览</button><button disabled={readOnly || data?.document == null || busy} className={editing?'active':''} onClick={()=>setEditing(true)}><Code size={14}/>编辑</button></div></header>
         {busy ? <p className="muted">正在读取文件…</p> : data?.document == null ? <p className="inline-note">此文件为二进制或超过 1 MB，保留在完整技能包中；请使用本地编辑器处理。</p> : editing ?
           <textarea aria-label="文件内容" className="package-code" spellCheck={false} value={document} onChange={e=>setDocument(e.target.value)}/> :

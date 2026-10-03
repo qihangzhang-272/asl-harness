@@ -22,14 +22,14 @@ async function readOverview(url, fetch, signal, document) {
   return{file:body.path,text,url:body.html_url};
 }
 
-async function readRepository(url, { fetch, core, temp, selected, repositories, remember }, signal) {
+async function readRepository(url, { fetch, core, temp, selected, repositories }, signal) {
     const request = (url, options = {}) => fetch(url, { ...options, signal: AbortSignal.any([signal, options.signal].filter(Boolean)) });
     const repo = await githubSnapshot(url, request);
     const key = `${repo.url}:${repo.commit}:${repo.subpath}`;
     const cached = cache.get(key);
-    if (cached && await fs.stat(cached.snapshot).then(s => s.isDirectory()).catch(() => false)) {
+    if (cached && repositories.has(cached.snapshot) && await fs.stat(cached.snapshot).then(s => s.isDirectory()).catch(() => false)) {
       signal?.throwIfAborted();
-      await remember(url);
+      repositories.get(cached.snapshot).urls.add(new URL(url).href);
       return {...cached,checkedAt:new Date().toISOString()};
     }
     cache.delete(key);
@@ -59,7 +59,8 @@ async function readRepository(url, { fetch, core, temp, selected, repositories, 
       return relative === "" || !relative.startsWith("..") && !path.isAbsolute(relative);
     });
     for (const skill of report.skills) {
-      skill.origin = `${repo.url}/tree/${repo.commit}/${path.relative(repositoryRoot, skill.source).split(path.sep).map(encodeURIComponent).join("/")}`;
+      skill.repositoryPath = path.relative(repositoryRoot, skill.source).split(path.sep).join('/');
+      skill.origin = `${repo.url}/tree/${repo.commit}/${skill.repositoryPath.split('/').map(encodeURIComponent).join("/")}`;
       const ancestors = report.repositoryDependencies.filter(d => {
         const file = path.join(output, d.file);
         return file.startsWith(repositoryRoot + path.sep) && path.dirname(file) !== skill.source && skill.source.startsWith(path.dirname(file) + path.sep);
@@ -88,8 +89,7 @@ async function readRepository(url, { fetch, core, temp, selected, repositories, 
       } catch (error) { modeError = error.message; }
     }
     signal?.throwIfAborted();
-    repositories.set(output,{environment,repo,url:new URL(url).href,modes:new Set(modes.map(m=>m.id))});
-    await remember(url);
+    repositories.set(output,{environment,repo,url:new URL(url).href,urls:new Set([new URL(url).href]),modes:new Set(modes.map(m=>m.id))});
     // README belongs to the selected folder (or repository root), never to every Skill.
     let readme=null;
     for(const directory of [...new Set([requestedPath,repositoryRoot])]) {

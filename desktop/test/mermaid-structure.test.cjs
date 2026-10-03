@@ -1,6 +1,13 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const api=()=>import('../src/mermaid-structure.mjs');
+test('renderer-scoped standalone nodes map to exact IDs, not label or suffix guesses',async()=>{
+  const {diagramNodes}=await import('../src/mermaid-structure-dom.mjs');
+  const nodes=['aslMermaid1-skill_a','aslMermaid2-skill_a','aslMermaid1-other_skill_a','flowchart-skill_a-0'].map(id=>({id,getAttribute:()=>null}));
+  const svg={id:'aslMermaid1',querySelector:()=>null,querySelectorAll:()=>nodes};
+  assert.deepEqual(diagramNodes(svg,'skill_a'),[nodes[0],nodes[3]]);
+  assert.deepEqual(diagramNodes({querySelector:()=>svg,querySelectorAll:()=>nodes},'skill_a'),[nodes[0],nodes[3]]);
+});
 const sequence='sequenceDiagram\r\n  participant A as 分析\r\n  participant B as 检索\r\n  alt 有材料\r\n    A->>B: 核对\r\n    Note over A,B: 保留事实\r\n    B-->>A: 返回\r\n  else 材料不足\r\n    A->>B: 补充\r\n  end\r\n';
 test('sequence exposes participants, messages, notes and branch labels without flattening',async()=>{
   const {structureItems,editStructure}=await api();

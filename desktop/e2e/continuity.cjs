@@ -1,0 +1,162 @@
+const {test}=require('node:test');
+const assert=require('node:assert/strict');
+const fs=require('node:fs/promises');
+const path=require('node:path');
+const {launch}=require('./fixture.cjs');
+
+test('cloud navigation preserves local position and refresh keeps the same repository skill', {timeout:120000},async()=>{
+  const {app,page,workspace,run,errors}=await launch();
+  const url='https://github.com/qa/continuity',preferences=path.join(run,'home/app/libraries.json');
+  try {
+    // Deterministic remote snapshots at the IPC boundary; all navigation uses real UI.
+    await app.evaluate(({ipcMain},url)=>{
+      let revision=0;
+      ipcMain.removeHandler('asl:github-skills');
+      ipcMain.handle('asl:github-skills',()=>{
+        const snapshot='/snapshot/'+(++revision);
+        return {ok:true,value:{repository:url,snapshot,commit:String(revision),modes:[],
+          readme:{text:'# 仓库介绍\n\n![附件](https://github.com/user-attachments/assets/example)\n\n![文件](./cover.png)',url:url+'/blob/main/README.md'},
+          skills:['first','second'].map(folder=>({id:'same-name',title:folder==='first'?'持续阅读':'同名技能',description:'仓库技能',repositoryPath:'skills/'+folder,source:snapshot+'/skills/'+folder,origin:url+'/tree/main/skills/'+folder}))}};
+      });
+      ipcMain.removeHandler('asl:source-document');
+      ipcMain.handle('asl:source-document',(_,source)=>({ok:true,value:'# 技能正文\n\n'+(source.endsWith('/first')?'选中的技能。':'另一个同名技能。')}));
+    },url);
+    const state=JSON.parse(await fs.readFile(preferences,'utf8'));
+    state.repositories=[url];
+    await fs.writeFile(preferences,JSON.stringify(state));
+    await page.reload();
+    await page.locator('.mode-library-overview').waitFor();
+    await page.locator('.source-tree button').filter({hasText:'Creator Studio'}).click();
+    await page.locator('.mode-page').waitFor();
+    await page.locator('.architecture-section g.node[role=button]').first().click();
+    await page.locator('.skill-canvas-panel .markdown-content').waitFor();
+    await page.locator('.cloud-source>.source-heading').click();
+    await page.locator('.source-library .repository-tabs').waitFor();
+    assert.equal(await page.locator('.inspector').count(),0,'云端阅读不能露出后台本地技能操作');
+    assert.equal(await page.locator('.skill-canvas-panel').count(),0);
+    await page.getByRole('button',{name:'工作模式',exact:true}).first().click();
+    await page.locator('.skill-canvas-panel .markdown-content').waitFor();
+    await page.getByRole('button',{name:'全部技能',exact:true}).first().click();
+    await page.getByRole('textbox',{name:'搜索技能',exact:true}).fill('Product');
+    await page.waitForFunction(async root=>{const r=await window.asl.initial();return r.value.views[root]?.query==='Product';},workspace);
+    const local=JSON.parse(await fs.readFile(preferences,'utf8')).views[workspace];
+    await page.locator('.cloud-source>.source-heading').click();
+    assert.equal(await page.getByRole('img',{name:'附件',exact:true}).getAttribute('src'),'https://github.com/user-attachments/assets/example');
+    assert.equal(await page.getByRole('img',{name:'文件',exact:true}).getAttribute('src'),'https://raw.githubusercontent.com/qa/continuity/main/cover.png');
+    await page.getByRole('button',{name:'查看 2 个技能',exact:true}).click();
+    await page.getByRole('button',{name:/持续阅读/}).click();
+    await page.getByText('选中的技能。',{exact:true}).waitFor();
+    await page.getByRole('button',{name:'刷新云端模式库',exact:true}).click();
+    await page.getByText('选中的技能。',{exact:true}).waitFor();
+    assert.equal(await page.getByRole('button',{name:'返回技能',exact:true}).count(),1);
+    assert.deepEqual(JSON.parse(await fs.readFile(preferences,'utf8')).views[workspace],local);
+    await page.getByRole('button',{name:'全部技能',exact:true}).first().click();
+    assert.equal(await page.getByRole('textbox',{name:'搜索技能',exact:true}).inputValue(),'Product');
+    await page.locator('.cloud-source>.source-heading').click();
+    await page.locator('.source-library').waitFor();
+    await page.waitForFunction(async()=>!!(await window.asl.initial()).value.activeSource);
+    await page.reload();
+    await page.locator('.source-library .repository-tabs').waitFor();
+    await page.locator('.read-status').waitFor({state:'detached',timeout:60000});
+    assert.deepEqual(JSON.parse(await fs.readFile(preferences,'utf8')).views[workspace],local,'恢复云端时不重置本地位置');
+    await page.getByRole('button',{name:'全部技能',exact:true}).first().click();
+    assert.equal(await page.getByRole('textbox',{name:'搜索技能',exact:true}).inputValue(),'Product');
+    await page.screenshot({path:path.join(run,'local-position-restored.png')});
+    assert.deepEqual(errors,[]);
+    console.log('导航连贯性验收：'+run);
+  } catch(error) {console.error('导航失败：'+run,await page.locator('body').innerText());throw error;}
+  finally {await page.close();await app.close();}
+});
+
+test('a first connection that fails can be retried without losing explicit connection intent',{timeout:60000},async()=>{
+  const {app,page,errors}=await launch({empty:true});
+  const url='https://github.com/qa/retry';
+  try {
+    await app.evaluate(({ipcMain},url)=>{
+      let attempt=0;
+      ipcMain.removeHandler('asl:github-skills');
+      ipcMain.handle('asl:github-skills',()=>++attempt===1?{ok:false,error:'暂时无法读取仓库'}:{ok:true,value:{repository:url,snapshot:'/retry',commit:'next',skills:[],modes:[],readme:{text:'# 重试成功',url:url+'/blob/main/README.md'}}});
+      ipcMain.removeHandler('asl:connect-repository');
+      ipcMain.handle('asl:connect-repository',(_,value,snapshot)=>({ok:snapshot==='/retry',value:[value]}));
+    },url);
+    await page.getByRole('button',{name:'发现',exact:true}).first().click();
+    await page.getByRole('textbox',{name:'GitHub 仓库地址',exact:true}).fill(url);
+    await page.getByRole('button',{name:'读取仓库',exact:true}).click();
+    await page.getByRole('button',{name:'重试',exact:true}).click();
+    await page.getByRole('heading',{name:'重试成功',exact:true}).waitFor();
+    await page.locator('.cloud-source>.source-heading').waitFor();
+    assert.deepEqual(errors,[]);
+  } finally {await page.close();await app.close();}
+});
+
+test('first launch discovers local skills and a chosen Mode library without Agent configuration',{timeout:120000},async()=>{
+  const {app,page,run,errors}=await launch({empty:true});
+  try {
+    const skill=path.join(run,'home/.agents/skills/product-analysis');
+    await fs.mkdir(path.dirname(skill),{recursive:true});
+    await fs.cp(path.resolve(__dirname,'../../examples/personal-environment/skills/product-analysis'),skill,{recursive:true});
+    await page.getByRole('button',{name:'发现',exact:true}).first().click();
+    await page.getByRole('button',{name:'本机技能',exact:true}).click();
+    await page.getByRole('button',{name:'扫描本机',exact:true}).click();
+    await page.locator('.discovered-skill').filter({hasText:'Product analysis'}).waitFor();
+    await page.getByRole('button',{name:'查看内容',exact:true}).click();
+    await page.locator('.editor-page .markdown-content h1').waitFor();
+    assert.equal(await page.locator('.modal-backdrop').count(),0);
+    assert.equal(await page.locator('.editor-page pre.repository-tree:visible').count(),0);
+    const state=JSON.parse(await fs.readFile(path.join(run,'home/app/libraries.json'),'utf8'));
+    assert.deepEqual(state.libraries,[],'reading does not silently create a work environment');
+    await page.screenshot({path:path.join(run,'first-local-skill.png')});
+    await page.locator('.editor-page-heading').getByRole('button',{name:'返回',exact:true}).click();
+    await page.getByRole('button',{name:'本机工作模式',exact:true}).click();
+    const library=path.join(run,'downloaded-library');
+    await fs.cp(path.resolve(__dirname,'../../examples/personal-environment'),library,{recursive:true});
+    await app.evaluate(({dialog},library)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[library]});},library);
+    await page.getByRole('button',{name:'选择目录',exact:true}).click();
+    await page.locator('.local-mode-row').filter({hasText:'Creator Studio'}).click();
+    await page.locator('.mode-page h1').filter({hasText:'Creator Studio'}).waitFor();
+    await page.locator('.architecture-section g.node[role=button]').click();
+    await page.locator('.skill-canvas-panel .markdown-content').waitFor();
+    await page.getByRole('button',{name:'发现',exact:true}).first().click();
+    await page.getByRole('button',{name:'粘贴 GitHub 链接',exact:true}).click();
+    await page.getByRole('textbox',{name:'GitHub 仓库地址',exact:true}).waitFor();
+    assert.deepEqual(errors,[]);
+    console.log('空环境发现验收：'+run);
+  } finally {await page.close();await app.close();}
+});
+
+test('reading stays visual and explicit source editing goes straight to the document', {timeout:120000},async()=>{
+  const {app,page,workspace,run,errors}=await launch();
+  try {
+    await page.locator('.source-tree button').filter({hasText:'Creator Studio'}).click();
+    await page.locator('.architecture-section .mermaid-drawing svg').waitFor();
+    await page.locator('.architecture-section .mermaid-edit').click({button:'right',position:{x:8,y:70}});
+    await page.getByRole('menuitem',{name:'编辑原文',exact:true}).click();
+    const editor=page.getByRole('textbox',{name:'模式说明',exact:true});
+    await editor.waitFor({timeout:3000});
+    await editor.fill('[查看要点](#核心要点)\n\n## 概览\n\n'+Array(40).fill('阅读内容。\n').join('\n')+'\n## 核心要点\n\n内容不应丢失。\n\n```mermaid\nflowchart LR\n A[阅读] --> B[理解]\n```');
+    await page.locator('.mode-workspace-document-toolbar').getByRole('button',{name:'预览',exact:true}).click();
+    await page.getByRole('link',{name:'查看要点',exact:true}).click();
+    const heading=page.getByRole('heading',{name:'核心要点',exact:true});
+    assert.ok(await heading.evaluate(el=>{const r=el.getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight;}),'目录应定位到标题');
+    await page.locator('.mode-workspace-document-preview .mermaid-drawing').dblclick();
+    assert.equal(await editor.count(),0,'图内手势不进入整篇源码');
+    await heading.dblclick();
+    await editor.waitFor();
+    await page.getByRole('button',{name:'保存',exact:true}).click();
+    await page.locator('.editor-page').waitFor({state:'detached',timeout:60000});
+    assert.match(await fs.readFile(path.join(workspace,'modes/creator-studio/MODE.md'),'utf8'),/核心要点/);
+    await page.getByRole('button',{name:'发现',exact:true}).first().click();
+    await page.getByRole('button',{name:'图示',exact:true}).click();
+    await page.locator('.diagram-examples .mermaid-drawing svg').waitFor();
+    await page.locator('.diagram-examples .mermaid-edit').click({button:'right',position:{x:8,y:70}});
+    assert.equal(await page.getByRole('textbox',{name:'图示原文',exact:true}).count(),0);
+    await page.getByRole('menuitem',{name:'编辑原文',exact:true}).click();
+    await page.getByRole('textbox',{name:'图示原文',exact:true}).waitFor();
+    await page.getByRole('button',{name:'返回图示',exact:true}).click();
+    assert.equal(await page.getByRole('textbox',{name:'图示原文',exact:true}).count(),0);
+    await page.screenshot({path:path.join(run,'reading-visual.png')});
+    assert.deepEqual(errors,[]);
+    console.log('阅读交互验收：'+run);
+  } catch(error) {console.error('阅读失败：'+run,await page.locator('body').innerText());throw error;}
+  finally {await page.close();await app.close();}
+});

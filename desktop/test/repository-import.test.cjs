@@ -28,7 +28,7 @@ for(const aliased of [false,true])test(`repository preview includes its actual R
   assert.match(result.readme.url,/blob\/e{40}\/README.md$/);
 });
 
-test('reopening an unchanged repository reuses the parsed snapshot and still remembers the source', async t => {
+test('reading or preloading a repository reuses its snapshot without reconnecting a removed source', async t => {
   const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'asl-repo-cache-'));
   t.after(() => fs.rm(temp, { recursive: true, force: true }));
   let downloads = 0, remembered = 0, parses = 0;
@@ -47,8 +47,11 @@ test('reopening an unchanged repository reuses the parsed snapshot and still rem
   };
   const one = await readRepository('https://github.com/qa/cache-fixture', context);
   const two = await readRepository('https://github.com/qa/cache-fixture', context);
+  const branch = await readRepository('https://github.com/qa/cache-fixture/tree/main', context);
   assert.equal(one.snapshot, two.snapshot);
-  assert.equal(downloads, 1); assert.equal(parses, 1); assert.equal(remembered, 2);
+  assert.equal(one.snapshot,branch.snapshot);
+  assert.deepEqual([...context.repositories.get(one.snapshot).urls],['https://github.com/qa/cache-fixture','https://github.com/qa/cache-fixture/tree/main']);
+  assert.equal(downloads, 1); assert.equal(parses, 1); assert.equal(remembered, 0);
   assert.ok(one.checkedAt,'cloud inspection exposes when it last checked upstream');
   assert.ok(two.checkedAt);
 });
@@ -83,6 +86,7 @@ test('ASL repository inspection preserves skill bytes instead of injecting a roo
   const report = await readRepository('https://github.com/qa/preserve-asl', context);
   assert.equal(report.catalog.skills[0].title,'Example');
   assert.equal(report.modes[0].id,'writing');
+  assert.equal(report.skills[0].repositoryPath,'skills/example');
   assert.equal(context.selected.has(report.snapshot),false); // Remote preview is not a writable local library.
   assert.equal(await fs.readFile(path.join(report.snapshot, 'skills/example/SKILL.md'), 'utf8'), 'original');
   assert.equal(await fs.stat(path.join(report.snapshot, 'skills/example/LICENSE')).then(()=>true).catch(()=>false), false);

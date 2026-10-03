@@ -23,7 +23,7 @@ test('an ordinary repository can be handed to AI with pinned provenance and the 
 
 test('unknown-format and repair handoffs stay available and completion validates the real target', () => {
   const app=source('App.jsx'),guide=source('EnvironmentGuide.jsx');
-  assert.match(app,/return openCloud\(url\)/);
+  assert.match(app,/return openCloud\(url,undefined,false,true\)/);
   assert.match(app,/cloud\?\.report\?openGuide\('',cloud.report\)/);
   assert.doesNotMatch(source('SourceLibrary.jsx'),/交给 AI 整理/,'仓库整理复用当前页面的顶栏入口，不重复同一按钮');
   assert.match(app,/onVerified=/);

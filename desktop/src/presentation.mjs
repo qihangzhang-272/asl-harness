@@ -1,4 +1,6 @@
 // Categories come only from Mode content, never keyword inference in the renderer.
+export const repositorySkillKey = skill => skill.repositoryPath || skill.id;
+
 export function capabilityGroups(skills, authored = null) {
   const groups=(authored||[]).map((g,index)=>({id:`custom-${index}`,title:g.title,
     icon:typeof g.icon==='string'?g.icon:'Box',

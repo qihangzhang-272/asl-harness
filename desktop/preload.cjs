@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld("asl", {
   mcpSave: values => ipcRenderer.invoke('asl:mcp-save', values),
   initial: () => ipcRenderer.invoke("asl:initial"),
   selectSource: value => ipcRenderer.invoke('asl:select-source', value),
+  connectRepository: (url,snapshot) => ipcRenderer.invoke('asl:connect-repository',url,snapshot),
   sourceMenu: url => ipcRenderer.invoke('asl:source-menu',url),
   remember: (workspace) => ipcRenderer.invoke("asl:remember", workspace),
   rememberView: (workspace,view) => ipcRenderer.invoke('asl:remember-view',workspace,view),

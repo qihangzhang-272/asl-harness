@@ -6,8 +6,10 @@
 
 `structure.cjs` 另验收时序参与者与消息拖拽、名称/消息/备注/条件原位编辑、备注移除、思维导图完整子树移动与移除/撤销/重做、状态名称编辑及技能打开。操作后回读 MODE.md，不以 SVG 临时位置代替保存结果；放大后继续编辑，后台刷新不能取消拖拽或挤动画板。
 
+`continuity.cjs` 验收本地与云端的位置隔离、刷新后的技能定位、首次连接失败重试、无 Agent 配置的技能发现及选库、图文阅读和显式原文编辑。远端更新使用确定性 IPC 快照，其余导航、渲染与本地文件操作使用真实 App。
+
 Windows CI 自动运行；Linux 的 GUI 尚未在本轮验收。截图及结果放在系统临时目录的 `asl-e2e-*`，可以用 `ASL_E2E_OUTPUT` 指定已存在的输出目录。失败保留截图，不自动删除证据。
 
-验收便携包：设置 `ASL_TEST_EXE` 为待验收 EXE 的绝对路径，然后执行 `node --test --test-concurrency=1 e2e/workspace.cjs e2e/structure.cjs`。开发 GUI 通过不代表最终打包文件已验收。
+验收便携包：设置 `ASL_TEST_EXE` 为待验收 EXE 的绝对路径，然后执行 `node --test --test-concurrency=1 e2e/workspace.cjs e2e/structure.cjs e2e/continuity.cjs`。开发 GUI 通过不代表最终打包文件已验收。
 
 性能对照：先保留改动前 `dist/`，构建新代码，将 `ASL_PERF_BASELINE` 指向旧目录，执行 `npm run test:performance`。`ASL_PERF_OUTPUT` 指定结果 JSON。脚本交替测量 A/B 各十轮，使用相同核心与示例，计时前分别预热选中的前端资源；它测前端重载，不冒充操作系统冷启动或真实 GitHub 网络性能。

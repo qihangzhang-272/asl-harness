@@ -59,6 +59,7 @@ import {
   restoreView,
   matchLocalModes,
   libraryGroups,
+  repositorySkillKey,
 } from "./presentation.mjs";
 
 const baseName = (value) => (value || "").split(/[\\/]/).filter(Boolean).pop();
@@ -152,7 +153,7 @@ function DiscoveredSkills({ report, catalog, readOnly, onInspect, onAdd, onMode,
           </div>
           <div className="discovered-actions">
             <button className="primary" disabled={!catalog || readOnly} onClick={() => onAdd(s)}><Plus size={15} />加入模式</button>
-            <button onClick={() => onInspect(s)}>查看解析<ChevronRight size={15} /></button>
+            <button onClick={() => onInspect(s)}>查看内容<ChevronRight size={15} /></button>
           </div>
         </article>;
       })}
@@ -564,24 +565,24 @@ export default function App() {
       const data = await call("initial");
       setInitial(data);
       if(data.activeSource)openCloud(data.activeSource.url,data.activeSource.mode);
-      if (data.workspace) await load(data.workspace, call, {restore:!data.activeSource});
+      if (data.workspace) await load(data.workspace, call, {restore:true});
       setReady(true);
     });
     return()=>{active=false;window.removeEventListener('focus',focus);};
   }, []);
   useEffect(()=>{
-    if(!ready||!workspace||!catalog||busy)return;
+    if(!ready||!workspace||!catalog||busy||cloud||loadingRoot)return;
     api('rememberView',workspace,{mode:modeId||'',page,view,skill:selected?.id||'',query,provider,githubUrl})
       .catch(error=>setMessage({error:true,text:`界面位置未保存：${error.message}`}));
-  },[ready,workspace,catalog,busy,loadingRoot,modeId,page,view,selected?.id,query,provider,githubUrl]);
+  },[ready,workspace,catalog,busy,cloud,loadingRoot,modeId,page,view,selected?.id,query,provider,githubUrl]);
   useEffect(()=>{
-    if(!resumeDiscovery||busy)return;
+    if(!resumeDiscovery||busy||cloud)return;
     const saved=resumeDiscovery;setResumeDiscovery(null);
     read(saved.provider === 'local' ? 'local' : 'github', '恢复发现结果', async call=>{
       if(saved.provider==='local')setLocalReport(await call('localSkills'));
       else setGithubReport(await call('githubSkills',saved.githubUrl));
     });
-  },[resumeDiscovery,busy]);
+  },[resumeDiscovery,busy,cloud]);
   useEffect(()=>{
     if(!initial||workspace)return;
     const check=()=>task(async()=>{const data=await api('initial');if(data.workspace)await load(data.workspace);});
@@ -680,6 +681,7 @@ export default function App() {
     if (['skill-editor','skill-files'].includes(modal?.kind) && !window.confirm('离开编辑页？未保存的修改会丢失。')) return;
     setModal(null);setCloud(null);cloudRequest.current++;reads.cancel('cloud');reads.cancel('detail');detailRequest.current++;
     api('selectSource',null).catch(error=>setMessage({error:true,text:error.message}));
+    if(cloud&&id===page)return;
     navigate(()=>{setPage(id);if(id==='modes')setModeId(null);setSelected(null);setQuery('');});
   }
   async function selectSkill(skill,root=workspace,call=api) {
@@ -773,16 +775,16 @@ export default function App() {
   }
   async function inspectGithub(url = githubUrl) {
     setGithubUrl(url);
-    return openCloud(url);
+    return openCloud(url,undefined,false,true);
   }
   function navigateCloud(patch){setCloud(previous=>({...previous,...patch}));}
-  async function openCloud(url, id, refresh=false) {
-    setSelected(null);setModal(null);setPage('modes');
+  async function openCloud(url, id, refresh=false,connect=false) {
+    setModal(null);
     const sequence=++cloudRequest.current;
     reads.cancel('cloud');reads.cancel('cloud-readme');
     const report=cloudCache.current.get(url);
-    const next={url,mode:id||null,view:'overview',skill:null,report};
-    if(!refresh&&report){setCloud(next);return;}
+    const next=refresh&&cloud?.url===url?{...cloud,report}:{url,mode:id||null,view:'overview',skill:null,report};
+    if(!refresh&&report&&initial?.repositories.includes(url)){setCloud(next);return;}
     setCloud({...next,loading:true});
     if(!report)read('cloud-readme','读取仓库介绍',async call=>{
       try{const readme=await call('repositoryOverview',url);if(sequence===cloudRequest.current)setCloud(previous=>({...previous,readme}));}
@@ -793,8 +795,12 @@ export default function App() {
       cloudCache.current.set(url,report);
       if(cloudCache.current.size>12)cloudCache.current.delete(cloudCache.current.keys().next().value);
       if(sequence!==cloudRequest.current)return;
+      if(connect&&!initial?.repositories.includes(url)) {
+        const repositories=await api('connectRepository',url,report.snapshot);
+        if(sequence!==cloudRequest.current)return;
+        setInitial(p=>({...p,repositories}));
+      }
       setCloud(previous=>previous?.url===url?{...previous,report,loading:false,error:null}:previous);
-      setInitial(p=>({...p,repositories:[url,...(p.repositories||[]).filter(v=>v!==url)]}));
     } catch(error){if(sequence===cloudRequest.current)setCloud(previous=>({...previous,loading:false,error:error.message}));}});
   }
   useEffect(()=>{
@@ -881,7 +887,8 @@ export default function App() {
     const report = await api("run", "import", { source: modal.source, target });
     setModal({ kind: "import-review", source: modal.source, target, report, replace: false });
   }
-  const editorOpen=['mode-workspace','skill-editor','skill-files','import-review','connect','agent-guide'].includes(modal?.kind);
+  const editorOpen=['mode-workspace','skill-editor','skill-files','discovered-detail','import-review','connect','agent-guide'].includes(modal?.kind);
+  const activePage=cloud?'modes':page;
 
   return (
     <NoticeContext.Provider value={{ ...message, busy, reads }}>
@@ -906,7 +913,7 @@ export default function App() {
                 key={id}
                 aria-label={label}
                 title={label}
-                className={page === id ? "active" : ""}
+                className={activePage === id ? "active" : ""}
                 onClick={() => goPage(id)}
               >
                 <Icon size={18} />
@@ -932,18 +939,18 @@ export default function App() {
         <div className="app-main">
           <header className="topbar">
             <span>
-              <button className="breadcrumb-button" onClick={()=>goPage(page)}>{page === "modes"
+              <button className="breadcrumb-button" onClick={()=>goPage(activePage)}>{activePage === "modes"
                 ? "工作模式"
                 : page === "skills"
                   ? "全部技能"
                   : page === "discover"
                     ? "发现"
                     : page === "updates" ? "来源与更新" : "Agent 配置"}</button>
-              {page === "modes" && (cloud || mode) && (
+              {activePage === "modes" && (cloud || mode) && (
                 <>
                   <ChevronRight size={14} />
                   <span title={cloud?.url || workspace}>{baseName(cloud?.url || workspace)}</span><ChevronRight size={14}/>
-                  <b>{cloud?(cloud.skill?cloud.report?.skills.find(s=>s.source===cloud.skill||s.id===cloud.skill)?.title:cloud.mode?cloud.report?.modes.find(m=>m.id===cloud.mode)?.title:cloud.view==='skills'?'技能':'仓库介绍'):mode.title}</b>
+                  <b>{cloud?(cloud.skill?cloud.report?.skills.find(s=>repositorySkillKey(s)===cloud.skill||s.id===cloud.skill)?.title:cloud.mode?cloud.report?.modes.find(m=>m.id===cloud.mode)?.title:cloud.view==='skills'?'技能':'仓库介绍'):mode.title}</b>
                 </>
               )}
             </span>
@@ -959,7 +966,7 @@ export default function App() {
                   <IconButton
                     icon={RotateCw}
                     label="刷新技能库"
-                    onClick={() => cloud?openCloud(cloud.url,cloud.mode,true):task(refreshLocal)}
+                    onClick={() => cloud?openCloud(cloud.url,cloud.mode,true,true):task(refreshLocal)}
                   />
                 )
               )}
@@ -970,7 +977,7 @@ export default function App() {
             <main className="content" ref={contentRef}>
               {!modal && <ReadStatus tasks={reads}/>}
               {cloud ? <SourceLibrary source={cloud} busy={busy} onNavigate={navigateCloud}
-                onRefresh={()=>openCloud(cloud.url,cloud.mode,true)}
+                onRefresh={()=>openCloud(cloud.url,cloud.mode,true,true)}
                 onUse={item=>task(()=>importRepositoryMode(item,null,true,cloud.report))}
                 onSave={item=>task(()=>importRepositoryMode(item,null,false,cloud.report))}
                 onAdd={catalog&&!readOnly?adoptSkill:null}/>
@@ -1186,7 +1193,7 @@ export default function App() {
                           compact={!!selected}
                           selectedId={selected?.id}
                           onSkill={item=>setSelected(item)}
-                          onEdit={readOnly?null:title=>setModal({kind:'mode-workspace',item:mode,title})}
+                          onEdit={readOnly?null:title=>setModal({kind:'mode-workspace',item:mode,title,editSource:true})}
                           onSaveDocument={readOnly?null:saveDiagram}
                         />
                         </SkillCanvas>
@@ -1196,7 +1203,7 @@ export default function App() {
                           query={query}
                           onSkill={item=>setModal({kind:'skill-files',item})}
                           readOnly={readOnly} readFile={(item,file)=>api('run','files',{workspace,skill:item.id,file})} saveFile={saveFile}
-                          onEditMode={readOnly?undefined:(_,title)=>setModal({kind:'mode-workspace',item:mode,title})}
+                          onEditMode={readOnly?undefined:(_,title)=>setModal({kind:'mode-workspace',item:mode,title,editSource:true})}
                           onSaveDocument={readOnly?null:saveDiagram}
                         />
                       )}
@@ -1243,7 +1250,7 @@ export default function App() {
                       </div>
                       <SkillLibrary catalog={catalog} query={query} onSkill={item=>setModal({kind:'skill-files',item})}
                         readOnly={readOnly} readFile={(item,file)=>api('run','files',{workspace,skill:item.id,file})} saveFile={saveFile}
-                        onEditMode={readOnly?undefined:(id,title)=>setModal({kind:'mode-workspace',item:catalog.modes.find(m=>m.id===id),title})} onSaveDocument={readOnly?null:saveDiagram}/>
+                        onEditMode={readOnly?undefined:(id,title)=>setModal({kind:'mode-workspace',item:catalog.modes.find(m=>m.id===id),title,editSource:true})} onSaveDocument={readOnly?null:saveDiagram}/>
                     </>
                   )}
                   {page === "discover" && (
@@ -1397,7 +1404,7 @@ export default function App() {
                 </>
               )}
             </main>
-            {selected && catalog && !(page==='modes'&&view==='map') && (
+            {!cloud && selected && catalog && !(page==='modes'&&view==='map') && (
               <SkillDetails
                 skill={selected}
                 readOnly={readOnly}
@@ -1498,6 +1505,7 @@ export default function App() {
             preloadedReport={localReport}
             mode={modal.item || null}
             initialTitle={modal.title}
+            editSource={modal.editSource}
             readFile={(item,file)=>api('run','files',{workspace,skill:item.id,file})}
             saveFile={request=>saveFile(request,false)}
             draft={modal.draft || null}
@@ -1594,19 +1602,20 @@ export default function App() {
             onApplied={(text,values) => { setMessage({ text });setAgentHost(values.host);setPage('agents');api("native").then(setNative).catch(error=>setMessage({error:true,text:error.message})); }}
           />
         )}
-        {modal?.kind === "discovered-detail" && <Dialog title={modal.skill.title} onClose={() => setModal(null)} wide>
-          <p>{modal.skill.description}</p>
-          <p className="muted">文件解析结果，未执行技能，也未验证实际效果。</p>
+        {modal?.kind === "discovered-detail" && <EditorPage title={modal.skill.title} onClose={() => setModal(null)}>
+          <Markdown text={modal.document}/>
+          <details><summary>文件与依赖</summary>
           {modal.skill.inspection?.reasons.length ? <div className="inline-note"><span><b>需要先核对配套内容</b>{modal.skill.inspection.reasons.map(reason => <small key={reason}>{reason}</small>)}</span></div> : <p>未发现脚本、运行声明或目录外引用，可继续检查完整技能包。</p>}
           {modal.skill.inspection?.dependencies.map(d => <div className="dependency-preview" key={d.file}><b>{d.kind} · {d.file}</b><p>{d.requirements.join("、") || "以原声明为准"}</p>{d.setupScripts.length > 0 && <small>安装脚本：{d.setupScripts.join("、")}（未执行）</small>}{d.parseWarning && <small>{d.parseWarning}</small>}</div>)}
           <details><summary>包含的文件（{modal.skill.inspection?.files.length || 0}）</summary><pre className="repository-tree">{modal.skill.inspection?.files.join("\n")}</pre></details>
-          <details><summary>技能原文</summary><pre className="repository-tree">{modal.document}</pre></details>
+          <details><summary>查看原文</summary><pre className="repository-tree">{modal.document}</pre></details>
           <p className="path-line">{modal.skill.origin || modal.skill.source}</p>
+          </details>
           <div className="dialog-actions"><button onClick={() => setModal(null)}>关闭</button>
             {modal.skill.origin && <button onClick={() => task(() => api("external", modal.skill.origin))}>查看原仓库<ArrowUpRight size={15} /></button>}
-            <button className="primary" disabled={!catalog || readOnly} onClick={() => adoptSkill(modal.skill)}>添加到 Mode</button>
+            {catalog&&!readOnly&&<button className="primary" onClick={() => adoptSkill(modal.skill)}>加入模式</button>}
           </div>
-        </Dialog>}
+        </EditorPage>}
         {modal?.kind === "setup" && <SetupDialog api={api} Dialog={Dialog} Tag={Tag} values={modal.values} resultMessage={modal.resultMessage} title={catalog?.modes.find(m => m.id === modal.values.mode)?.title || modal.values.mode} task={task} onClose={() => setModal(null)} />}
         {modal?.kind === "add-to-mode" && (
           <Dialog title="加入工作模式" onClose={() => setModal(null)}>

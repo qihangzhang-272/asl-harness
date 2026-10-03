@@ -151,10 +151,15 @@ if(primary) app.whenReady().then(() => {
       repositories: preferences.repositories, activeSource: preferences.activeSource, packaged: app.isPackaged, version:app.getVersion() };
   });
   handle('asl:select-source', async value => {
-    const preferences=await readPreferences(preferenceFile);
-    if(value!==null && (!value || Object.keys(value).some(k=>!['url','mode'].includes(k)) || !preferences.repositories.includes(value.url) || value.mode!==null && !/^[\w.-]{1,100}$/.test(value.mode))) throw new Error('请先连接模式库');
-    await updatePreferences(preferenceFile,p=>({...p,activeSource:value}));
+    if(value!==null && (!value || Object.keys(value).some(k=>!['url','mode'].includes(k)) || typeof value.url!=='string' || value.mode!==null && !/^[\w.-]{1,100}$/.test(value.mode))) throw new Error('请先连接模式库');
+    // A late selection cannot resurrect a connection removed while a read was pending.
+    await updatePreferences(preferenceFile,p=>value===null||p.repositories.includes(value.url)?{...p,activeSource:value}:p);
     return {saved:true};
+  });
+  handle('asl:connect-repository', async (url,snapshot) => {
+    if(!repositories.get(snapshot)?.urls.has(new URL(url).href))throw new Error('请先读取这个仓库');
+    const preferences=await updatePreferences(preferenceFile,p=>({...p,repositories:[url,...p.repositories.filter(v=>v!==url)].slice(0,12)}));
+    return preferences.repositories;
   });
 
   handle('asl:watch', async (workspace) => {
@@ -295,7 +300,6 @@ if(primary) app.whenReady().then(() => {
     return readRepository(url, { fetch: (...args) => net.fetch(...args),
       core: (action, values, signal) => runCore(action, values, { ...options, signal }),
       temp: app.getPath("temp"), selected, repositories,
-      remember: url => updatePreferences(preferenceFile, p => ({ ...p, repositories: [url, ...p.repositories.filter(v => v !== url)].slice(0, 12) })),
     }, signal);
   });
   handle("asl:repository-mode", async (snapshot, mode) => {

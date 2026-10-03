@@ -38,7 +38,7 @@ function WorkspaceFrame({title, children, onClose, wide}) {
  */
 export default function ModeWorkspace({
   mode = null, draft = null, catalog = null, workspace, api, read, reads,
-  Dialog = EditorPage, Field = DefaultField, onSave, onCatalog, onClose, readFile, saveFile, initialTitle = '', preloadedReport,
+  Dialog = EditorPage, Field = DefaultField, onSave, onCatalog, onClose, readFile, saveFile, initialTitle = '', preloadedReport, editSource=false,
 }) {
   const source = useMemo(() => readModeDocument(mode?.document), [mode]);
   const [name, setName] = useState(() => draft?.name ?? source.name);
@@ -75,8 +75,8 @@ export default function ModeWorkspace({
   useEffect(()=>{if(preloadedReport)setReport(preloadedReport);},[preloadedReport]);
   const [importing, setImporting] = useState('');
   const [error, setError] = useState('');
-  const [pane,setPane]=useState('canvas');
-  const [documentEditing,setDocumentEditing]=useState(false);
+  const [pane,setPane]=useState(editSource?'document':'canvas');
+  const [documentEditing,setDocumentEditing]=useState(editSource);
   const live=useRef(true);
   useEffect(()=>{live.current=true;return()=>{live.current=false;reads?.cancel('mode-workspace-local');};},[]);
 
@@ -214,7 +214,7 @@ export default function ModeWorkspace({
             const scopes=[...map.paradigms,{id:'shared',title:'通用能力'}].filter(p=>p.title===d.title);
             if(scopes.length===1)onSelectScope(scopes[0].id);
           }}>{d.title}</button>)}</div>
-            <button onClick={()=>{setPane('document');setDocumentEditing(true);}}>原文</button></nav>
+            </nav>
           <SkillCanvas selected={selected} onSelect={setSelected} readFile={readFile} saveFile={saveFile}>
             {diagram?<MermaidEdit key={index} source={diagram.source}
               empty={!members.length&&diagram.source.trim()==='flowchart LR'}
@@ -228,7 +228,7 @@ export default function ModeWorkspace({
       }}
       documentEditor={<section className="mode-workspace-document-pane">
         <div className="mode-workspace-document-toolbar"><span>MODE.md</span><button onClick={()=>setDocumentEditing(!documentEditing)}>{documentEditing?'预览':'编辑'}</button></div>
-        {documentEditing?<textarea aria-label="模式说明" autoFocus value={body} onChange={event=>setBody(event.target.value)}/>:<div className="mode-workspace-document-preview" onDoubleClick={()=>setDocumentEditing(true)}><Markdown text={body || '尚未填写'}/></div>}
+        {documentEditing?<textarea aria-label="模式说明" autoFocus value={body} onChange={event=>setBody(event.target.value)}/>:<div className="mode-workspace-document-preview" onDoubleClick={event=>{if(!event.target.closest('button,a,input,textarea,.mermaid-viewport'))setDocumentEditing(true);}}><Markdown text={body || '尚未填写'}/></div>}
       </section>}
       skills={librarySkills}
       localSkills={candidates}

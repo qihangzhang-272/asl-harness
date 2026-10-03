@@ -7,7 +7,7 @@ const vm = require("node:vm");
 const { createRequire } = require("node:module");
 
 // Exercise the actual IPC handlers. Native Windows dialogs are separately checked in the packaged App.
-async function desktop(t, {missingDocuments=false,coreError=null}={}) {
+async function desktop(t, {missingDocuments=false,coreError=null,repositoryReader}={}) {
   const home = await fs.mkdtemp(path.join(os.tmpdir(), "asl-ipc-"));
   t.after(() => fs.rm(home, { recursive: true, force: true }));
   const directory = path.resolve(__dirname, "..");
@@ -40,10 +40,10 @@ async function desktop(t, {missingDocuments=false,coreError=null}={}) {
   };
   const executed = [];
   vm.runInNewContext(await fs.readFile(path.join(directory, "main.cjs"), "utf8"), {
-    __dirname: directory, process: { ...process, argv: [] },
+    __dirname: directory, process: { ...process, argv: [] }, URL,
     require: name => name === "electron" ? electron : name === "./bridge.cjs"
       ? { ...localRequire(name), runCore: async (...args) => { executed.push(args); if(coreError)throw coreError; return {}; } }
-      : localRequire(name),
+      : name==='./repository-import.cjs'&&repositoryReader?{...localRequire(name),readRepository:repositoryReader}:localRequire(name),
   });
   await new Promise(resolve => setImmediate(resolve));
   return { home, dialog, clipboard, calls, executed, events,menu:electron.Menu,focused:()=>focused, invoke: (method, ...args) => handlers.get(`asl:${method}`)(
@@ -71,6 +71,27 @@ test('native repository context menu removes only its connection and cancellatio
   assert.deepEqual(result.value.repositories,[urls[1]]);
   assert.equal(JSON.parse(await fs.readFile(file,'utf8')).activeSource,null);
 });
+test('only explicit connection can register an inspected repository; late selection cannot undo removal',async t=>{
+  const url='https://github.com/example/preview',snapshot='/inspected/preview';
+  const app=await desktop(t,{repositoryReader:async (url,context)=>{
+    context.repositories.set(snapshot,{url,urls:new Set([url])});return {snapshot};
+  }});
+  assert.equal((await app.invoke('connect-repository',url,snapshot)).ok,false);
+  await app.invoke('github-skills',url);
+  assert.deepEqual((await app.invoke('initial')).value.repositories,[]);
+  assert.equal((await app.invoke('connect-repository',url,snapshot)).ok,true);
+  assert.deepEqual((await app.invoke('initial')).value.repositories,[url]);
+  await app.invoke('select-source',{url,mode:null});
+  app.menu.choose=true;
+  await app.invoke('source-menu',url);
+  await app.invoke('github-skills',url);
+  await app.invoke('select-source',{url,mode:null});
+  const state=(await app.invoke('initial')).value;
+  assert.deepEqual(state.repositories,[]);
+  assert.equal(state.activeSource,null);
+  assert.equal((await app.invoke('connect-repository',url,snapshot)).ok,true,'explicit reconnect is still allowed');
+});
+
 test('reopen focuses the existing window and exposes version plus remembered views',async t=>{
   const app=await desktop(t);
   const initial=(await app.invoke('initial')).value;
