@@ -66,6 +66,7 @@
 ::view-transition-old(root) { display: none; }
 ::view-transition-new(root) { animation: none; }
 .content { view-transition-name: asl-content; }
+.content>.read-status{position:fixed;right:24px;bottom:24px;z-index:50;max-width:min(360px,calc(100vw - 48px));max-height:40vh;overflow:auto;box-shadow:0 8px 28px #446c9d14}
 ::view-transition-old(asl-content) { animation-duration: 100ms; }
 ::view-transition-new(asl-content) { animation-duration: 180ms; }
 ::view-transition-group(asl-content) { animation-timing-function: cubic-bezier(.22,1,.36,1); }
@@ -94,7 +95,6 @@ button:active:not(:disabled) { transform: scale(.985); }
 .repository-skill-card>div{flex:1;min-width:0}.repository-skill-card h2{font-size:16px;line-height:1.45;margin:0 0 9px}.repository-skill-card p{font-size:13px;line-height:1.65;margin:0;color:#627999}.repository-skill-card:hover{transform:translateY(-2px);box-shadow:0 8px 24px #4275b910}.repository-skill-card>svg{margin-top:8px;flex:none}
 @media(prefers-reduced-motion:reduce){.repository-skill-card{transition:none;transform:none}}
 .sidebar{position:relative;width:var(--sidebar-width)!important}
-.skill-file-panel{position:relative;flex-basis:var(--skill-panel-width)!important}
 .panel-resize{position:absolute;top:0;bottom:0;width:10px;z-index:6;cursor:col-resize;touch-action:none;outline:none}
 .panel-resize.right{right:-5px}.panel-resize.left{left:-5px}
 .panel-resize::after{content:'';position:absolute;top:40%;bottom:40%;left:4px;width:2px;border-radius:2px;background:#6f9ee0;opacity:0;transition:opacity 140ms}

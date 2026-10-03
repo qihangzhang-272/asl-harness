@@ -1,7 +1,7 @@
 // Edit the rendered label in its original SVG position, not in a separate dialog.
 export function editRenderedLabel(element,item,onCommit) {
   const svg=element.closest('svg');if(!svg||svg.querySelector('.mermaid-label-editor'))return;
-  const label=item.kind==='node'?element.querySelector('g.label'):element.matches('path')?null:element;
+  const label=element.matches('text,g.label')?element:item.kind==='node'?element.querySelector('g.label'):element.matches('path')?null:element;
   const rect=(label||element).getBoundingClientRect(),matrix=svg.getScreenCTM();if(!matrix)return;
   const inverse=matrix.inverse(),point=new DOMPoint(rect.x,rect.y).matrixTransform(inverse);
   let width=rect.width/Math.abs(matrix.a),height=rect.height/Math.abs(matrix.d);

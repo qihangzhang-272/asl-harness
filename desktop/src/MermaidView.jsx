@@ -3,9 +3,10 @@ import {Minus,Plus,Scan,Maximize2,Minimize2} from 'lucide-react';
 import {renderDiagram} from './mermaid-render.mjs';
 import {editRenderedLabel} from './mermaid-inline.mjs';
 import {attachHandles} from './mermaid-handles.mjs';
+import {diagramNodes,structureElements,attachStructureDrag} from './mermaid-structure-dom.mjs';
 import './mermaid.css';
 
-export default memo(function MermaidView({source,onNode,nodes=[],onError,items,onElement,onConnect,compact=false,selectedId,onExpand,expanded=false,disabled=false}) {
+export default memo(function MermaidView({source,onNode,nodes=[],onError,items,structure,onElement,onConnect,compact=false,selectedId,onExpand,expanded=false,disabled=false}) {
   const [svg,setSvg]=useState(''),[error,setError]=useState(''),[scale,setScale]=useState(null);
   const markup=useMemo(()=>({__html:svg}),[svg]);
   const [renderedSource,setRenderedSource]=useState('');
@@ -14,12 +15,14 @@ export default memo(function MermaidView({source,onNode,nodes=[],onError,items,o
   const zoom=compact?Math.max(.05,fit):scale==='fit'?Math.max(.15,fit):(scale??1);
   const box=useRef(null),section=useRef(null),[visible,setVisible]=useState(false);
   const clickTimers=useRef(new Map());
+  const callbacks=useRef({});callbacks.current={onNode,onElement,onConnect,nodes};
+  const bindingKey=JSON.stringify([nodes.map(n=>[n.alias,n.data.title,n.data.skill?.id]),!!onElement,!!onConnect]);
   // Background catalog/connection refreshes must not cancel a user's pending single click.
   useEffect(()=>()=>{clickTimers.current.forEach(clearTimeout);clickTimers.current.clear();},[source,svg]);
   useEffect(()=>{const observer=new IntersectionObserver(entries=>{if(entries.some(e=>e.isIntersecting)){setVisible(true);observer.disconnect();}},{rootMargin:'160px'});observer.observe(section.current);return()=>observer.disconnect();},[]);
   useEffect(()=>{
     if(!visible)return;
-    let current=true;setError('');setScale(null);
+    let current=true;setError('');
     renderDiagram(source).then(result=>{if(current){
       const dimensions=new DOMParser().parseFromString(result,'image/svg+xml').documentElement.getAttribute('viewBox').split(/[\s,]+/);
       setNaturalWidth(Number(dimensions[2]));setNaturalHeight(Number(dimensions[3]));
@@ -34,10 +37,13 @@ export default memo(function MermaidView({source,onNode,nodes=[],onError,items,o
   },[svg]);
   useEffect(()=>{
     if(!box.current)return;
+    // A catalog refresh can replace callbacks without changing the SVG. Do not cancel an active drag.
+    const onNode=skill=>callbacks.current.onNode?.(skill);
+    const onElement=callbacks.current.onElement?(...args)=>callbacks.current.onElement?.(...args):null;
+    const onConnect=callbacks.current.onConnect?(...args)=>callbacks.current.onConnect?.(...args):null;
+    const openNode=alias=>{const node=callbacks.current.nodes.find(n=>n.alias===alias);if(node)onNode({...node.data.skill,title:node.data.title});};
     box.current.querySelectorAll('.mermaid-edge-hit').forEach(element=>element.remove());
-    const findNodes=alias=>[...box.current.querySelectorAll('g.node,g[data-et="participant"]')].filter(el=>
-      el.getAttribute('data-id')===alias||el.getAttribute('data-asl-node')===alias||el.id===alias||
-      new RegExp(`(?:^|-)(?:flowchart|state)-${alias.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}-[0-9]+$`).test(el.id));
+    const findNodes=alias=>diagramNodes(box.current,alias);
     const findNode=alias=>findNodes(alias)[0];
     const handles=[];
     box.current.querySelectorAll('g.node').forEach(el=>el.classList.remove('is-selected'));
@@ -45,8 +51,8 @@ export default memo(function MermaidView({source,onNode,nodes=[],onError,items,o
       for(const element of findNodes(node.alias)){
       element.setAttribute('role','button');element.setAttribute('tabindex','0');element.setAttribute('aria-label',node.data.title);
       element.classList.toggle('is-selected',node.data.skill?.id===selectedId);
-      element.onclick=()=>onNode?.({...node.data.skill,title:node.data.title});
-      element.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onNode?.({...node.data.skill,title:node.data.title});}};
+      element.onclick=()=>openNode(node.alias);
+      element.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openNode(node.alias);}};
       }
     }
     if(items?.editable&&onElement){
@@ -56,7 +62,7 @@ export default memo(function MermaidView({source,onNode,nodes=[],onError,items,o
         const target={kind:'node',id:node.id,label:node.label};
         const cancelClick=()=>{clearTimeout(clickTimers.current.get(node.id));clickTimers.current.delete(node.id);};
         const edit=event=>{cancelClick();event?.stopPropagation();editRenderedLabel(element,target,label=>onElement({...target,label},'commit',event));};
-        element.onclick=event=>{event.stopPropagation();cancelClick();if(event.detail>1)return;clickTimers.current.set(node.id,setTimeout(()=>{clickTimers.current.delete(node.id);onElement(target,'select',event);},220));};
+        element.onclick=event=>{event.stopPropagation();cancelClick();if(event.detail>1)return;clickTimers.current.set(node.id,setTimeout(()=>{clickTimers.current.delete(node.id);if(onElement(target,'select',event)!==false)edit(event);},220));};
         element.ondblclick=edit;
         element.oncontextmenu=e=>{e.preventDefault();e.stopPropagation();onElement({...target,edit:()=>edit(e)},'context',e);};
         element.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onElement(target,'select',e);}if(e.key==='F2'){e.preventDefault();edit(e);}};
@@ -80,8 +86,27 @@ export default memo(function MermaidView({source,onNode,nodes=[],onError,items,o
     }
     const svgElement=box.current.querySelector('svg');
     const detach=svgElement?attachHandles(svgElement,handles,onConnect):()=>{};
-    return detach;
-  },[svg,onNode,nodes,items,onElement,onConnect,compact,selectedId]);
+    let detachStructure=()=>{};
+    if(svgElement&&structure?.type&&onElement) {
+      const entries=structureElements(svgElement,structure);
+      for(const {element,item,label} of entries) {
+        const isNode=['node','participant'].includes(item.kind);
+        element.setAttribute('role','button');element.setAttribute('tabindex','0');element.setAttribute('aria-label',item.label||'编辑图中文字');
+        const cancelClick=()=>{clearTimeout(clickTimers.current.get(item.key));clickTimers.current.delete(item.key);};
+        const edit=event=>{cancelClick();event?.stopPropagation();editRenderedLabel(label||element,item,value=>onElement({...item,label:value},'commit',event));};
+        element.ondblclick=edit;
+        element.onclick=event=>{
+          event.stopPropagation();cancelClick();if(event.detail>1)return;
+          if(!isNode){edit(event);return;}
+          clickTimers.current.set(item.key,setTimeout(()=>{clickTimers.current.delete(item.key);if(onElement(item,'select',event)!==false)edit(event);},220));
+        };
+        element.oncontextmenu=event=>{event.preventDefault();event.stopPropagation();onElement({...item,edit:()=>edit(event)},'context',event);};
+        element.onkeydown=event=>{if(event.key==='F2'||event.key==='Enter'){event.preventDefault();edit(event);}};
+      }
+      detachStructure=attachStructureDrag(svgElement,entries,structure,change=>onElement(change,'commit'));
+    }
+    return ()=>{detach();detachStructure();};
+  },[svg,bindingKey,items,structure,compact,selectedId]);
   return <section ref={section} className={`mermaid-view ${compact?'is-compact':''}`} aria-label="Mermaid 架构图">
     {error?<div role="alert" className="mermaid-error"><strong>这张图需要修正</strong><details><summary>详细错误</summary><pre>{error}</pre></details></div>:null}
     {!svg&&!error&&<div role="status" className="mermaid-pending">正在绘图…</div>}

@@ -4,6 +4,7 @@ import ParadigmEditor from './ParadigmEditor.jsx';
 import EditorPage from './EditorPage.jsx';
 import Markdown from './Markdown.jsx';
 import {diagramsIn,replaceDiagram,editFlowchart,diagramLabel,flowchartItems} from './mermaid-document.mjs';
+import {structureItems,editStructure} from './mermaid-structure.mjs';
 import {modeDiagramDocument,skillNodes,diagramBlock,withoutSkillNodes} from './mode-diagrams.mjs';
 import MermaidEdit from './MermaidEdit.jsx';
 import SkillCanvas from './SkillCanvas.jsx';
@@ -201,8 +202,9 @@ export default function ModeWorkspace({
         const diagrams=diagramsIn(body),index=Math.min(diagramIndex,Math.max(0,diagrams.length-1)),diagram=diagrams[index];
         if(!diagram)throw new Error('先在文档中添加 Mermaid 图');
         const id=skillNodes([skill])[0].alias;
-        if(flowchartItems(diagram.source).nodes.some(node=>node.id===id))return;
-        return modeDocument(name,replaceDiagram(body,index,editFlowchart(diagram.source,{kind:'add',id,label:skill.title||skill.id})));
+        const structure=structureItems(diagram.source);
+        if((structure.type?structure.items:flowchartItems(diagram.source).nodes).some(node=>node.id===id))return;
+        return modeDocument(name,replaceDiagram(body,index,(structure.type?editStructure:editFlowchart)(diagram.source,{kind:'add',id,label:skill.title||skill.id})));
       }}
       renderCanvas={({draft:map,members,available,onSelectScope,onEditDocument})=>{
         const diagrams=diagramsIn(body),index=Math.min(diagramIndex,Math.max(0,diagrams.length-1)),diagram=diagrams[index];

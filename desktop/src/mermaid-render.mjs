@@ -8,6 +8,7 @@ export async function renderDiagram(source) {
       htmlLabels:false,theme:'base',look:'classic',fontFamily:'Segoe UI, Microsoft YaHei, sans-serif',
       themeVariables:{primaryColor:'#f2f7ff',primaryBorderColor:'#8ba9d9',primaryTextColor:'#233957',lineColor:'#7c96bd',secondaryColor:'#eaf2ff',tertiaryColor:'#f8faff',fontSize:'15px',
         actorBkg:'#f2f7ff',actorBorder:'#8ba9d9',actorTextColor:'#233957',signalColor:'#7c96bd',signalTextColor:'#233957',
+        noteBkgColor:'#eaf2ff',noteBorderColor:'#8ba9d9',noteTextColor:'#233957',
         ...Object.fromEntries(Array.from({length:12},(_,i)=>[[`cScale${i}`,['#f2f7ff','#eaf2ff','#f8faff'][i%3]],[`cScaleLabel${i}`,'#233957'],[`cScaleInv${i}`,'#8ba9d9']]).flat()),
       },
       themeCSS:'.mindmap-node .label text { text-anchor: middle; } .mindmap-node .node-bkg ~ .label text { text-anchor: start; } .mindmap-node .label-container { stroke: #8ba9d9; stroke-width: 1px; } [class*="section-edge-"] { stroke: #7c96bd; stroke-width: 1.5px; }',

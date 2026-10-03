@@ -1,14 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { FileText, FolderOpen, Code, Save, Search, Puzzle, X } from 'lucide-react';
+import { FileText, FolderOpen, Code, Save, Search, Puzzle } from 'lucide-react';
 import Markdown from './Markdown.jsx';
 import MermaidView from './MermaidView.jsx';
 import {diagramsIn,outlineFor} from './mermaid-document.mjs';
-import PanelResize from './PanelResize.jsx';
-
-// Files are returned by the core's skill-local allowlist, never arbitrary renderer paths.
-export function SkillPanel({title,children,onClose}) {
-  return <aside className="skill-file-panel" aria-label="技能内容"><PanelResize name="skill" side="left" initial={380} min={300} max={620}/><header className="skill-panel-heading"><h2>{title}</h2><button aria-label="关闭技能" onClick={onClose}><X size={18}/></button></header>{children}</aside>;
-}
 export default function SkillFiles({ item, Dialog, readFile, saveFile, onClose, readOnly, embedded=false }) {
   const [data, setData] = useState(null), [file, setFile] = useState('SKILL.md');
   const [document, setDocument] = useState(''), [editing, setEditing] = useState(false);
@@ -17,7 +11,7 @@ export default function SkillFiles({ item, Dialog, readFile, saveFile, onClose, 
   useEffect(()=>{
     if(!embedded||!dirty)return;
     const guard=event=>{
-      if(event.target.closest('.skill-file-panel,.skill-canvas-panel'))return;
+      if(event.target.closest('.skill-canvas-panel'))return;
       if(busy||!window.confirm('当前文件有未保存的修改，放弃这些修改？')){event.preventDefault();event.stopImmediatePropagation();}
     };
     const unload=event=>{event.preventDefault();event.returnValue='';};

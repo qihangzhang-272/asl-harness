@@ -17,35 +17,11 @@
 .mermaid-edit .flowchart-link[role=button]{pointer-events:stroke;cursor:pointer}
 .mermaid-edge-hit{fill:none!important;stroke:transparent!important;stroke-width:14px!important;pointer-events:stroke;cursor:pointer}
 .mermaid-edit .flowchart-link[role=button]:hover{stroke:#2e66ce!important}
-.mermaid-inline-editor{position:absolute;z-index:5;padding:5px;border:1px solid var(--line);border-radius:10px;background:#fcfdff;box-shadow:0 8px 28px #23395720}
 .mermaid-label-editor{overflow:visible}
 .mermaid-label-editor>div{width:100%;height:100%;display:flex;align-items:center;justify-content:center;text-align:center;outline:none;color:#233957;font:15px/1.5 'Segoe UI','Microsoft YaHei',sans-serif;white-space:pre-wrap;overflow-wrap:anywhere;cursor:text;border:0;border-radius:0;background:transparent}
-.mermaid-inline-editor>div{display:flex;gap:5px;justify-content:flex-end}
-.mermaid-inline-editor button{padding:5px 8px;box-shadow:none}
 .mermaid-connect-status{margin:6px 0;font-size:12px}
 .mermaid-connect-status{display:flex;gap:12px;align-items:center}
-.skill-file-panel{flex:0 0 clamp(340px,33vw,460px);min-width:0;display:flex;flex-direction:column;border-left:1px solid var(--line);background:#fbfdffdc;overflow:hidden}
-.skill-panel-heading{display:flex;align-items:center;justify-content:space-between;padding:18px 16px 12px;gap:12px}
-.skill-panel-heading h2{font-size:15px;line-height:1.5;margin:0;overflow-wrap:anywhere}
-.skill-panel-heading button{border:0;background:transparent;box-shadow:none;padding:5px}
-.skill-file-panel .file-workbench,.editor-page .skill-file-panel .file-workbench{display:flex;flex:1;min-height:0;height:auto;border:0;border-radius:0;flex-direction:column}
-.skill-file-panel .package-tree,.editor-page .skill-file-panel .package-tree{position:static;max-height:175px;flex-shrink:0;border:0;border-bottom:1px solid var(--line-soft);padding:4px 12px;background:transparent}
-.skill-file-panel .package-tree .search{margin-bottom:4px}
-.skill-file-panel .package-tree button.active{background:var(--brand-soft);color:var(--brand-deep)}
-.skill-file-panel .package-tree details{display:contents}
-.skill-file-panel .package-tree summary{padding:5px 8px}
-.skill-file-panel .package-document,.editor-page .skill-file-panel .package-document{flex:1;min-height:0;overflow:auto;background:transparent}
-.skill-file-panel .package-document header{position:sticky;top:0;background:#f7fafff0;z-index:1;padding:8px 12px}
-.skill-file-panel .package-document header .tabs button{padding:5px 8px;font-size:12px}
-.skill-file-panel .package-rendered,.skill-file-panel .package-preview{padding:14px 16px;overflow-wrap:anywhere}
-.skill-file-panel .package-code{flex:1;min-height:200px;resize:none;border:0;border-radius:0}
-.skill-file-panel .dialog-actions,.editor-page .skill-file-panel .dialog-actions{position:static;flex-shrink:0;margin:0;padding:12px;border-top:1px solid var(--line-soft);background:transparent}
-.skill-file-panel .dialog-actions button{font-size:12px;padding:7px 10px}
-.content-with-detail:has(.skill-file-panel) .page-heading{flex-wrap:wrap}
-.content-with-detail:has(.skill-file-panel) .page-heading>div:first-child{flex-basis:100%}
-.content-with-detail:has(.skill-file-panel) .page-heading .heading-actions{margin-left:auto}
 @media(prefers-reduced-motion:reduce){.mermaid-drawing{transition:none}}
-@media(max-width:1100px){.skill-file-panel{flex-basis:320px}}
 .canvas-menu{position:fixed;z-index:1200;width:288px;padding:6px;border:1px solid #dbe6f7;border-radius:14px;background:#f9fcfff5;backdrop-filter:blur(24px);box-shadow:0 16px 48px #284d7829;font-size:13px}
 .canvas-menu button{width:100%;display:flex;align-items:center;gap:10px;padding:10px;border:0;box-shadow:none;background:transparent;text-align:left;border-radius:8px}
 .canvas-menu button span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -59,6 +35,10 @@
 .node:hover>.mermaid-port,.node:focus-within>.mermaid-port,.mermaid-port.is-connecting{opacity:1}
 .mermaid-port:hover{fill:#397de0;stroke:#fff;stroke-width:2px}
 .mermaid-connection-preview{fill:none;stroke:#4281e4;stroke-width:2px;stroke-dasharray:5 4;pointer-events:none}
+.mermaid-drawing [data-asl-edit].is-dragging{opacity:.45;cursor:grabbing}
+.mermaid-drawing [data-asl-edit]{user-select:none;pointer-events:bounding-box}
+.mermaid-drawing [data-asl-edit].is-drop-target{filter:drop-shadow(0 0 4px #5597ee)}
+.mermaid-drawing text[data-asl-edit]:hover{fill:#2568d2!important}
 .mermaid-drawing g.node.is-selected rect{stroke:#2d6cd5!important;stroke-width:2px!important;fill:#e3eeff!important}
 .mermaid-tools{left:16px;right:auto;bottom:14px;gap:4px;padding:5px;background:#f8fbffdf;backdrop-filter:blur(18px);border-radius:12px;box-shadow:0 4px 16px #315b8c12}
 .architecture-section.is-expanded{inset:12px;background:#f6f9ff;z-index:60}

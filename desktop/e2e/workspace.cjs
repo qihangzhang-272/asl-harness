@@ -63,7 +63,7 @@ test('isolated Electron: native create/edit, complete skill, rejection and navig
       await page.locator('.editor-page').waitFor({state:'detached',timeout:60000});
       await page.locator('.architecture-section .mermaid-drawing svg').waitFor();
       assert.ok((await fs.readFile(file,'utf8')).includes(source));
-      await page.locator('.architecture-section [role=button][aria-label="Product analysis"]').first().click();
+      await page.locator('.architecture-section g[data-asl-node="skill_product_analysis"],.architecture-section g[id*="state-skill_product_analysis-"]').first().click();
       await page.locator('.skill-canvas-panel .markdown-content').waitFor();
       await page.getByRole('button',{name:'技能逻辑架构',exact:true}).click();
       await page.locator('.skill-canvas-graph').evaluate(el=>Promise.all(el.getAnimations().map(animation=>animation.finished.catch(()=>{}))));
@@ -83,6 +83,6 @@ test('isolated Electron: native create/edit, complete skill, rejection and navig
     assert.deepEqual(errors,[]);
     await fs.writeFile(path.join(run,'result.json'),JSON.stringify({ok:true,checks:['create-native','undo-redo','context-add','draft-guard','save-readback','skill-focus','bad-diagram-rejected','sequence-source-edit','state-source-edit','mindmap-source-edit','back-to-library','legacy-scope-navigation','legacy-open-no-write'],errors},null,2));
     console.log('验收证据：'+run);
-  }catch(error){await page.screenshot({path:path.join(run,'failure.png')});console.error('验收证据：'+run);throw error;}
+  }catch(error){await page.screenshot({path:path.join(run,'failure.png')});console.error('验收证据：'+run,errors);throw error;}
   finally{await page.close();await app.close();}
 });
