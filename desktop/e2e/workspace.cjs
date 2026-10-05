@@ -19,6 +19,7 @@ test('isolated Electron: native create/edit, complete skill, rejection and navig
     let leavePrompts=0;
     page.removeAllListeners('dialog');page.on('dialog',dialog=>{leavePrompts++;return dialog.dismiss();});
     await page.locator('.mode-workspace-native .mermaid-edit').click({button:'right',position:{x:8,y:8}});
+    await page.getByRole('menuitem',{name:'添加技能',exact:true}).click();
     await page.getByRole('menuitem',{name:'Source research',exact:true}).click();
     assert.equal(leavePrompts,0,'画板菜单不是离开编辑页');
     await page.locator('.mode-workspace-native g.node').filter({hasText:'Source research'}).waitFor();

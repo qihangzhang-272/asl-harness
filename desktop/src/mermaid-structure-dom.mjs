@@ -1,3 +1,5 @@
+import {edgeHit} from './mermaid-handles.mjs';
+
 export function diagramNodes(svg,alias) {
   const escaped=alias.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
   const rendererId=(svg.querySelector('svg')||svg).id;
@@ -24,7 +26,7 @@ export function structureElements(svg,model) {
     }
     const messages=model.items.filter(i=>i.kind==='message'),paths=[...svg.querySelectorAll('[data-et="message"]')],labels=[...svg.querySelectorAll('text.messageText')];
     if(messages.length===paths.length&&labels.length===paths.length&&paths.every((p,i)=>p.dataset.from===messages[i].from&&p.dataset.to===messages[i].to)){
-      paths.forEach((p,i)=>{add(p,messages[i],labels[i]);add(labels[i],messages[i]);});
+      paths.forEach((p,i)=>{add(p,messages[i],labels[i]);add(edgeHit(p),messages[i],labels[i]);add(labels[i],messages[i]);});
     }
     const notes=model.items.filter(i=>i.kind==='note'),renderedNotes=[...svg.querySelectorAll('g[data-et="note"]')];
     if(notes.length===renderedNotes.length)renderedNotes.forEach((el,i)=>add(el,notes[i],el.querySelector('text.noteText')));
@@ -38,10 +40,15 @@ export function structureElements(svg,model) {
 }
 
 // Drag changes order/parentage, not SVG coordinates. Mermaid performs the next layout.
+export function dropPlacement(type,kind,rect,x,y) {
+  if(type==='mindmap')return y<rect.y+rect.height*.25?'before':y>rect.y+rect.height*.75?'after':'inside';
+  return (kind==='participant'?x<rect.x+rect.width/2:y<rect.y+rect.height/2)?'before':'after';
+}
+
 export function attachStructureDrag(svg,entries,model,onMove) {
   let drag=null,suppressClick=false;
   function stop(){
-    if(drag){drag.element.classList.remove('is-dragging');drag.target?.classList.remove('is-drop-target');drag=null;}
+    if(drag){drag.element.classList.remove('is-dragging');drag.target?.classList.remove('is-drop-target');if(drag.target)delete drag.target.dataset.drop;drag=null;}
     window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',finish);
     window.removeEventListener('pointercancel',cancel);window.removeEventListener('keydown',key);
   }
@@ -52,8 +59,10 @@ export function attachStructureDrag(svg,entries,model,onMove) {
     if(!drag.started&&Math.hypot(event.clientX-drag.x,event.clientY-drag.y)<6)return;
     event.preventDefault();drag.started=true;drag.element.classList.add('is-dragging');
     const target=document.elementFromPoint(event.clientX,event.clientY)?.closest('[data-asl-edit]');
-    drag.target?.classList.remove('is-drop-target');drag.target=target&&svg.contains(target)?target:null;
+    drag.target?.classList.remove('is-drop-target');if(drag.target)delete drag.target.dataset.drop;
+    drag.target=target&&svg.contains(target)?target:null;
     drag.target?.classList.add('is-drop-target');
+    if(drag.target)drag.target.dataset.drop=dropPlacement(model.type,drag.item.kind,drag.target.getBoundingClientRect(),event.clientX,event.clientY);
   }
   function finish(event){
     const current=drag;if(!current)return;
@@ -62,15 +71,14 @@ export function attachStructureDrag(svg,entries,model,onMove) {
     stop();
     if(!current.started||!to||to.key===current.item.key)return;
     const rect=target.getBoundingClientRect();
-    const placement=model.type==='mindmap'?(event.shiftKey?(event.clientY<rect.y+rect.height/2?'before':'after'):'inside'):
-      (current.item.kind==='participant'?event.clientX<rect.x+rect.width/2:event.clientY<rect.y+rect.height/2)?'before':'after';
+    const placement=dropPlacement(model.type,current.item.kind,rect,event.clientX,event.clientY);
     onMove({kind:'move',key:current.item.key,to:to.key,placement});
   }
   function click(event){if(suppressClick){event.preventDefault();event.stopImmediatePropagation();suppressClick=false;}}
   svg.addEventListener('click',click,true);
   for(const {element,item} of entries) {
     element.dataset.aslEdit=item.key;
-    if(!model.structural||model.activation||item.kind==='condition')continue;
+    if(!model.structural||model.activation||item.kind==='condition'&&!item.first)continue;
     element.onpointerdown=event=>{
       if(event.button!==0||event.target.closest('.mermaid-label-editor'))return;
       event.preventDefault();

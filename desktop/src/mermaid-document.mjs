@@ -1,5 +1,20 @@
 import {marked} from 'marked';
 
+export const diagramTemplates=[
+  {id:'flow',title:'流程图',source:'flowchart LR\n start["输入"]\n work["处理"]\n result["结果"]\n start --> work\n work --> result'},
+  {id:'mindmap',title:'思维导图',source:'mindmap\n root((协作))\n  research[研究]\n   evidence[证据]\n  output[表达]'},
+  {id:'sequence',title:'时序图',source:'sequenceDiagram\n participant A as 研究\n participant B as 复核\n A->>B: 提交材料\n alt 材料齐备\n B-->>A: 反馈\n else 需要补充\n Note over A,B: 补齐证据\n end'},
+];
+
+export function appendDiagramTemplate(document,type) {
+  const template=diagramTemplates.find(t=>t.id===type);
+  if(!template)throw new Error('未找到这个图型');
+  const titles=new Set(diagramsIn(document).map(d=>d.title));
+  let title=template.title,n=2;while(titles.has(title))title=`${template.title} ${n++}`;
+  const eol=document.includes('\r\n')?'\r\n':'\n';
+  return document+['','','## '+title,'','```mermaid',template.source,'```',''].join('\n').replace(/\n/g,eol);
+}
+
 export function diagramsIn(text='') {
   const result=[];let title='架构',offset=0;
   marked.walkTokens(marked.lexer(text),token=>{
@@ -55,7 +70,20 @@ export function editFlowchart(source,change) {
   const model=flowchartItems(source),lines=[...model.lines],eol=source.includes('\r\n')?'\r\n':'\n';
   if(!model.editable)throw new Error('此图的语法请在原文中修改；不会转换或丢弃原有内容');
   const append=text=>{if(lines.length&&!lines.at(-1).endsWith('\n'))lines[lines.length-1]+=eol;lines.push(text+eol);};
-  if(change.kind==='node'){
+  if(change.kind==='direction'){
+    if(!['LR','RL','TD','TB','BT'].includes(change.direction))throw new Error('图的方向无效');
+    const line=lines.findIndex(line=>/^\s*(?:flowchart|graph)\s+/.test(line));
+    lines[line]=lines[line].replace(/\b(LR|RL|TD|TB|BT)\b/,change.direction);
+  }else if(change.kind==='move'){
+    const from=model.nodes.find(n=>n.id===change.key),to=model.nodes.find(n=>n.id===change.to);
+    if(!from||!to||from.implicit||to.implicit)throw new Error('请先明确这两个节点的名称');
+    if(from.id===to.id)return source;
+    const moving=lines[from.line].replace(/\r?\n$/,'')+eol;
+    let at=to.line+(change.placement==='after'?1:0);
+    if(at===lines.length&&!lines.at(-1).endsWith('\n'))lines[lines.length-1]+=eol;
+    lines.splice(from.line,1);if(at>from.line)at--;
+    lines.splice(at,0,moving);
+  }else if(change.kind==='node'){
     const node=model.nodes.find(n=>n.id===change.id);
     if(!node)throw new Error('节点已改变，请重新选择');
     if(change.remove){

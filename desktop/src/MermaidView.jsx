@@ -2,7 +2,7 @@ import React,{memo,useEffect,useMemo,useRef,useState} from 'react';
 import {Minus,Plus,Scan,Maximize2,Minimize2} from 'lucide-react';
 import {renderDiagram} from './mermaid-render.mjs';
 import {editRenderedLabel} from './mermaid-inline.mjs';
-import {attachHandles} from './mermaid-handles.mjs';
+import {attachHandles,edgeHit} from './mermaid-handles.mjs';
 import {diagramNodes,structureElements,attachStructureDrag} from './mermaid-structure-dom.mjs';
 import './mermaid.css';
 
@@ -73,7 +73,7 @@ export default memo(function MermaidView({source,onNode,nodes=[],onError,items,s
       items.edges.forEach((edge,index)=>{
         const path=paths.find(el=>el.getAttribute('data-id')===edge.renderId);if(!path)return;
         const label=labels.find(el=>el.getAttribute('data-id')===edge.renderId)?.parentElement;
-        const hit=path.cloneNode(false);hit.removeAttribute('id');hit.removeAttribute('data-id');hit.removeAttribute('style');hit.removeAttribute('marker-end');hit.removeAttribute('marker-start');hit.setAttribute('class','mermaid-edge-hit');path.after(hit);
+        const hit=edgeHit(path);
         for(const element of [path,hit,label].filter(Boolean)){
           const target={kind:'edge',index,label:edge.label};
           element.setAttribute('role','button');element.setAttribute('tabindex','0');element.setAttribute('aria-label',edge.label||'编辑连线');
@@ -87,6 +87,10 @@ export default memo(function MermaidView({source,onNode,nodes=[],onError,items,s
     const svgElement=box.current.querySelector('svg');
     const detach=svgElement?attachHandles(svgElement,handles,onConnect):()=>{};
     let detachStructure=()=>{};
+    if(svgElement&&items?.editable&&onElement){
+      const entries=items.nodes.filter(n=>!n.implicit).map(item=>({element:findNode(item.id),item:{...item,key:item.id,kind:'node'}})).filter(e=>e.element);
+      detachStructure=attachStructureDrag(svgElement,entries,{type:'flowchart',structural:true},change=>onElement(change,'commit'));
+    }
     if(svgElement&&structure?.type&&onElement) {
       const entries=structureElements(svgElement,structure);
       for(const {element,item,label} of entries) {

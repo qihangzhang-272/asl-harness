@@ -15,14 +15,14 @@
 .mermaid-edit{position:relative;min-height:320px}
 .mermaid-edit .mermaid-view{min-height:320px}
 .mermaid-edit .flowchart-link[role=button]{pointer-events:stroke;cursor:pointer}
-.mermaid-edge-hit{fill:none!important;stroke:transparent!important;stroke-width:14px!important;pointer-events:stroke;cursor:pointer}
+.mermaid-edge-hit{fill:none!important;stroke:transparent!important;stroke-width:14px!important;pointer-events:stroke!important;cursor:pointer}
 .mermaid-edit .flowchart-link[role=button]:hover{stroke:#2e66ce!important}
 .mermaid-label-editor{overflow:visible}
 .mermaid-label-editor>div{width:100%;height:100%;display:flex;align-items:center;justify-content:center;text-align:center;outline:none;color:#233957;font:15px/1.5 'Segoe UI','Microsoft YaHei',sans-serif;white-space:pre-wrap;overflow-wrap:anywhere;cursor:text;border:0;border-radius:0;background:transparent}
 .mermaid-connect-status{margin:6px 0;font-size:12px}
 .mermaid-connect-status{display:flex;gap:12px;align-items:center}
 @media(prefers-reduced-motion:reduce){.mermaid-drawing{transition:none}}
-.canvas-menu{position:fixed;z-index:1200;width:288px;padding:6px;border:1px solid #dbe6f7;border-radius:14px;background:#f9fcfff5;backdrop-filter:blur(24px);box-shadow:0 16px 48px #284d7829;font-size:13px}
+.canvas-menu{position:fixed;z-index:1200;width:288px;padding:6px;border:1px solid #dbe6f7;border-radius:14px;background:#f9fcfff5;backdrop-filter:blur(24px);box-shadow:0 16px 48px #284d7829;font-size:13px;overflow-y:auto;scrollbar-width:thin}
 .canvas-menu button{width:100%;display:flex;align-items:center;gap:10px;padding:10px;border:0;box-shadow:none;background:transparent;text-align:left;border-radius:8px}
 .canvas-menu button span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .canvas-menu button:is(:hover,:focus-visible){background:#e8f0ff}
@@ -38,6 +38,9 @@
 .mermaid-drawing [data-asl-edit].is-dragging{opacity:.45;cursor:grabbing}
 .mermaid-drawing [data-asl-edit]{user-select:none;pointer-events:bounding-box}
 .mermaid-drawing [data-asl-edit].is-drop-target{filter:drop-shadow(0 0 4px #5597ee)}
+.mermaid-drawing [data-drop=before]{filter:drop-shadow(0 -4px 1px #5597ee)!important}
+.mermaid-drawing [data-drop=after]{filter:drop-shadow(0 4px 1px #5597ee)!important}
+.mermaid-drawing [data-drop=inside] rect{stroke:#3479dc!important;stroke-width:3px!important}
 .mermaid-drawing text[data-asl-edit]:hover{fill:#2568d2!important}
 .mermaid-drawing g.node.is-selected rect{stroke:#2d6cd5!important;stroke-width:2px!important;fill:#e3eeff!important}
 .mermaid-tools{left:16px;right:auto;bottom:14px;gap:4px;padding:5px;background:#f8fbffdf;backdrop-filter:blur(18px);border-radius:12px;box-shadow:0 4px 16px #315b8c12}

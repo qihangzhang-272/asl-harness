@@ -21,7 +21,7 @@ test('native diagrams edit in place and persist semantic drag, context actions a
     const textbox=page.locator('.mermaid-label-editor [role=textbox]');await textbox.waitFor({timeout:2000});
     await textbox.fill(value);await textbox.press('Enter');
     await page.waitForFunction(()=>!document.querySelector('.mermaid-label-editor'),{},{timeout:30000});
-    assert.ok((await fs.readFile(file,'utf8')).includes(value));
+    await savedMatches(new RegExp(value));
   }
   async function drag(from,to,relative={x:.5,y:.1}){
     await from.scrollIntoViewIfNeeded();
@@ -57,7 +57,7 @@ test('native diagrams edit in place and persist semantic drag, context actions a
     await page.screenshot({path:path.join(run,'sequence-structure.png')});
     await source('mindmap\n root((协作))\n  skill_product_analysis[分析]\n  skill_source_research[检索]\n   evidence[证据]');
     await edit(page.locator('g.node[data-asl-node="evidence"]'),'证据资料');
-    await drag(page.locator('g.node[data-asl-node="skill_source_research"]'),page.locator('g.node[data-asl-node="skill_product_analysis"]'));
+    await drag(page.locator('g.node[data-asl-node="skill_source_research"]'),page.locator('g.node[data-asl-node="skill_product_analysis"]'),{x:.5,y:.5});
     await page.waitForFunction(()=>!document.querySelector('[aria-busy="true"]'));
     // The file is the source of truth, not the transient SVG transform.
     await savedMatches(/\n    skill_source_research/);

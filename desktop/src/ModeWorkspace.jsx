@@ -3,7 +3,7 @@ import {FolderOpen, RotateCw} from 'lucide-react';
 import ParadigmEditor from './ParadigmEditor.jsx';
 import EditorPage from './EditorPage.jsx';
 import Markdown from './Markdown.jsx';
-import {diagramsIn,replaceDiagram,editFlowchart,diagramLabel,flowchartItems} from './mermaid-document.mjs';
+import {diagramsIn,replaceDiagram,editFlowchart,diagramLabel,flowchartItems,appendDiagramTemplate} from './mermaid-document.mjs';
 import {structureItems,editStructure} from './mermaid-structure.mjs';
 import {modeDiagramDocument,skillNodes,diagramBlock,withoutSkillNodes} from './mode-diagrams.mjs';
 import MermaidEdit from './MermaidEdit.jsx';
@@ -200,7 +200,7 @@ export default function ModeWorkspace({
       onRemoveFromDiagram={withoutSkillNodes}
       onAddToDiagram={skill=>{
         const diagrams=diagramsIn(body),index=Math.min(diagramIndex,Math.max(0,diagrams.length-1)),diagram=diagrams[index];
-        if(!diagram)throw new Error('先在文档中添加 Mermaid 图');
+        if(!diagram)throw new Error('先在空白画板右键新建图表');
         const id=skillNodes([skill])[0].alias;
         const structure=structureItems(diagram.source);
         if((structure.type?structure.items:flowchartItems(diagram.source).nodes).some(node=>node.id===id))return;
@@ -216,13 +216,14 @@ export default function ModeWorkspace({
           }}>{d.title}</button>)}</div>
             </nav>
           <SkillCanvas selected={selected} onSelect={setSelected} readFile={readFile} saveFile={saveFile}>
-            {diagram?<MermaidEdit key={index} source={diagram.source}
-              empty={!members.length&&diagram.source.trim()==='flowchart LR'}
+            <MermaidEdit key={index} source={diagram?.source}
+              empty={!diagram||!members.length&&diagram.source.trim()==='flowchart LR'}
               nodes={skillNodes(available.filter(s=>members.includes(s.id)),map.nodes)}
               candidates={skillNodes(available,map.nodes)} compact={!!selected} selectedId={selected?.id}
               expanded={expanded} onExpand={()=>setExpanded(!expanded)}
               onNode={setSelected} onSource={()=>{setPane('document');setDocumentEditing(true);}}
-              onChange={(source,skill)=>onEditDocument(modeDocument(name,replaceDiagram(body,index,source)),skill)}/>:<Markdown text={body}/>}
+              onCreate={type=>{onEditDocument(modeDocument(name,appendDiagramTemplate(body,type)));setDiagramIndex(diagrams.length);setSelected(null);}}
+              onChange={(source,skill)=>onEditDocument(modeDocument(name,replaceDiagram(body,index,source)),skill)}/>
           </SkillCanvas>
         </div>;
       }}

@@ -1,5 +1,12 @@
 const ns='http://www.w3.org/2000/svg';
 
+// A generous pointer target without changing the visible line or its source identity.
+export function edgeHit(element) {
+  const hit=element.cloneNode(false);
+  for(const attribute of [...hit.attributes])if(attribute.name==='id'||attribute.name==='style'||attribute.name.startsWith('data-')||attribute.name.startsWith('marker-'))hit.removeAttribute(attribute.name);
+  hit.setAttribute('class','mermaid-edge-hit');element.after(hit);return hit;
+}
+
 // Handles are temporary SVG controls; Mermaid owns the layout and source.
 export function attachHandles(svg,entries,onConnect) {
   let drag=null;
