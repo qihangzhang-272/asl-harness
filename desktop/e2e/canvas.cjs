@@ -9,10 +9,21 @@ test('canvas templates and structure can be created and edited without source or
   const {app,page,workspace,run,errors}=await launch();
   const file=path.join(workspace,'modes/creator-studio/MODE.md');
   const original=await fs.readFile(file,'utf8');
+  await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setSize(1024,720));
   async function ready(){await page.waitForFunction(()=>!document.querySelector('.mode-workspace-native [aria-busy="true"],.mode-workspace-native .mermaid-viewport[inert]'));}
-  async function menu(){await ready();await page.locator('.mode-workspace-native .mermaid-edit').click({button:'right',position:{x:8,y:8}});}
+  async function blank(button='left',selector='.mode-workspace-native .mermaid-edit'){
+    const canvas=page.locator(selector);await canvas.scrollIntoViewIfNeeded();
+    const point=await canvas.evaluate(element=>{
+      const box=element.getBoundingClientRect(),viewport=element.querySelector('.mermaid-viewport').getBoundingClientRect();
+      const toolbar=element.closest('.mode-workspace-native')?.querySelector('.diagram-edit-toolbar')?.getBoundingClientRect();
+      return {x:Math.max(box.left,viewport.left)+8,y:Math.max(box.top,viewport.top,toolbar?.bottom||0)+12};
+    });
+    assert.ok(await page.evaluate(({x,y})=>!!document.elementFromPoint(x,y)?.closest('.mermaid-edit'),point),'落点必须在可见画板内');
+    await page.mouse.click(point.x,point.y,{button});
+  }
+  async function menu(){await ready();await blank('right');}
   async function create(title){await menu();await page.getByRole('menuitem',{name:'新建图表',exact:true}).click();await page.getByRole('menuitem',{name:title,exact:true}).click();await page.locator('.mode-workspace-native .diagram-edit-toolbar button.active').filter({hasText:title}).waitFor();await page.locator('.mode-workspace-native .mermaid-drawing>svg').waitFor();await ready();}
-  async function edit(node,text){await node.dblclick();await page.locator('.mermaid-label-editor [role=textbox]').fill(text);await page.locator('.mode-workspace-native .mermaid-edit').click({position:{x:8,y:8}});await page.locator('.mermaid-label-editor').waitFor({state:'detached'});}
+  async function edit(node,text){await node.dblclick();await page.locator('.mermaid-label-editor [role=textbox]').fill(text);await blank();await page.locator('.mermaid-label-editor').waitFor({state:'detached'});}
   async function drag(from,to,x=.5,y=.5){
     await from.scrollIntoViewIfNeeded();const a=await from.boundingBox(),b=await to.boundingBox();
     await page.mouse.move(a.x+a.width/2,a.y+a.height/2);await page.mouse.down();await page.mouse.move(b.x+b.width*x,b.y+b.height*y,{steps:16});await page.mouse.up();
@@ -26,7 +37,7 @@ test('canvas templates and structure can be created and edited without source or
     await page.mouse.click(messageBox.x+messageBox.width/2,messageBox.y+5,{button:'right'});
     await page.getByRole('menuitem',{name:'修改备注',exact:true}).click();
     await page.locator('.mermaid-label-editor [role=textbox]').fill('复核资料');
-    await page.locator('.mode-workspace-native .mermaid-edit').click({position:{x:8,y:8}});
+    await blank();
     await page.locator('g[data-et="participant"][data-id="A"]').first().click({button:'right'});
     await page.getByRole('menuitem',{name:'发送消息',exact:true}).click();
     await page.locator('g[data-et="participant"][data-id="B"]').first().click();
@@ -35,6 +46,8 @@ test('canvas templates and structure can be created and edited without source or
     await page.getByRole('menuitem',{name:'添加条件',exact:true}).click();
     await page.locator('text.loopText').filter({hasText:'条件成立'}).waitFor();
     await ready();
+    await page.getByRole('button',{name:'缩小图',exact:true}).click();
+    await page.getByRole('button',{name:'缩小图',exact:true}).click();
     await drag(page.locator('text.loopText').filter({hasText:'条件成立'}),page.locator('text.messageText').filter({hasText:'复核资料'}),.5,.1);
     await ready();
     await page.locator('text.loopText').filter({hasText:'条件成立'}).click({button:'right'});
@@ -98,11 +111,11 @@ test('canvas templates and structure can be created and edited without source or
     await page.getByRole('tab',{name:'Agent 草稿',exact:true}).click();
     const agentNode=page.locator('g.node[data-asl-node="review"]');
     await agentNode.dblclick();await page.locator('.mermaid-label-editor [role=textbox]').fill('用户复核');
-    await page.locator('.architecture-section .mermaid-edit').click({position:{x:8,y:8}});
+    await blank('left','.architecture-section .mermaid-edit');
     await page.waitForFunction(()=>!document.querySelector('.mermaid-label-editor,.mermaid-viewport[inert]'));
     assert.ok((await fs.readFile(file,'utf8')).includes('review[用户复核]'),'Agent 草稿可由用户继续编辑');
     const beforeAppend=await fs.readFile(file,'utf8');
-    await page.locator('.architecture-section .mermaid-edit').click({button:'right',position:{x:8,y:8}});
+    await blank('right','.architecture-section .mermaid-edit');
     await page.getByRole('menuitem',{name:'新建图表',exact:true}).click();await page.getByRole('menuitem',{name:'流程图',exact:true}).click();
     await page.locator('.paradigm-tabs [aria-selected="true"]').filter({hasText:'流程图 2'}).waitFor();
     assert.ok((await fs.readFile(file,'utf8')).startsWith(beforeAppend),'阅读页新建追加而不覆盖已有图');
