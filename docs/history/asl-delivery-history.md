@@ -2,6 +2,18 @@
 
 冻结记录，不代表当前实现。当前事实只看[架构总览 View 9](../asl-architecture-views.md#view-9--当前项目状态)。保留原始措辞和证据，用于追溯。
 
+## 2026-10-04 交付回执
+
+App 0.5.10 / CLI 0.4.6 的发行验收记录；当前状态仍只看总览 View 9。
+
+- **发布：**用户明确授权后，App／CLI 框架、测试及入口文档按目标拆分中文提交。机械公开检出实现 `0d6426c5803d2f6974efe428d495316e55609277` 的 [Windows／Linux CI](https://github.com/qihangzhang-272/asl-harness/actions/runs/37256854759)通过后，22:53（America/New_York）公开 [app-v0.5.10](https://github.com/qihangzhang-272/asl-harness/releases/tag/app-v0.5.10)。Windows 未签名便携预览版，不标成稳定版或安全认证；独立 Python 包写含图文档仍需可用的 Mermaid 渲染器。
+- **桌面：**安装于 `%LOCALAPPDATA%\Programs\ASL Workspace\0.5.10`，冻结核心为 0.4.6；快捷方式切到该 EXE，并核对新进程路径及 `ASL Workspace` 主窗口。原 0.5.9、桌面快捷方式和用户偏好备份保留于工作区 `.local/backups/asl-desktop-entry-0.5.10-20261004/`。真实用户目录 `%APPDATA%\ASL Workspace` 只读冒烟核对 App 版本、Capital Markets Desk 公司画像文件打开、返回画板和 Creator Studio；唯一活动库与 3 个云端连接保留，无 renderer 错误。证据为工作区 `.local/validation/asl-release-0.5.10-20261004/installed-real-profile.json` 与同目录截图。
+- **程序包：**候选、最终 ZIP 与安装目录 405 个文件逐项 SHA-256 一致；18 个 Python 模块与 wheel 源码一致。ZIP `ASL-Workspace-0.5.10-Windows-x64.zip` 为 170,355,257 字节，SHA-256 `F92D39BC4854F86F1F3B483C467FD9B6DE4A0F087BB02D581B8066F93D88A4C0`，远端 digest／大小一致。wheel 为 90,764 字节，SHA-256 `612A1AA2197B4AB4D9DA49761500648853DCE5056AFDB101EFD5AA8BE2F544C6`；源码包为 131,018 字节，SHA-256 `D90285C69781F04BDCF62F20865B79E2C0BCE9208FCD9DDD20995126A935F2A7`。初次 ZIP 因上游许可时间戳早于 1980 失败；370 字节不完整产物移入上述本地证据目录，最终包显式允许旧时间戳并通过解压与逐项核验，没有混入正式资产。
+- **验收：**本地完整 Python 241 通过／6 条平台权限条件跳过，Node 182 通过。最终 EXE 首轮桌面 12 项通过、结构截图超时；失败截图保留，结构用例单独复验通过。后续小窗口鼠标画板复验覆盖 15 组操作及 CLI 往返，通过证据 `%TEMP%/asl-e2e-wrWRo7/result.json`。最终 CI 两平台 Python 各 245 通过／2 跳过，Windows Node 182、Linux Node 180 通过，Windows 四套桌面测试共 13 项通过；Linux GUI 未运行。npm audit 为 0 告警，不等于全系统安全认证。
+- **失败没有略过：**新增鼠标测试第一次 [CI](https://github.com/qihangzhang-272/asl-harness/actions/runs/37255649651)在固定顶部栏下右击不可见画板落点；改为可见空白落点并缩图后复验。第二次 [CI](https://github.com/qihangzhang-272/asl-harness/actions/runs/37256454841)操作通过但 Windows 检出 CRLF 与保存 LF 导致正文断言误判；下载产物确认正文完整，仅比较时统一等价换行，保留其余逐字检查。两次失败原始证据保留在 `%TEMP%/asl-ci-failure-<run-id>/`。这两项修正仅涉及测试，不改生产代码、不移除门控或断言。
+- **内容边界：**本轮只上传内容库中英 README 下载入口 `8dc3e26`，[内容 CI](https://github.com/qihangzhang-272/agent-skill-library/actions/runs/37255713755)通过，业务 Skill／Mode 的既有修改不发布。622 个原有技能文件的聚合 SHA-256 前后均为 `D2374450CCC1017BEC17D06B48C5C5CF05A49EDDB4FC384B5EDCB2D7971B6611`；另一任务接入 `build-visual-teaching` 的本地来源登记由原任务自行修正，未介入其正文。冻结 CLI 只读检查真实库 60 Skills／4 Modes／6 张图通过，生成视图一致；缓存排除提示保留，不据此删除文件。
+- **收敛边界：**读写继续共用现有 CLI、指纹和原生 Mermaid 实际渲染门控。维护 Agent 只拉取完整技能、填写引用、转为节点和组织 Mode，不改技能内容；本轮也未改真实 Mode、宿主账号或真实业务调用。任意 Mermaid 全语法可视编辑、动态生命期、未知复杂语句、首次网络读取与冷机性能不冒称完成。10-03 性能对照原始结果在下方冻结记录，不改写为本轮实测收益。
+
 ## 2026-10-03 状态快照（2026-10-04 归档）
 
 ### 开发收敛复审 · 2026-10-03 · 未发布
