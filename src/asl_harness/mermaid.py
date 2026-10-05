@@ -42,9 +42,19 @@ def validate_documents(documents: list[dict]) -> dict:
             result = subprocess.run([*command, str(input_file)], capture_output=True,
                                     text=True, encoding='utf-8', errors='replace', timeout=55, env=environment,
                                     creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
-        report = json.loads(result.stdout.strip())
-    except (OSError, subprocess.TimeoutExpired, ValueError) as failure:
+    except (OSError, subprocess.TimeoutExpired) as failure:
         raise HarnessError('MERMAID_RENDERER_UNAVAILABLE', f'Mermaid 渲染验收未完成，原文未写入；请重试：{failure}') from failure
+    try:
+        report = json.loads(result.stdout.strip())
+        if not isinstance(report, dict):
+            raise ValueError('Renderer report is not an object')
+    except ValueError as cause:
+        failure = HarnessError('MERMAID_RENDERER_UNAVAILABLE', '图示校验程序未能正常运行，内容未保存。请保留草稿，用正式安装版重试；如果仍失败，请检查程序目录权限。')
+        failure.details = [{'executable': str(executable), 'exitCode': result.returncode,
+                            'exitCodeHex': f'0x{result.returncode & 0xffffffff:08X}',
+                            'stderr': result.stderr.strip()[:2000], 'message': str(cause),
+                            'action': '使用正式安装版随附核心重新验收；检查运行目录权限，不要修改图或绕过校验。'}]
+        raise failure from cause
     if 'rendered' not in report:
         raise HarnessError('MERMAID_RENDERER_UNAVAILABLE', '渲染器未完成检查；保留草稿后重试：' + str(report.get('errors')))
     if result.returncode or not report.get('ok'):

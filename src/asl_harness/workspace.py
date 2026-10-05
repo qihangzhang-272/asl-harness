@@ -112,33 +112,33 @@ def _read_nonempty(path: Path, label: str) -> str:
 
 def _git_commit(root: Path) -> str:
     try:
-        top = Path(
-            subprocess.run(
-                ["git", "-C", str(root), "rev-parse", "--show-toplevel"],
-                check=True,
-                capture_output=True,
-                text=True,
-            ).stdout.strip()
-        ).resolve()
-        commit = subprocess.run(
-            ["git", "-C", str(root), "rev-parse", "HEAD"],
+        top, commit = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "--show-toplevel", "HEAD"],
             check=True,
             capture_output=True,
             text=True,
-        ).stdout.strip()
-    except (OSError, subprocess.CalledProcessError):
+        ).stdout.strip().splitlines()
+        top = Path(top).resolve()
+    except (OSError, ValueError, subprocess.CalledProcessError):
         return "uncommitted"
     if not root.is_relative_to(top) or not re.fullmatch(r"[0-9a-f]{40,64}", commit):
         return "uncommitted"
     return commit
 
 
+def _package_paths(package: Path, ignored_names: frozenset[str] = frozenset()):
+    excluded = GENERATED_DIRECTORIES | {".git"} | ignored_names
+    for current, directories, files in os.walk(package):
+        # Prune before descending: installed dependencies are never authored package content.
+        directories[:] = [name for name in directories if name not in excluded]
+        for name in [*directories, *files]:
+            if name not in excluded:
+                yield Path(current) / name
+
+
 def _package_files(package: Path, environment: Path) -> tuple[Path, ...]:
     files = []
-    for path in package.rglob("*"):
-        relative = path.relative_to(package)
-        if any(part in GENERATED_DIRECTORIES or part == ".git" for part in relative.parts):
-            continue
+    for path in _package_paths(package):
         if path.is_symlink():
             resolved = path.resolve()
             if not resolved.exists() or not resolved.is_relative_to(environment):
@@ -168,13 +168,8 @@ def filesystem_path(path: Path) -> Path:
 
 def package_fingerprint(package: Path, *, ignored_names: frozenset[str] = frozenset()) -> str:
     digest = hashlib.sha256()
-    for path in sorted(package.rglob("*"), key=lambda item: item.as_posix()):
+    for path in sorted(_package_paths(package, ignored_names), key=lambda item: item.as_posix()):
         relative = path.relative_to(package)
-        if any(
-            part in GENERATED_DIRECTORIES or part == ".git" or part in ignored_names
-            for part in relative.parts
-        ):
-            continue
         actual = filesystem_path(path)
         if actual.is_file():
             digest.update(relative.as_posix().encode("utf-8"))

@@ -3,29 +3,21 @@ import { FileText, FolderOpen, Code, Save, Search, Puzzle } from 'lucide-react';
 import Markdown from './Markdown.jsx';
 import MermaidView from './MermaidView.jsx';
 import {diagramsIn,outlineFor} from './mermaid-document.mjs';
+import {useLeaveGuard} from './EditorPage.jsx';
 export default function SkillFiles({ item, Dialog, readFile, saveFile, onClose, readOnly, embedded=false }) {
   const [data, setData] = useState(null), [file, setFile] = useState('SKILL.md');
   const [document, setDocument] = useState(''), [editing, setEditing] = useState(false);
   const [error, setError] = useState(''), [query, setQuery] = useState(''), [busy, setBusy] = useState(false);
+  const [retry, setRetry] = useState(0);
   const dirty = data?.document != null && document.replaceAll('\r\n','\n') !== data.document.replaceAll('\r\n','\n');
-  useEffect(()=>{
-    if(!embedded||!dirty)return;
-    const guard=event=>{
-      if(event.target.closest('.skill-canvas-panel'))return;
-      if(busy||!window.confirm('当前文件有未保存的修改，放弃这些修改？')){event.preventDefault();event.stopImmediatePropagation();}
-    };
-    const unload=event=>{event.preventDefault();event.returnValue='';};
-    window.document.addEventListener('click',guard,true);window.addEventListener('beforeunload',unload);
-    return()=>{window.document.removeEventListener('click',guard,true);window.removeEventListener('beforeunload',unload);};
-  },[embedded,dirty,busy]);
+  const leave=useLeaveGuard(dirty,busy,embedded?'.skill-canvas-panel':'.editor-page');
   useEffect(() => {
     let active = true;
     setBusy(true); setError(''); setData(null);
     readFile(file).then(result => { if (active) { setData(result); setDocument(result.document || ''); setEditing(false); } })
       .catch(e => { if (active) setError(e.message); }).finally(() => { if (active) setBusy(false); });
     return () => { active = false; };
-  }, [file,item.id]);
-  function leave(action) { if (!busy && (!dirty || window.confirm('当前文件有未保存的修改，放弃这些修改？'))) action(); }
+  }, [file,item.id,retry]);
   function edit(){if(!readOnly&&!busy&&data?.document!=null)setEditing(true);}
   const groups = [...new Set((data?.files || []).map(f => f.group))];
   return <Dialog title={item.title} onClose={() => leave(onClose)} wide>
@@ -40,7 +32,7 @@ export default function SkillFiles({ item, Dialog, readFile, saveFile, onClose, 
       </nav>
       <section className="package-document" onDoubleClick={event=>{if(!event.target.closest('button,a,input,textarea,.mermaid-viewport'))edit();}}>
         <header><span title={file}>{file}</span><div className="tabs"><button disabled={busy} className={!editing?'active':''} onClick={()=>setEditing(false)}>预览</button><button disabled={readOnly || data?.document == null || busy} className={editing?'active':''} onClick={()=>setEditing(true)}><Code size={14}/>编辑</button></div></header>
-        {busy ? <p className="muted">正在读取文件…</p> : data?.document == null ? <p className="inline-note">此文件为二进制或超过 1 MB，保留在完整技能包中；请使用本地编辑器处理。</p> : editing ?
+        {busy||!data&&!error ? <p className="muted">正在读取文件…</p> : !data ? <div role="alert"><p className="error-text">{error}</p><button onClick={()=>setRetry(value=>value+1)}>重新读取</button></div> : data.document == null ? <p className="inline-note">此文件为二进制或超过 1 MB，保留在完整技能包中；请使用本地编辑器处理。</p> : editing ?
           <textarea aria-label="文件内容" className="package-code" spellCheck={false} value={document} onChange={e=>setDocument(e.target.value)}/> :
           /\.md$/i.test(file) ? <div className="package-rendered">{file==='SKILL.md'&&!diagramsIn(document).length&&outlineFor(document)&&<details className="diagram-outline"><summary>文档结构</summary><MermaidView source={outlineFor(document)}/></details>}<Markdown text={document} onFile={relative=>{
             const parts=file.split('/').slice(0,-1);
@@ -50,7 +42,7 @@ export default function SkillFiles({ item, Dialog, readFile, saveFile, onClose, 
           }}/></div> : /\.(mmd|mermaid)$/i.test(file)?<MermaidView source={document}/>:<pre className="package-preview">{document}</pre>}
       </section>
     </div>
-    {error && <p role="alert" className="error-text">{error}</p>}
+    {error && data && <p role="alert" className="error-text">{error}</p>}
     <div className="dialog-actions">{!embedded&&<span className="muted">{dirty ? '有未保存修改' : '直接对应本地文件'} · 保存不会执行脚本</span>}<button disabled={busy} onClick={()=>leave(onClose)}>关闭</button><button className="primary" disabled={!dirty || busy || readOnly} onClick={async()=>{
       setBusy(true); setError('');
       try { await saveFile({operation:'skill.file.save',id:item.id,file,document,expected:data.fingerprint}); const result=await readFile(file); setData(result); setDocument(result.document || ''); setEditing(false); }

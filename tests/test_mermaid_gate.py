@@ -134,3 +134,29 @@ def test_diagram_limit_does_not_block_unrelated_plain_documents(tmp_path):
     with pytest.raises(HarnessError) as error:
         validate_packages([tmp_path])
     assert error.value.code == 'MERMAID_DOCUMENT_TOO_LARGE'
+
+
+@pytest.mark.parametrize('exit_code,stdout', [(2147483651, '\n'), (-2147483645, '\n'), (0, '[]')])
+def test_renderer_startup_failure_reports_runtime_without_overwriting(tmp_path, monkeypatch, exit_code, stdout):
+    from asl_harness import mermaid
+    from subprocess import CompletedProcess
+    root = _environment(tmp_path)
+    mode = management.catalog(root)['modes'][0]
+    file = root / 'modes' / mode['id'] / 'MODE.md'
+    original = file.read_bytes()
+    view = (root / 'WORKSPACE.md').read_bytes()
+    executable = tmp_path / 'ASL Workspace.exe'
+    executable.touch()
+    monkeypatch.setattr(mermaid, 'renderer_command', lambda: [str(executable), '--validate-mermaid'])
+    monkeypatch.setattr(mermaid.subprocess, 'run', lambda *args, **kwargs: CompletedProcess(args[0], exit_code, stdout, ''))
+    with pytest.raises(HarnessError) as error:
+        management.edit(root, {'operation': 'mode.save', 'id': mode['id'], 'expected': mode['fingerprint'],
+                             'skills': mode['roots'], 'document': '# 关系\n```mermaid\nflowchart LR\n A --> B\n```'})
+    assert error.value.code == 'MERMAID_RENDERER_UNAVAILABLE'
+    assert '正式安装版' in str(error.value) and 'Expecting value' not in str(error.value)
+    detail = error.value.details[0]
+    assert detail['executable'] == str(executable)
+    assert detail['exitCode'] == exit_code
+    assert detail['exitCodeHex'] == f'0x{exit_code & 0xffffffff:08X}'
+    assert file.read_bytes() == original
+    assert (root / 'WORKSPACE.md').read_bytes() == view

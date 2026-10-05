@@ -1,6 +1,7 @@
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {Network, Plus, Puzzle, Redo2, Save, Search, Undo2, X, Pencil} from 'lucide-react';
 import './graph-editor.css';
+import {useLeaveGuard} from './EditorPage.jsx';
 import {
   LIMITS, SHARED, addParadigm, assignedScopes, commitHistory, createHistory,
   displayTitle, installCandidates, isSkillId, memberIds, mergeInventory,
@@ -265,20 +266,11 @@ export default function ParadigmEditor({mode,skills,Dialog,onSave,onClose,localS
     ? '全部已归属'
     : validation.unassigned.length ? `${validation.unassigned.length} 个待归属` : validation.errors[0].message;
 
-  useEffect(()=>{
-    if(!dirty)return;
-    const guard=event=>{
-      if(event.target.closest('.editor-page, .canvas-menu'))return;
-      if(installing||saving||!window.confirm('有未保存的修改，放弃？')){event.preventDefault();event.stopImmediatePropagation();}
-    };
-    const unload=event=>{event.preventDefault();event.returnValue='';};
-    document.addEventListener('click',guard,true);window.addEventListener('beforeunload',unload);
-    return()=>{document.removeEventListener('click',guard,true);window.removeEventListener('beforeunload',unload);};
-  },[dirty,installing,saving]);
+  const leave=useLeaveGuard(dirty,!!installing||saving);
 
   function close() {
     if(installing||saving){setNotice('正在写入，请稍候');return;}
-    if (!dirty || window.confirm('有未保存的修改，放弃？')) onClose();
+    leave(onClose);
   }
 
   function addNewParadigm() {

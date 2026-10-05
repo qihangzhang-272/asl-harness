@@ -20,5 +20,4 @@
 .local-mode-row { display:flex; width:100%; align-items:center; text-align:left; gap:12px; border:0; border-bottom:1px solid var(--line-soft, #edf2fc); border-radius:0; padding:12px 14px; }
 .local-mode-row span { flex:1; min-width:0; }
 .local-mode-row small { display:block; color:var(--muted, #5b7191); font-size:12px; overflow:hidden; text-overflow:ellipsis; margin-top:4px; }
-.local-match { margin-top:8px; width:100%; text-align:left; }
 @media(max-width:1080px) { .mcp-content.with-editor { grid-template-columns:1fr; } .mcp-editor { position:static; } }

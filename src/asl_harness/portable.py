@@ -21,7 +21,7 @@ from pathlib import Path, PurePosixPath
 
 from .dependencies import describe_dependencies
 from .sync import _git_status, _replace_package, _rollback_paths, environment_write_lock, _environment_fingerprints, _require_unchanged
-from .workspace import GENERATED_DIRECTORIES, LIFECYCLE_AREAS, HarnessError, Workspace, package_fingerprint, safe_write_path
+from .workspace import GENERATED_DIRECTORIES, LIFECYCLE_AREAS, HarnessError, Workspace, package_fingerprint, safe_write_path, _package_paths
 
 NAMESPACE = "io.github.qihangzhang-272.asl"
 SCHEMA = "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json"
@@ -322,8 +322,7 @@ def _comparison_text(data: bytes | None) -> str | None:
 
 def _package_differences(local: Path, incoming: Path, *, mode: bool = False) -> list[dict]:
     def files(root):
-        return {p.relative_to(root).as_posix(): p for p in root.rglob('*') if p.is_file()
-                and not any(part in GENERATED_DIRECTORIES or part == '.git' for part in p.relative_to(root).parts)}
+        return {p.relative_to(root).as_posix(): p for p in _package_paths(root) if p.is_file()}
     before, after = files(local), files(incoming)
     result = []
     for name in sorted(before.keys() | after.keys()):

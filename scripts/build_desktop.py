@@ -26,6 +26,29 @@ def core_metadata(root: Path, output: Path) -> Path:
     return folder
 
 
+def smoke_core(app: Path, smoke: Path) -> None:
+    document = "# 中文模式验收\n\n研究与表达 🎨。\n\n```mermaid\nflowchart LR\n A[研究] --> B[表达]\n```\n"
+    command = [
+        str(app / "resources/core/asl-harness.exe"), "environment.edit", "--workspace", str(smoke),
+    ]
+    for identifier, text in (("unicode-smoke", document), ("invalid-smoke", "```mermaid\nflowchart LR\n A -->[\n```\n")):
+        check = subprocess.run(command, input=json.dumps({"operation": "mode.save", "id": identifier, "document": text,
+                                "skills": ["source-research"], "architecture": {"shared": ["source-research"], "paradigms": []}}, ensure_ascii=False).encode("utf-8"), capture_output=True, timeout=70)
+        output = check.stdout.decode("utf-8", errors="replace")
+        try:
+            report = json.loads(output)
+        except ValueError as cause:
+            raise ValueError(f"Packaged core returned no report: exit={check.returncode}, {command[0]}") from cause
+        if identifier == "unicode-smoke":
+            if check.returncode or not report.get("ok") or report.get("diagrams", {}).get("rendered") != 1:
+                raise ValueError(f"Packaged real Mermaid render failed: {output}")
+            view = (smoke / "WORKSPACE.md").read_bytes()
+        elif check.returncode != 2 or report.get("error", {}).get("code") != "MERMAID_RENDER_FAILED" or (smoke / "modes/invalid-smoke").exists():
+            raise ValueError(f"Packaged core accepted invalid Mermaid: {output}")
+        if (smoke / "modes/unicode-smoke/MODE.md").read_text(encoding="utf-8") != document or (smoke / "WORKSPACE.md").read_bytes() != view:
+            raise ValueError("Packaged content changed while saving or rejecting Mermaid")
+
+
 def build(output: Path) -> Path:
     if sys.platform != "win32":
         raise ValueError("This packaging script currently supports Windows only")
@@ -62,15 +85,7 @@ def build(output: Path) -> Path:
     # Test the frozen executable, not the developer's Python / locale.
     smoke = work / "smoke-environment"
     shutil.copytree(root / "examples/personal-environment", smoke)
-    document = "# 中文模式验收\n\n研究与表达 🎨。\n"
-    check = subprocess.run([
-        str(app / "resources/core/asl-harness.exe"), "environment.edit", "--workspace", str(smoke),
-    ], input=json.dumps({"operation": "mode.save", "id": "unicode-smoke", "document": document,
-                        "skills": ["source-research"], "architecture": {"shared": ["source-research"], "paradigms": []}}, ensure_ascii=False).encode("utf-8"), capture_output=True)
-    if check.returncode or not json.loads(check.stdout.decode("utf-8")).get("ok"):
-        raise ValueError(f"Packaged Chinese input failed: {check.stdout.decode('utf-8', errors='replace')}")
-    if (smoke / "modes/unicode-smoke/MODE.md").read_text(encoding="utf-8") != document:
-        raise ValueError("Packaged Chinese content changed while saving")
+    smoke_core(app, smoke)
     shutil.copy2(root / "LICENSE", app / "ASL-LICENSE.txt")
     notices = app / "resources/licenses"
     notices.mkdir()

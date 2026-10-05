@@ -11,11 +11,12 @@ export function useReadTasks(onError) {
     if (!request) return;
     pending.current.delete(key);
     window.asl.cancelRead(request.id).catch(() => {});
+    request.onCancel?.();
     setItems([...pending.current.values()]);
   }
-  async function read(key, label, work) {
+  async function read(key, label, work, onCancel) {
     cancel(key);
-    const request = { id: crypto.randomUUID(), key, label };
+    const request = { id: crypto.randomUUID(), key, label, onCancel };
     pending.current.set(key, request);
     setItems([...pending.current.values()]);
     const current = () => pending.current.get(key) === request;
@@ -28,7 +29,7 @@ export function useReadTasks(onError) {
       if (!reply.ok) throw new Error(reply.error);
       return reply.value;
     };
-    try { return await work(call); }
+    try { const result = await work(call); return current() ? result : undefined; }
     catch (error) { if (current()) onError(error); }
     finally {
       if (current()) { pending.current.delete(key); setItems([...pending.current.values()]); }

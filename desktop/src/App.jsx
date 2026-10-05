@@ -9,7 +9,7 @@ import React, {
 } from "react";
 import SkillFiles from './SkillFiles.jsx';
 import SkillCanvas from './SkillCanvas.jsx';
-import EditorPage from './EditorPage.jsx';
+import EditorPage,{useLeaveGuard} from './EditorPage.jsx';
 import PanelResize from './PanelResize.jsx';
 import DiagramExamples from './DiagramExamples.jsx';
 import EnvironmentGuide from './EnvironmentGuide.jsx';
@@ -174,8 +174,12 @@ function SkillEditor({ item, texts, onSave, onClose }) {
   const [source, setSource] = useState(
     texts?.["SOURCE.md"] || "# Source\n\n- Origin: local://authored\n",
   );
+  const original=useRef({id,description,document,source});
+  const dirty=Object.entries({id,description,document,source}).some(([key,value])=>value!==original.current[key]);
+  const leave=useLeaveGuard(dirty);
+  const close=()=>leave(onClose);
   return (
-    <EditorPage title={item ? "编辑技能" : "创建技能"} onClose={onClose} wide>
+    <EditorPage title={item ? "编辑技能" : "创建技能"} onClose={close} wide>
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -229,7 +233,7 @@ function SkillEditor({ item, texts, onSave, onClose }) {
           />
         </details>
         <div className="dialog-actions">
-          <button type="button" onClick={onClose}>
+          <button type="button" onClick={close}>
             取消
           </button>
           <button className="primary">保存技能</button>
@@ -427,7 +431,6 @@ export default function App() {
   const [indexing,setIndexing]=useState(false);
   const localIndex=useRef(null);
   const [localModeReport, setLocalModeReport] = useState(null);
-  const [extraSkillRoot, setExtraSkillRoot] = useState(null);
   const [githubUrl, setGithubUrl] = useState("");
   const [cloud, setCloud] = useState(null);
   const cloudRequest = useRef(0);
@@ -554,7 +557,7 @@ export default function App() {
       if(localIndex.current)return;
       setIndexing(true);
       const job=api('localSkills',null,refresh);localIndex.current=job;
-      try {const report=await job;if(active)setLocalReport(report);return report;}
+      try {const report=await job;if(active)setLocalReport(previous=>previous?.directory?previous:report);return report;}
       catch(error){if(active&&!refresh)setMessage({error:true,text:`本机技能读取失败：${error.message}`});}
       finally{if(localIndex.current===job)localIndex.current=null;if(active)setIndexing(false);last=Date.now();}
     };
@@ -564,9 +567,9 @@ export default function App() {
     read('environment', '打开工作环境', async call => {
       const data = await call("initial");
       setInitial(data);
+      setReady(true);
       if(data.activeSource)openCloud(data.activeSource.url,data.activeSource.mode);
       if (data.workspace) await load(data.workspace, call, {restore:true});
-      setReady(true);
     });
     return()=>{active=false;window.removeEventListener('focus',focus);};
   }, []);
@@ -678,7 +681,6 @@ export default function App() {
     return read('environment', '打开模式库', call => load(root, call, {targetMode}));
   };
   function goPage(id) {
-    if (['skill-editor','skill-files'].includes(modal?.kind) && !window.confirm('离开编辑页？未保存的修改会丢失。')) return;
     setModal(null);setCloud(null);cloudRequest.current++;reads.cancel('cloud');reads.cancel('detail');detailRequest.current++;
     api('selectSource',null).catch(error=>setMessage({error:true,text:error.message}));
     if(cloud&&id===page)return;
@@ -745,7 +747,7 @@ export default function App() {
     if (!source) return;
     const report = await api("localSkills", source);
     if (report.skills.length === 1) await inspectDiscovered(report.skills[0]);
-    else { setLocalReport(report); setExtraSkillRoot(source); setProvider("local"); setPage("discover"); }
+    else { setLocalReport({...report,directory:source}); setProvider("local"); setPage("discover"); }
   }
   function adoptSkill(skill, targetMode) {
     setModal({ kind: "local-import", ...skill, mode: targetMode || (page === "modes" ? mode?.id || "" : ""), category: "",
@@ -790,18 +792,25 @@ export default function App() {
       try{const readme=await call('repositoryOverview',url);if(sequence===cloudRequest.current)setCloud(previous=>({...previous,readme}));}
       catch{/* Full inspection supplies the final error/retry; this independent preview is optional. */}
     });
-    return read('cloud','读取模式库',async call=>{try {
-      const report=await repositoryReport(url,refresh);
-      cloudCache.current.set(url,report);
-      if(cloudCache.current.size>12)cloudCache.current.delete(cloudCache.current.keys().next().value);
+    // Preloading may share the download; cancellation discards this reader's result.
+    // Connection is a separate write, only after the cancellable read has finished.
+    const result=await read('cloud','读取模式库',()=>repositoryReport(url,refresh).then(report=>({report}),error=>({error})),()=>{
       if(sequence!==cloudRequest.current)return;
+      reads.cancel('cloud-readme');
+      setCloud(previous=>previous?.url===url?{...previous,loading:false,error:'已停止读取'}:previous);
+    });
+    if(!result||sequence!==cloudRequest.current)return;
+    try {
+      if(result.error)throw result.error;
+      const report=result.report;
+      if(cloudCache.current.size>12)cloudCache.current.delete(cloudCache.current.keys().next().value);
       if(connect&&!initial?.repositories.includes(url)) {
         const repositories=await api('connectRepository',url,report.snapshot);
         if(sequence!==cloudRequest.current)return;
         setInitial(p=>({...p,repositories}));
       }
       setCloud(previous=>previous?.url===url?{...previous,report,loading:false,error:null}:previous);
-    } catch(error){if(sequence===cloudRequest.current)setCloud(previous=>({...previous,loading:false,error:error.message}));}});
+    } catch(error){if(sequence===cloudRequest.current)setCloud(previous=>({...previous,loading:false,error:error.message}));}
   }
   useEffect(()=>{
     if(cloud?.report)api('selectSource',{url:cloud.url,mode:cloud.mode||null}).catch(error=>setMessage({error:true,text:error.message}));
@@ -1321,9 +1330,9 @@ export default function App() {
                       </div>
                       {provider==='local-modes'&&<LocalModes report={localModeReport} onOpen={openLocalMode} onScan={()=>scanLocalModes()} onChoose={()=>task(chooseModeDirectory)}/>}
                       {provider === "local" && <>
-                        <div className="field-heading"><span className="muted">{extraSkillRoot ? "自选目录" : indexing?'正在检查更新':localReport?.checkedAt?`检查于 ${new Date(localReport.checkedAt).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'})}`:'本机技能'}</span><div className="heading-actions">
-                          <button onClick={() => read('local', '发现目录技能', async call => { const root = await call('choose', 'skillSearchRoot'); if (root) { setExtraSkillRoot(root); setLocalReport(await call('localSkills', root)); } })}><FolderOpen size={16} />选择目录</button>
-                          <button onClick={() => read('local', '发现本机技能', async call => { setExtraSkillRoot(null); setLocalReport(await call('localSkills',null,true)); })}><RotateCw size={16} />扫描本机</button>
+                        <div className="field-heading"><span className="muted">{localReport?.directory ? "自选目录" : indexing?'正在检查更新':localReport?.checkedAt?`检查于 ${new Date(localReport.checkedAt).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'})}`:'本机技能'}</span><div className="heading-actions">
+                          <button onClick={() => read('local', '发现目录技能', async call => { const root = await call('choose', 'skillSearchRoot'); if (root) setLocalReport({...await call('localSkills', root),directory:root}); })}><FolderOpen size={16} />选择目录</button>
+                          <button onClick={() => read('local', '发现本机技能', async call => setLocalReport(await call('localSkills',null,true)))}><RotateCw size={16} />扫描本机</button>
                         </div></div>
                         <button className="primary" onClick={()=>openGuide('')}><Copy size={16}/>交给 AI 整理</button>
                         <DiscoveredSkills report={localReport} catalog={catalog} readOnly={readOnly} onAdd={adoptSkill} onMode={showMode} onInspect={skill => task(() => inspectDiscovered(skill))} />
