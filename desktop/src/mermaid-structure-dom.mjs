@@ -1,13 +1,5 @@
 import {edgeHit} from './mermaid-handles.mjs';
-
-export function diagramNodes(svg,alias) {
-  const escaped=alias.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-  const rendererId=(svg.querySelector('svg')||svg).id;
-  return [...svg.querySelectorAll('g.node,g[data-et="participant"]')].filter(el=>
-    el.getAttribute('data-id')===alias||el.getAttribute('data-asl-node')===alias||el.id===alias||
-    (rendererId&&el.id===`${rendererId}-${alias}`)||
-    new RegExp(`(?:^|-)(?:flowchart|state)-${escaped}-[0-9]+$`).test(el.id));
-}
+import {diagramNodes} from './mermaid-canvas.mjs';
 
 // Match renderer identities, never visible text (two elements can have the same label).
 export function structureElements(svg,model) {

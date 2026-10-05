@@ -67,7 +67,7 @@ export default function MermaidEdit({source='',onChange,onCreate,nodes=[],candid
     if(!event.target.closest('button,input,textarea,g.node,[data-asl-edit],.flowchart-link,.edgeLabel,.mermaid-edge-hit,.mermaid-label-editor'))open({kind:'canvas'},event);
   }}>
     {from&&<div className="mermaid-connect-status">选择目标节点<button aria-label="取消连接" onClick={()=>setFrom('')}><X size={14}/></button></div>}
-    {empty?<div className="mermaid-viewport" aria-label="空白画板"/>:<MermaidView source={source} nodes={nodes} onNode={onNode} items={items} structure={structure} onElement={select} compact={compact} selectedId={selectedId} onExpand={onExpand} expanded={expanded} disabled={busy} onConnect={(from,to)=>change({kind:'connect',from,to})}/>}
+    {empty?<div className="mermaid-viewport" aria-label="空白画板"/>:<MermaidView source={source} nodes={nodes} onNode={onNode} items={items} structure={structure} onElement={select} compact={compact} selectedId={selectedId} onExpand={onExpand} expanded={expanded} disabled={busy} onConnect={(from,to,geometry)=>change({kind:'connect',from,to,...geometry})}/>}
     {target&&createPortal(<div ref={menu} className="canvas-menu" role="menu" aria-label="画板菜单" style={{left:target.x,top:target.y,maxHeight:`calc(100vh - ${target.y+8}px)`}}>
       {target.kind==='templates'?<>
         <button role="menuitem" onClick={()=>setTarget({...target,kind:'canvas'})}>返回</button>
@@ -107,7 +107,7 @@ export default function MermaidEdit({source='',onChange,onCreate,nodes=[],candid
           {!!candidates.length&&<button role="menuitem" onClick={()=>setTarget({...target,kind:'skills',parent:target.key})}><Plus size={15}/>添加子技能</button>}
         </>}
         {canMove&&[-1,1].map(step=>peers[peerIndex+step]&&<button role="menuitem" key={step} disabled={busy} onClick={()=>change({kind:'move',key:target.key,to:peers[peerIndex+step].key,placement:step<0?'before':'after'})}>{target.kind==='participant'?(step<0?'左移':'右移'):(step<0?'上移':'下移')}</button>)}
-        {(!structure.type||canStructure&&!(structure.type==='mindmap'&&!target.parent))&&<button role="menuitem" className="destructive" disabled={busy} onClick={()=>change({...target,remove:true})}><Trash2 size={15}/>{structure.type==='mindmap'?'移除分支':target.kind==='participant'?'移除参与者及关联内容':target.kind==='condition'?(target.first?'移除分组及内容':'移除分支及内容'):target.kind==='node'?'移出画板':'移除'}</button>}
+        {(!structure.type||canStructure&&!(structure.type==='mindmap'&&!target.parent))&&<button role="menuitem" className="destructive" disabled={busy} onClick={()=>change({...target,remove:true})}><Trash2 size={15}/>{structure.type==='mindmap'?'移除分支':target.kind==='participant'?'移除参与者及关联内容':target.kind==='condition'?(target.first?'移除分组及内容':'移除分支及内容'):target.kind==='node'?'移出画板':target.kind==='edge'?'删除连线':'移除'}</button>}
         {structure.type&&onSource&&<button role="menuitem" onClick={()=>{setTarget(null);onSource();}}><Code2 size={15}/>编辑原文</button>}
       </>}
     </div>,document.body)}

@@ -69,26 +69,22 @@ export function flowchartItems(source='') {
 export function editFlowchart(source,change) {
   const model=flowchartItems(source),lines=[...model.lines],eol=source.includes('\r\n')?'\r\n':'\n';
   if(!model.editable)throw new Error('此图的语法请在原文中修改；不会转换或丢弃原有内容');
+  let layout=change.layout||readLayout(source),remaining=model.edges;
   const append=text=>{if(lines.length&&!lines.at(-1).endsWith('\n'))lines[lines.length-1]+=eol;lines.push(text+eol);};
   if(change.kind==='direction'){
     if(!['LR','RL','TD','TB','BT'].includes(change.direction))throw new Error('图的方向无效');
     const line=lines.findIndex(line=>/^\s*(?:flowchart|graph)\s+/.test(line));
     lines[line]=lines[line].replace(/\b(LR|RL|TD|TB|BT)\b/,change.direction);
-  }else if(change.kind==='move'){
-    const from=model.nodes.find(n=>n.id===change.key),to=model.nodes.find(n=>n.id===change.to);
-    if(!from||!to||from.implicit||to.implicit)throw new Error('请先明确这两个节点的名称');
-    if(from.id===to.id)return source;
-    const moving=lines[from.line].replace(/\r?\n$/,'')+eol;
-    let at=to.line+(change.placement==='after'?1:0);
-    if(at===lines.length&&!lines.at(-1).endsWith('\n'))lines[lines.length-1]+=eol;
-    lines.splice(from.line,1);if(at>from.line)at--;
-    lines.splice(at,0,moving);
+    layout={nodes:{},edges:{}};
+  }else if(change.kind==='layout'){
+    // Geometry travels inside this Mermaid document, never in App preferences.
   }else if(change.kind==='node'){
     const node=model.nodes.find(n=>n.id===change.id);
     if(!node)throw new Error('节点已改变，请重新选择');
     if(change.remove){
       if(node.line!=null)lines[node.line]='';
       for(const edge of model.edges)if(edge.from===node.id||edge.to===node.id)lines[edge.line]='';
+      remaining=remaining.filter(edge=>edge.from!==node.id&&edge.to!==node.id);
     }else if(node.implicit)append(`${node.id}["${editLabel(change.label)}"]`);
     else {const p=node.parts;lines[node.line]=`${p[1]}${p[2]}${p[3]}"${editLabel(change.label)}"${p[5]}${p[6]}${lines[node.line].endsWith('\n')?eol:''}`;}
   }else if(change.kind==='edge'){
@@ -96,6 +92,7 @@ export function editFlowchart(source,change) {
     if(!edge)throw new Error('连线已改变，请重新选择');
     const p=edge.parts;
     lines[edge.line]=change.remove?'':`${p[1]}${p[2]} ${p[3]}${change.label?`|"${editLabel(change.label)}"|`:''} ${p[5]}${p[6]}${lines[edge.line].endsWith('\n')?eol:''}`;
+    if(change.remove)remaining=remaining.filter(item=>item!==edge);
   }else if(change.kind==='connect'){
     if(![change.from,change.to].every(id=>model.nodes.some(n=>n.id===id)))throw new Error('请先选择已有节点');
     append(`${change.from} -->${change.label?`|"${editLabel(change.label)}"|`:''} ${change.to}`);
@@ -103,7 +100,36 @@ export function editFlowchart(source,change) {
     if(!new RegExp(`^${identifier}$`).test(change.id)||model.nodes.some(n=>n.id===change.id))throw new Error('节点标识无效或已经存在');
     append(`${change.id}["${editLabel(change.label)}"]`);
   }else throw new Error('不支持的图修改');
-  return lines.join('');
+  const result=lines.join(''),next=flowchartItems(result);
+  const edges=Object.fromEntries(remaining.flatMap((edge,i)=>layout.edges[edge.renderId]?[[next.edges[i].renderId,layout.edges[edge.renderId]]]:[]));
+  if(change.kind==='connect'&&change.fromPort&&change.toPort)edges[next.edges.at(-1).renderId]={from:change.fromPort,to:change.toPort};
+  layout={nodes:Object.fromEntries(Object.entries(layout.nodes).filter(([id])=>next.nodes.some(n=>n.id===id))),edges};
+  return writeLayout(result,layout);
+}
+
+const layoutLine=/^[ \t]*%% asl-layout(?:[ \t]+([^\r\n]*))?[ \t]*(?:\r?\n|$)/gm;
+export function readLayout(source='') {
+  const matches=[...source.matchAll(layoutLine)];
+  if(!matches.length)return {nodes:{},edges:{}};
+  try {
+    if(matches.length!==1)throw Error();
+    const value=JSON.parse(matches[0][1]),model=flowchartItems(source);
+    const object=v=>v&&typeof v==='object'&&!Array.isArray(v);
+    if(!model.editable||!object(value)||Object.keys(value).sort().join()!=='edges,nodes'||!object(value.nodes)||!object(value.edges))throw Error();
+    for(const [id,p] of Object.entries(value.nodes)){
+      if(!model.nodes.some(n=>n.id===id)||!object(p)||Object.keys(p).sort().join()!=='x,y'||![p.x,p.y].every(n=>typeof n==='number'&&Number.isFinite(n)&&Math.abs(n)<=100000))throw Error();
+    }
+    for(const [id,p] of Object.entries(value.edges)){
+      if(!model.edges.some(e=>e.renderId===id)||!object(p)||Object.keys(p).sort().join()!=='from,to'||![p.from,p.to].every(s=>['top','right','bottom','left'].includes(s)))throw Error();
+    }
+    return value;
+  }catch{throw new Error('画板布局无效：请检查节点、连线、坐标和连接点');}
+}
+function writeLayout(source,layout) {
+  const eol=source.includes('\r\n')?'\r\n':'\n',line=`%% asl-layout ${JSON.stringify(layout)}${eol}`;
+  const populated=Object.keys(layout.nodes).length||Object.keys(layout.edges).length;
+  const next=[...source.matchAll(layoutLine)].length?source.replace(layoutLine,populated?line:''):populated?source+(source.endsWith('\n')?'':eol)+line:source;
+  readLayout(next);return next;
 }
 export const diagramLabel=text=>String(text).replace(/["<>#`\r\n\u2028\u2029]/g,c=>`#${c.codePointAt(0)};`);
 

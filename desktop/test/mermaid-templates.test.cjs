@@ -1,12 +1,9 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 
-test('flow structural drag reorders declarations, preserves edges and uses native direction',async()=>{
+test('automatic flow direction preserves declarations and relations',async()=>{
   const {editFlowchart}=await import('../src/mermaid-document.mjs');
   const source='flowchart LR\n A["输入"]\n B["复核"]\n C["反馈"]\n A --> B\n A --> C\n';
-  const next=editFlowchart(source,{kind:'move',key:'C',to:'B',placement:'before'});
-  assert.ok(next.indexOf('C[')<next.indexOf('B['));
-  assert.ok(next.endsWith(' A --> B\n A --> C\n'));
   assert.equal(editFlowchart(source,{kind:'direction',direction:'TD'}),source.replace('flowchart LR','flowchart TD'));
   assert.throws(()=>editFlowchart(source,{kind:'direction',direction:'bad'}),/方向/);
 });

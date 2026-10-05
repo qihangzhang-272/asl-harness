@@ -47,7 +47,7 @@ test('sequence endpoint selection preserves message text and can insert a reply 
   assert.throws(()=>editStructure(source,{kind:'retarget',key:item.key,endpoint:'to',id:'missing'}),/参与者/);
 });
 test('renderer-scoped standalone nodes map to exact IDs, not label or suffix guesses',async()=>{
-  const {diagramNodes}=await import('../src/mermaid-structure-dom.mjs');
+  const {diagramNodes}=await import('../src/mermaid-canvas.mjs');
   const nodes=['aslMermaid1-skill_a','aslMermaid2-skill_a','aslMermaid1-other_skill_a','flowchart-skill_a-0'].map(id=>({id,getAttribute:()=>null}));
   const svg={id:'aslMermaid1',querySelector:()=>null,querySelectorAll:()=>nodes};
   assert.deepEqual(diagramNodes(svg,'skill_a'),[nodes[0],nodes[3]]);

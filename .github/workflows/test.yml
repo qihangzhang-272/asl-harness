@@ -43,7 +43,7 @@ jobs:
       - run: ${{ runner.os == 'Linux' && 'xvfb-run -a ' || '' }}python -m pytest
       - run: ${{ runner.os == 'Linux' && 'xvfb-run -a ' || '' }}npm test
         working-directory: desktop
-      - run: node --test --test-concurrency=1 e2e/workspace.cjs e2e/structure.cjs e2e/canvas.cjs e2e/continuity.cjs
+      - run: node --test --test-concurrency=1 e2e/workspace.cjs e2e/structure.cjs e2e/canvas.cjs e2e/direct-canvas.cjs e2e/continuity.cjs
         if: runner.os == 'Windows'
         working-directory: desktop
         env:

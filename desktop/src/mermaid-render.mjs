@@ -1,7 +1,10 @@
+import {flowchartItems,readLayout} from './mermaid-document.mjs';
+import {flowCanvas} from './mermaid-canvas.mjs';
 let library;
 let counter=0;
 export async function renderDiagram(source) {
   if(typeof source!=='string'||!source.trim()||source.length>50000)throw new Error('图内容需为 1–50000 字的 Mermaid 原文');
+  const layout=readLayout(source);
   library ||= import('mermaid').then(({default:mermaid})=>{
     mermaid.initialize({startOnLoad:false,securityLevel:'strict',suppressErrorRendering:true,maxTextSize:50000,maxEdges:500,
       secure:['securityLevel','startOnLoad','suppressErrorRendering','maxTextSize','maxEdges','themeCSS','htmlLabels'],
@@ -41,6 +44,9 @@ export async function renderDiagram(source) {
     for(const element of root.querySelectorAll('*')){
       if(['script','iframe','image'].includes(element.localName)){element.remove();continue;}
       for(const attribute of [...element.attributes])if(/^on/i.test(attribute.name)||(/href$/i.test(attribute.name)&&!attribute.value.startsWith('#')))element.removeAttribute(attribute.name);
+    }
+    if(Object.keys(layout.nodes).length||Object.keys(layout.edges).length){
+      container.appendChild(root);flowCanvas(root,flowchartItems(source),layout);
     }
     return new XMLSerializer().serializeToString(root);
   } finally {container.remove();}
