@@ -93,7 +93,7 @@ test('canvas templates and structure can be created and edited without source or
     await page.locator('.editor-page').waitFor({state:'detached',timeout:60000});
     const saved=await fs.readFile(file,'utf8');
     for(const content of ['sequenceDiagram','mindmap','复核资料','补充证据','条件成立'])assert.ok(saved.includes(content),content);
-    assert.ok(saved.includes(original.trim()),'原正文未丢失');
+    assert.ok(saved.replaceAll('\r\n','\n').includes(original.replaceAll('\r\n','\n').trim()),'原正文未丢失');
     assert.ok(saved.indexOf('output[表达]')<saved.indexOf('research[研究]'),'不用 Shift 调整同级顺序');
     assert.match(saved,/flowchart TD/);assert.match(saved,/node1 --> result/);
     assert.ok(saved.indexOf('alt 条件成立')<saved.indexOf(': 复核资料'),'整个条件组移动，不拆散分支');
