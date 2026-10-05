@@ -1,7 +1,7 @@
 {
   "name": "asl-desktop",
   "productName": "ASL Workspace",
-  "version": "0.5.9",
+  "version": "0.5.10",
   "private": true,
   "description": "Manage and carry your AI work environments",
   "license": "MIT",
@@ -10,7 +10,7 @@
     "start": "npm run build && electron .",
     "build": "vite build",
     "test": "node --test test/*.test.cjs",
-    "test:e2e": "npm run build && node --test --test-concurrency=1 e2e/workspace.cjs e2e/structure.cjs e2e/continuity.cjs",
+    "test:e2e": "npm run build && node --test --test-concurrency=1 e2e/workspace.cjs e2e/structure.cjs e2e/canvas.cjs e2e/continuity.cjs",
     "test:performance": "node e2e/performance.cjs"
   },
   "devDependencies": {
