@@ -128,6 +128,10 @@
 
 <!-- ASL:PROJECT STATUS START -->
 
+### 候选已验收 · 0.5.11 画板直接操作修复（发布中）
+
+用户实测确认 0.5.10 的流程图结构排序并非直接拖动，四面连接也未保留端口身份。已补跟手移动、实时吸附和明确的连线删除，最终候选 EXE 桌面 14 项、前端 186 项通过；Python 使用候选程序的真实渲染器为 241 通过／6 条条件跳过。关系保留标准 Mermaid，手工布局以同图注释存储，边界见 [View 2D](architecture/02d-app-navigation.md)，步骤见[直接操作补齐计划](plans/2026-10-04-canvas-direct-manipulation.md)。GitHub 发行与桌面切换尚待完成，不改真实 Skill 或 Mode。
+
 ### 已交付版本 · 2026-10-04 · Windows App 0.5.10 / CLI 0.4.6
 
 - **发行与桌面：**[0.5.10 预览发行](https://github.com/qihangzhang-272/asl-harness/releases/tag/app-v0.5.10)已公开，标签对应通过验收的 `0d6426c`；App ZIP、校验文件与 CLI wheel／源码包均已上传。桌面入口已切到 `%LOCALAPPDATA%\Programs\ASL Workspace\0.5.10\ASL Workspace.exe` 并打开，核对真实进程与主窗口。候选、ZIP、安装目录 405 个文件逐项摘要一致，远端 ZIP 摘要及大小一致。旧安装和入口备份保留。
