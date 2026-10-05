@@ -2,6 +2,15 @@
 
 冻结记录，不代表当前实现。当前事实只看[架构总览 View 9](../asl-architecture-views.md#view-9--当前项目状态)。保留原始措辞和证据，用于追溯。
 
+## 2026-10-05 画板修复交付回执
+
+- **发布：**App 0.5.11 / CLI 0.4.6，开发实现 `92d9979`、架构 `401d2d8`；机械公开检出 `b533b99aa378877e5b458f524e1c77c02ffe45f7` 通过 [Windows／Linux CI](https://github.com/qihangzhang-272/asl-harness/actions/runs/37261614225) 后，于 00:05（America/New_York）公开 [app-v0.5.11](https://github.com/qihangzhang-272/asl-harness/releases/tag/app-v0.5.11)。开发与公开检出 204 个受管文件逐项一致。仍为 Windows 未签名便携预览，不冒称稳定版。
+- **程序与桌面：**最终 candidate6、ZIP 和 `%LOCALAPPDATA%\Programs\ASL Workspace\0.5.11` 的 405 个文件逐项 SHA-256 一致。ZIP 170,358,330 字节，SHA-256 `BCFF85C3BDB5FED49313B379D70694168BDA7967C509FAACD541326DDB133B9C`，GitHub 上传完成后的大小和 digest 一致。用户确认保存后正常关闭 0.5.10，更新原桌面快捷方式；最终正常启动进程 58808，路径为 0.5.11，主窗口为 `ASL Workspace`。旧安装保留，快捷方式和偏好备份在 `.local/backups/asl-desktop-entry-0.5.11-20261005/`，不改真实账号。
+- **实际问题与修复：**原公司画像移动前中后坐标不变，原实现仅重排声明；四面连接只传节点 ID，不保存侧；平行及反向线重合时可误删另一条。共享 SVG 几何适配补直接拖动、实时路由、精确端口吸附与独立连线命中。新连接写入期间仍可见；坏布局和只读写入失败不污染原文。不换渲染器或视觉体系，手工布局只随原 Mermaid 注释保存。
+- **验证：**最终 Node 186／186、EXE 桌面 14／14。CI Python 两平台各 245 通过／2 跳过；Windows Node 186，Linux Node 184 通过／2 条平台跳过；Windows 桌面 14 通过。开发目录既有 Low 完整性标签导致默认本地 Python 渲染测试失败，证据未删除；指向候选 EXE 的真实渲染器后 241 通过／6 条平台条件跳过，不模拟结果、不关闭沙箱。npm audit 两平台为 0 告警，不等于全系统安全认证。
+- **失败与复验：**首候选因鼠标按下就提前置顶节点而破坏双击，改为真正移动后才置顶；独立复审先后确认同排平行线、反向线重合，按端点对分离通道后验证分别删除正反向边。失败证据 `%TEMP%/asl-review-parallel-PTiFAs/asl-e2e-uOBpGO`、`%TEMP%/asl-review-reverse-vImcFy/asl-e2e-aDMccY`，独立通过证据 `%TEMP%/asl-review-reverse-fixed-F9F6Yo/asl-e2e-SY1WZ2`。最终直接操作 `%TEMP%/asl-direct-canvas-CulKCp/asl-e2e-YuQcMP`，完整日志 `%TEMP%/asl-0.5.11-e2e-final6.log`。
+- **真实库与边界：**安装后的原偏好只读复验公司画像端口、技能内容打开和返回画板成功，保留 1 个本地库及 3 个云端连接，无 renderer 错误。证据在 `.local/validation/asl-release-0.5.11-20261004/installed-real-profile.json`、同目录截图和 `package.json`。实际 Skill／Mode 未由本轮改写；两项技能和 Capital Markets Desk 的并行内容变化留给原任务，未混入发布。时序和思维图的结构编辑保持，未扩张为任意图型自由坐标；普通阅读器忽略布局注释，未知语法不强转或丢弃。当前事实只维护总览 View 9。
+
 ## 2026-10-04 交付回执
 
 App 0.5.10 / CLI 0.4.6 的发行验收记录；当前状态仍只看总览 View 9。
