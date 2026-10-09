@@ -4,11 +4,15 @@ const os=require('node:os');
 const {pathToFileURL}=require('node:url');
 const {_electron}=require('playwright');
 const desktop=path.resolve(__dirname,'..');
+const children=new WeakMap();
 
 async function dispose(app){
   // Only the process created by this fixture; never a real user's window.
-  if(app.windows().some(window=>!window.isClosed()))await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().forEach(window=>window.destroy()));
-  await app.close();
+  const child=children.get(app),timer=child?.exitCode===null&&child.signalCode===null?setTimeout(()=>child.kill(),5000):null;
+  try{
+    if(app.windows().some(window=>!window.isClosed()))await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().forEach(window=>window.destroy()));
+    await app.close();
+  }finally{clearTimeout(timer);}
 }
 
 function packagedCore(executable=process.env.ASL_TEST_EXE){
@@ -30,6 +34,7 @@ async function launch({output=process.env.ASL_E2E_OUTPUT,baseline,core,library,e
   const env={...process.env,HOME:home,USERPROFILE:home,APPDATA:path.join(home,'Roaming'),LOCALAPPDATA:path.join(home,'Local'),CODEX_HOME:path.join(home,'.codex'),CLAUDE_CONFIG_DIR:path.join(home,'.claude')};
   delete env.ELECTRON_RUN_AS_NODE;
   const app=await _electron.launch({...(process.env.ASL_TEST_EXE&&{executablePath:process.env.ASL_TEST_EXE}),args:[...(process.env.ASL_TEST_EXE?[]:[desktop]),'--user-data-dir='+path.join(home,'app')],env});
+  children.set(app,app.process());
   const page=await app.firstWindow();page.setDefaultTimeout(20000);
   const errors=[];page.on('pageerror',error=>errors.push(error.message));
   page.on('dialog',dialog=>dialog.accept());
