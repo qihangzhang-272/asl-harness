@@ -130,13 +130,14 @@
 
 <!-- ASL:PROJECT STATUS START -->
 
-### 0.5.12 候选整包验收通过 · 2026-10-08 · 仓库逐项组织与 CLI 共用指引
+### Windows 0.5.12 已交付、Mac 验收中 · 2026-10-08 · 仓库逐项组织与 CLI 共用指引
 
 - **新增入口：**仓库预览直接选择新建或已有 Mode，复用原画板逐项阅读、拖入、连接和保存。仓库来源不被后台扫描替换，同名来源可读且加入时确认使用本地版本；不静默覆盖 Skill。采用与保存分别反馈，取消 Mode 不假称撤销已采用包。仅自动生成的无边集合改为可编辑 flowchart，不转换作者图。
 - **Agent：**`cli.describe.organization` 与 `environment.guide` 共用一份整理方法；当前 Host 依据用户目标与完整技能内容组织关系，CLI 提供读取、采用、写入与真实渲染门控。没有新建调度器、业务 Skill 或行业规则引擎，修改技能内容仍须具体授权。
 - **Windows 最终包：**App **0.5.12**／核心 **0.4.7**。核心 **347 通过、7 条平台条件跳过**；Node **236 通过**；最终原生包完整桌面 **43/43 通过**（约 219 秒）；26 张专项 Mermaid 图真实渲染通过。新增两条实机链覆盖首个 Mode／已有 Mode、阅读不写盘、取消、同名版本、完整脚本保留及保存后定位。已人工检查实际画板和阅读截图。日志见 `.local/validation/release-0.5.12-*`。
 - **内容交付边界：**内容版与框架版共用同一程序；只取已公开提交 `8dc3e269f5fd933421558cb3c96a5010651418ed`，不读本地未确认业务变化。内容包解压后冻结 CLI 检查通过，派生视图当前且无告警；Skill／Mode 原字节不改。包不含个人 Git 历史，后续演进记录仍需本机 Git 与仓库／作者配置。
-- **待交付：**本条记录时尚未推送、创建 Release 或替换桌面。Mac 原生构建／完整回归工作流已准备，尚未在 Mac 验收；只采用 ad-hoc 签名，不是开发者签名或公证。具体发布结果在本节补记，不能把 Windows 通过写成跨平台通过。过程及保留失败见[本轮计划](plans/2026-10-08-repository-mode-and-release.md)。
+- **Windows 交付：**[Harness](https://github.com/qihangzhang-272/asl-harness/releases/tag/app-v0.5.12) 与 [内容版](https://github.com/qihangzhang-272/agent-skill-library/releases/tag/app-v0.5.12)均已公开上传，GitHub 资产 SHA-256 与本地一致。框架 ZIP 为 `89c982a4bd7c17b9aef2b0f7757cc48a670733a808f165fe1229921cae8fb485`，内容 ZIP 为 `f781dc032b7e1155619267bb402f650ed382391fe29aaf845bfcff6f714fb062`。桌面入口已切换到 0.5.12 并启动，406 个安装文件与候选逐字节一致；保留旧版文件，未改真实 Skill、Mode、账号或投影。内容库只推送两个 README（`6a2ceab`），78 项既有业务变化未发布；协议 8 项仍保留。
+- **Mac 与依赖边界：**首次原生工作流 [37876645051](https://github.com/qihangzhang-272/asl-harness/actions/runs/37876645051)有运行额度，但被 `source-map-js` 高危公告拦截。仅将构建依赖从 1.2.1 升到 1.2.2，安全高危门控恢复，Node 236 项通过，105 个前端产物与已发 Windows 原字节一致。仍有 KaTeX／Mermaid 关联的两项低危报告，要求已有原型污染作为前置条件；不以强制降级 Mermaid 消警报，保留为兼容升级待办，不宣称零风险。Mac 尚未验收或发布，不是 Universal，未来包仅 ad-hoc 签名而非开发者签名／公证。过程及保留失败见[本轮计划](plans/2026-10-08-repository-mode-and-release.md)。
 
 ### 开发接入已验收、未交付 · 2026-10-08 · Mode 演进、归档与 Agent 体验
 

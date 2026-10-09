@@ -46,3 +46,5 @@ CLI 内置的是整理指引，不是带固定行业结论的新业务 Skill。�
 - 0.5.12 候选 1/2 保留为证据，不作为最终交付。首轮完整 43 项中旧候选仍显示 mermaid 简介的一项失败，最新前端定向 2/2 已通过；最终完整包另行冻结复验。
 - 最终冻结 Windows 包完整桌面 **43/43** 通过，约 219 秒；Node **236/236** 通过；26 张专项图真实渲染通过。已查看实际仓库阅读、拖入及保存后的画板截图。解压内容版冻结 CLI 返回 `ok=true`、`workspaceViewCurrent=true`、无告警。
 - 框架 ZIP 首次使用标准 zipfile 命令遇到上游文件早于 1980 的时间戳，失败产物不发布；使用 stdlib 的 `strict_timestamps=False` 重新打包到独立验证目录，不修改 App 文件或源代码时间。
+- Windows 两仓 Release 上传完成，API 资产摘要与本地一致。Library Release 创建首次用了短 SHA 被 GitHub 拒绝；换完整 SHA 后成功，没有重复发行或混入其他文件。桌面 0.5.12 的 406 个文件与候选一致，入口和图标同步后启动；旧目录未删除。
+- Mac 首轮真实 runner 被安全门控阻断（不是额度问题）：[source-map-js 公告](https://github.com/advisories/GHSA-68fv-2mgg-jv7q)影响构建期 PostCSS 依赖。仅升级 1.2.1→1.2.2，未改 runtime；高危门控通过，Node 236 项重跑通过，105 个构建输出与 Windows 候选完全一致，不需替换已发布二进制。保留 npm 低危 KaTeX 关联报告：[上游说明](https://github.com/advisories/GHSA-238p-pmpm-9mq7)要求已有原型污染／选项污染，并建议独立消毒。当前 Mermaid strict、sandbox、contextIsolation 保留，但不将其等同漏洞已修复；兼容升级另评估，不执行会倒退到 Mermaid 10 的 `audit fix --force`。
