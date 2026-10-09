@@ -84,3 +84,55 @@ test('all navigation rails resize, retain preferences, cancel safely and leave r
   }catch(error){console.error(run,error.stack);console.error('目录滚动事实：',await page.evaluate(()=>({events:window.__panelWheel,trees:[...document.querySelectorAll('.package-tree')].map(el=>({box:el.getBoundingClientRect().toJSON(),height:el.clientHeight,contentHeight:el.scrollHeight,top:el.scrollTop,overflow:getComputedStyle(el).overflow})),outerTop:document.querySelector('.content')?.scrollTop})).catch(()=>null));await page.screenshot({path:path.join(run,'panels-failure.png'),timeout:10000}).catch(capture=>console.error('截图未完成：'+capture.message));await fs.writeFile(path.join(run,'panels-failure.html'),await page.locator('body').innerHTML({timeout:10000}).catch(()=>''));throw error;}
   finally{await dispose(app);}
 });
+
+test('a pending external Skill reread keeps the document and scrollable directory visible',{timeout:120000},async()=>{
+  const {app,page,run,workspace,errors}=await launch();
+  try{
+    const directory=path.join(workspace,'skills/product-analysis/references');
+    await fs.mkdir(directory,{recursive:true});
+    await Promise.all(Array.from({length:35},(_,i)=>fs.writeFile(path.join(directory,`连续阅读-${i}.md`),'# 资料\n')));
+    await page.getByRole('button',{name:'全部技能',exact:true}).first().click();
+    await page.locator('.skill-table-row').filter({has:page.locator('[title="product-analysis"]')}).click();
+    await page.locator('.package-tree button[title^="references/连续阅读-"]').last().waitFor();
+    const before=await page.locator('.package-rendered').innerText();
+    await app.evaluate(({ipcMain})=>{
+      const original=ipcMain._invokeHandlers.get('asl:run');
+      ipcMain.removeHandler('asl:run');ipcMain.handle('asl:run',async(event,action,...args)=>{
+        if(action==='files'&&!globalThis.releaseReread)await new Promise(resolve=>globalThis.releaseReread=resolve);
+        return original(event,action,...args);
+      });
+    });
+    await fs.appendFile(path.join(workspace,'skills/product-analysis/SKILL.md'),'\n外部更新后的阅读内容。\n');
+    await page.waitForFunction(()=>document.querySelector('[aria-label="重新读取文件"]')?.disabled);
+    assert.equal(await page.locator('.package-tree button[title^="references/连续阅读-"]').count(),35,'同一文件更新时目录不能被清空');
+    assert.equal(await page.locator('.package-rendered').innerText(),before,'后台读取期间保留最后有效内容');
+    await page.locator('.package-tree').hover({position:{x:32,y:80}});await page.mouse.wheel(0,1200);
+    await page.waitForFunction(()=>document.querySelector('.package-tree').scrollTop>0);
+    await app.evaluate(()=>globalThis.releaseReread());
+    await page.getByText('外部更新后的阅读内容。',{exact:true}).waitFor();
+    assert.deepEqual(errors,[]);console.log('连续阅读：'+run);
+  }finally{await app.evaluate(()=>globalThis.releaseReread?.()).catch(()=>{});await dispose(app);}
+});
+
+test('a visible Mode remains navigable while refresh is still remembering the library',{timeout:120000},async()=>{
+  const {app,page,run,workspace,errors}=await launch();
+  try{
+    const second=path.join(workspace,'modes/second');await fs.mkdir(second);
+    await fs.writeFile(path.join(second,'MODE.md'),'# Second\n');
+    await fs.writeFile(path.join(second,'mode.yaml'),'apiVersion: asl-wep/v0.4.0\nkind: ModeProjection\nmetadata:\n  id: second\nspec:\n  skills: [source-research]\n  architecture:\n    shared: [source-research]\n    paradigms: []\n');
+    await app.evaluate(({ipcMain})=>{
+      const original=ipcMain._invokeHandlers.get('asl:remember');
+      ipcMain.removeHandler('asl:remember');ipcMain.handle('asl:remember',async(event,...args)=>{
+        if(!globalThis.releaseRemember)await new Promise(resolve=>globalThis.releaseRemember=resolve);
+        return original(event,...args);
+      });
+    });
+    await page.getByRole('button',{name:'刷新技能库',exact:true}).click();
+    await page.locator('.source-tree button').filter({hasText:'Second'}).waitFor();
+    await page.locator('.source-tree button').filter({hasText:'Creator Studio'}).click();
+    await page.locator('.mode-page').getByRole('heading',{name:'Creator Studio',exact:true,level:1}).waitFor({timeout:1500});
+    await app.evaluate(()=>globalThis.releaseRemember());
+    await page.locator('.architecture-section g.node[role=button]').first().waitFor();
+    assert.deepEqual(errors,[]);console.log('读取期间导航：'+run);
+  }finally{await app.evaluate(()=>globalThis.releaseRemember?.()).catch(()=>{});await dispose(app);}
+});

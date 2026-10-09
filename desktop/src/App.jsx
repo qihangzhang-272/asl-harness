@@ -766,10 +766,10 @@ export default function App() {
     const target=workspace&&!readOnly?workspace:initial.managedLibrary;
     setModal({kind:'agent-guide',workspace:target,mode:modeId||'',repository});
   }
-  async function refreshLocal() {
+  async function refreshLocal(call=api) {
     const target=modal?.workspace||workspace;
-    if(target){await load(target);setModal(null);}
-    else{const data=await api('initial');if(data.workspace)await load(data.workspace);}
+    if(target)await load(target,call,{protectDrafts:true});
+    else{const data=await call('initial');if(data.workspace)await load(data.workspace,call,{protectDrafts:true});}
   }
   async function importRepositoryMode(item, chosenTarget, nextAgent=false, sourceReport=githubReport) {
     if (!chosenTarget) {
@@ -896,7 +896,7 @@ export default function App() {
                   <IconButton
                     icon={RotateCw}
                     label="刷新技能库"
-                    onClick={() => cloud?openCloud(cloud.url,cloud.mode,true,true):task(refreshLocal)}
+                    onClick={() => cloud?openCloud(cloud.url,cloud.mode,true,true):read('environment','刷新工作环境',refreshLocal)}
                   />
                 )
               )}

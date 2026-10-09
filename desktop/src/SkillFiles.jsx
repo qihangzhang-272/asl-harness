@@ -16,6 +16,7 @@ export default function SkillFiles({ item, Dialog, readFile, saveFile, onClose, 
   const [error, setError] = useState(''), [query, setQuery] = useState(''), [busy, setBusy] = useState(false);
   const [retry, setRetry] = useState(0);
   const refreshRead=useRef(false);
+  const readContext=useRef(null);
   useEffect(()=>{
     const discard=()=>{refreshRead.current=true;setRetry(n=>n+1);};
     window.document.addEventListener('asl:discard-drafts',discard);
@@ -26,7 +27,10 @@ export default function SkillFiles({ item, Dialog, readFile, saveFile, onClose, 
   useScrollMemory(`${key}:${file}`,rendered,!!data&&!editing&&!busy);
   useEffect(() => {
     let active = true;
-    setBusy(true); setError(''); setData(null);
+    const context=`${key}:${file}`;
+    setBusy(true); setError('');
+    if(readContext.current!==context)setData(null);
+    readContext.current=context;
     const refresh=refreshRead.current;refreshRead.current=false;
     readFile(file,refresh).then(result => { if (active) { setData(result); setDocument(result.document || ''); setEditing(false); } })
       .catch(e => { if (active) {if(file!=='SKILL.md'&&/不在当前包|文件不在/.test(e.message))setFile('SKILL.md');else setError(e.message);} }).finally(() => { if (active) setBusy(false); });
@@ -46,7 +50,7 @@ export default function SkillFiles({ item, Dialog, readFile, saveFile, onClose, 
       </nav><PanelResize name="skill-files" label="调整技能文件目录宽度" initial={220} min={140} max={360}/></aside>
       <section className="package-document" onDoubleClick={event=>{if(!event.target.closest('button,a,input,textarea,.mermaid-viewport'))edit();}}>
         <header><span title={file}>{file}</span><div className="tabs"><button aria-label="重新读取文件" title="重新读取文件" disabled={busy} onClick={()=>leave(()=>{refreshRead.current=true;setRetry(n=>n+1);})}><RotateCw size={14}/></button><button disabled={busy} className={!editing?'active':''} onClick={()=>setEditing(false)}>预览</button><button disabled={readOnly || data?.document == null || busy} className={editing?'active':''} onClick={()=>setEditing(true)}><Code size={14}/>编辑</button></div></header>
-        {busy||!data&&!error ? <p className="muted">正在读取文件…</p> : !data ? <div role="alert"><p className="error-text">{error}</p><button onClick={()=>setRetry(value=>value+1)}>重新读取</button></div> : data.document == null ? <p className="inline-note">此文件为二进制或超过 1 MB，保留在完整技能包中；请使用本地编辑器处理。</p> : editing ?
+        {!data&&!error ? <p className="muted">正在读取文件…</p> : !data ? <div role="alert"><p className="error-text">{error}</p><button onClick={()=>setRetry(value=>value+1)}>重新读取</button></div> : data.document == null ? <p className="inline-note">此文件为二进制或超过 1 MB，保留在完整技能包中；请使用本地编辑器处理。</p> : editing ?
           <textarea aria-label="文件内容" className="package-code" spellCheck={false} value={document} onChange={e=>setDocument(e.target.value)}/> :
           /\.md$/i.test(file) ? <div ref={rendered} className="package-rendered">{file==='SKILL.md'&&!diagramsIn(document).length&&outlineFor(document)&&<details className="diagram-outline"><summary>文档结构</summary><MermaidView source={outlineFor(document)}/></details>}<Markdown text={document} onFile={relative=>{
             const parts=file.split('/').slice(0,-1);
