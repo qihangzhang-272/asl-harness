@@ -1,4 +1,4 @@
-"""Build a Windows portable desktop folder without changing the user's Python.
+"""Build a native Windows portable folder or macOS app on that operating system.
 
 Run with a build-only venv containing PyInstaller and project dependencies, after npm ci in desktop/.
 The output path must be new. No installer, auto-update service, or signing claim.
@@ -8,6 +8,8 @@ from __future__ import annotations
 import argparse
 import importlib.metadata
 import json
+import os
+import plistlib
 import shutil
 import subprocess
 import sys
@@ -28,8 +30,9 @@ def core_metadata(root: Path, output: Path) -> Path:
 
 def smoke_core(app: Path, smoke: Path) -> None:
     document = "# 中文模式验收\n\n研究与表达 🎨。\n\n```mermaid\nflowchart LR\n A[研究] --> B[表达]\n```\n"
+    core = app / ('Contents/Resources/core/asl-harness' if sys.platform == 'darwin' else 'resources/core/asl-harness.exe')
     command = [
-        str(app / "resources/core/asl-harness.exe"), "environment.edit", "--workspace", str(smoke),
+        str(core), "environment.edit", "--workspace", str(smoke),
     ]
     for identifier, text in (("unicode-smoke", document), ("invalid-smoke", "```mermaid\nflowchart LR\n A -->[\n```\n")):
         check = subprocess.run(command, input=json.dumps({"operation": "mode.save", "id": identifier, "document": text,
@@ -50,15 +53,17 @@ def smoke_core(app: Path, smoke: Path) -> None:
 
 
 def build(output: Path) -> Path:
-    if sys.platform != "win32":
-        raise ValueError("This packaging script currently supports Windows only")
+    if sys.platform not in ('win32', 'darwin'):
+        raise ValueError('Build on Windows or macOS; cross-compilation is not supported')
+    mac = sys.platform == 'darwin'
     root = Path(__file__).resolve().parents[1]
     desktop = root / "desktop"
     runtime = desktop / "node_modules/electron/dist"
     output = output.resolve()
     if output.exists():
         raise ValueError("Use a new output directory; existing builds are never deleted")
-    if not (runtime / "electron.exe").is_file():
+    binary = runtime / ('Electron.app/Contents/MacOS/Electron' if mac else 'electron.exe')
+    if not binary.is_file():
         raise ValueError("Run npm ci in desktop/ first")
     npm = shutil.which("npm.cmd") or shutil.which("npm")
     if not npm:
@@ -69,26 +74,36 @@ def build(output: Path) -> Path:
     work.mkdir()
     metadata = core_metadata(root, work)
     subprocess.run([sys.executable, "-m", "PyInstaller", "--noconfirm", "--name", "asl-harness",
-                    "--add-data", f"{metadata};{metadata.name}",
+                    "--add-data", f"{metadata}{os.pathsep}{metadata.name}",
                     "--paths", str(root / "src"), "--distpath", str(work / "dist"),
                     "--workpath", str(work / "work"), "--specpath", str(work), str(desktop / "core_entry.py")], check=True)
-    app = output / "ASL Workspace"
-    shutil.copytree(runtime, app, ignore=shutil.ignore_patterns("default_app.asar"))
-    (app / "electron.exe").rename(app / "ASL Workspace.exe")
-    assets = app / "resources/app"
+    app = output / ('ASL Workspace.app' if mac else 'ASL Workspace')
+    shutil.copytree(runtime / 'Electron.app' if mac else runtime, app, symlinks=mac,
+                    ignore=shutil.ignore_patterns('default_app.asar'))
+    resources = app / ('Contents/Resources' if mac else 'resources')
+    if mac:
+        info_file = app / 'Contents/Info.plist'
+        info = plistlib.loads(info_file.read_bytes())
+        version = json.loads((desktop / 'package.json').read_text(encoding='utf-8'))['version']
+        info.update(CFBundleName='ASL Workspace', CFBundleDisplayName='ASL Workspace',
+                    CFBundleIdentifier='com.asl.workspace', CFBundleVersion=version,
+                    CFBundleShortVersionString=version)
+        info_file.write_bytes(plistlib.dumps(info))
+    else:
+        (app / 'electron.exe').rename(app / 'ASL Workspace.exe')
+    assets = resources / 'app'
     assets.mkdir()
-    for name in ("package.json", "main.cjs", "preload.cjs", "bridge.cjs", "library.cjs", "native.cjs", "market.cjs", "assistant.cjs", "repository.cjs", "read-requests.cjs", "repository-import.cjs", "connections.cjs", "local-discovery.cjs", "mermaid-check.cjs"):
-        shutil.copy2(desktop / name, assets / name)
+    for source in [desktop / 'package.json', *desktop.glob('*.cjs')]:
+        shutil.copy2(source, assets / source.name)
     shutil.copytree(desktop / "dist", assets / "dist")
-    shutil.copytree(work / "dist/asl-harness", app / "resources/core")
-    shutil.copytree(root / "examples/personal-environment", app / "resources/example-environment")
-    # Test the frozen executable, not the developer's Python / locale.
-    smoke = work / "smoke-environment"
-    shutil.copytree(root / "examples/personal-environment", smoke)
-    smoke_core(app, smoke)
-    shutil.copy2(root / "LICENSE", app / "ASL-LICENSE.txt")
-    notices = app / "resources/licenses"
+    shutil.copytree(work / 'dist/asl-harness', resources / 'core', symlinks=mac)
+    shutil.copytree(root / 'examples/personal-environment', resources / 'example-environment')
+    shutil.copy2(root / 'LICENSE', (resources if mac else app) / 'ASL-LICENSE.txt')
+    notices = resources / 'licenses'
     notices.mkdir()
+    if mac:
+        shutil.copy2(runtime / 'LICENSE', notices / 'Electron-LICENSE.txt')
+        shutil.copy2(runtime / 'LICENSES.chromium.html', notices / 'LICENSES.chromium.html')
     packages = subprocess.run([npm, "ls", "--omit=dev", "--all", "--parseable"],
                               cwd=desktop, capture_output=True, text=True, check=True)
     for location in packages.stdout.splitlines()[1:]:
@@ -108,11 +123,20 @@ def build(output: Path) -> Path:
         if source.is_file():
             shutil.copy2(source, notices / "Python-LICENSE.txt")
             break
+    if mac:
+        # Re-seal changed resources locally; this is not publisher signing or notarization.
+        subprocess.run(['codesign', '--force', '--deep', '--sign', '-', '--preserve-metadata=entitlements', str(app)], check=True)
+        subprocess.run(['codesign', '--verify', '--deep', '--strict', str(app)], check=True)
+    # Test the frozen executable after assembly/signing, not the developer's Python / locale.
+    smoke = work / 'smoke-environment'
+    shutil.copytree(root / 'examples/personal-environment', smoke)
+    smoke_core(app, smoke)
     return app
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="构建自带核心的 ASL Windows 桌面便携版")
+    parser = argparse.ArgumentParser(description="在本机平台构建自带核心的 ASL 桌面预览版")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
-    print(json.dumps({"output": str(build(args.output)), "signed": False}, ensure_ascii=False))
+    print(json.dumps({'output': str(build(args.output)), 'signed': False,
+                      'adHocSigned': sys.platform == 'darwin', 'notarized': False}, ensure_ascii=False))

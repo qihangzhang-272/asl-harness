@@ -147,7 +147,7 @@ spec:
             label: 已核对的材料
 ```
 
-每个技能都有明确归属。通用检索无需给所有节点连线；当前 Agent 可以先读材料再决定是否搜索。人和 Agent 编辑同一个 `mode.yaml`，App 校验后呈现，具体协议与当前实现见[总架构 View 6](docs/asl-architecture-views.md)。
+每个技能都有明确归属。通用检索无需给所有节点连线；当前 Agent 可以先读材料再决定是否搜索。成员与分类保存在 `mode.yaml`，作者关系图保存在 `MODE.md` 的 Mermaid 中；有作者图就优先呈现，没有时才从已有 YAML 关系生成视图。人和 Agent 使用同一 CLI 校验后写入，具体协议与当前实现见[总架构 View 6](docs/asl-architecture-views.md)。
 
 ## 从工具集合到长期成长的工作环境
 
@@ -185,13 +185,13 @@ Environment 是普通文件夹，也是本地 Git 真源。人可以直接阅读
 
 ### 桌面预览版
 
-[下载 Windows App](https://github.com/qihangzhang-272/asl-harness/releases/download/app-v0.5.11/ASL-Workspace-0.5.11-Windows-x64.zip) · [版本说明与校验值](https://github.com/qihangzhang-272/asl-harness/releases/tag/app-v0.5.11)
+[下载 Windows App](https://github.com/qihangzhang-272/asl-harness/releases/download/app-v0.5.12/ASL-Workspace-0.5.12-Windows-x64.zip) · [各平台下载与校验值](https://github.com/qihangzhang-272/asl-harness/releases/tag/app-v0.5.12) · [带公开技能的内容版](https://github.com/qihangzhang-272/agent-skill-library/releases)
 
 无需安装 Python 或 Node.js。下载后右键 ZIP → **全部解压** → 打开 `ASL Workspace` 文件夹 → 双击 **`ASL Workspace.exe`**。保留整个文件夹，不要只拿走 EXE；GitHub 自动生成的 `Source code` 压缩包是源码，不是 App。
 
 这是 Windows x64 未签名预览版，不是安装程序；可能触发系统的未知发行者提醒。不需要管理员权限，不要求关闭系统防护。请只使用本仓库 Releases 中的文件，并核对同页 SHA-256。
 
-打开后，可以点击「从这台电脑开始」，复制整理提示词给你正在使用的 AI，按工作目的建立或整理 Mode；App 不在后台启动 AI。也可以「导入别人分享的工作模式」，从 [Agent Skill Library](https://github.com/qihangzhang-272/agent-skill-library) 或其他符合 ASL 协议的仓库选取。模式不是预设身份：同一个人可以维护多个工作场景。
+打开后，可以点击「从这台电脑开始」，选择完整技能并在画板中建立 Mode，不要求先安装 Agent。仓库预览的「组织技能」可逐个阅读、拖入新建或已有 Mode；也可以把目标交给正在使用的 Agent，由 `cli.describe` 与 `environment.guide` 提供同一整理指引。App 不在后台自主运行 AI。也可导入别人分享的完整 Mode；同一个人可以维护多个工作场景。
 
 「来源与更新」会在打开 App 时及运行期间每 15 分钟检查上游；发现新提交后可查看 Mode 差异，确认后更新，不会自动覆盖本地调教。Codex / Claude Code 的用户级应用自动使用标准目录，项目级才需要选择项目；DeepSeek 生成独立预设，WorkBuddy 当前只支持项目级。模型登录和复杂依赖仍由原生 Agent 配置，不能把内容导入当成全部功能已就绪。完整边界与验收见[总架构的当前状态](docs/asl-architecture-views.md#view-9--当前项目状态)。
 
@@ -205,7 +205,9 @@ npm ci --prefix desktop
 npm start --prefix desktop
 ```
 
-首次导入可自动建立本地工作环境；从本机整理时，由你正在使用的 AI 按提示词编辑本地文件，App 回读显示。本地库、ZIP 和只读示例保留为其他入口。内容仍是普通文件，不是 App 私有数据库。
+首次导入或保存首个 Mode 可建立本地工作环境；人和 Agent 经同一 CLI 校验写入，App 回读显示。内容仍是普通文件，不是 App 私有数据库。Mode 演变记录依赖本机 Git 与作者配置；没有时仍能保存，但不会伪造历史。
+
+macOS 包仅在原生构建和验收通过后列于发行页；按 CPU 架构标注，不宣称 Universal。当前包未做开发者签名或 Apple 公证，不要求关闭系统防护。Mac 随包 CLI 位于 `ASL Workspace.app/Contents/Resources/core/asl-harness`。
 
 Windows 开发者可以构建自带核心的便携文件夹，接收方无需手动安装 Python。请保留整个输出文件夹，不要单独拷贝 exe；这是未签名预览版，不是安装包。以下命令在仓库根目录的 PowerShell 中执行，输出目录必须不存在：
 
@@ -279,7 +281,7 @@ MCP、命令、环境变量名称或必要宿主插件由责任 Skill 按需声�
 
 ### 场景与能力的显式关系
 
-Mode 只保存 Skill 根。Harness 解析依赖闭包，检查不存在的引用与循环，并生成当前能力地图。删除或替换 Skill 前，可以看见它影响哪些 Mode。
+Mode 保存 Skill 根、可选分类和技能协作组织，`MODE.md` 可包含多种 Mermaid 图。Harness 解析依赖闭包，拒绝缺失引用与技能硬依赖循环；协作图的分支、汇合及反馈环则可以保留，不是执行流水线。删除或替换 Skill 前，可以看见它影响哪些 Mode。
 
 ### 外部能力的本地化入口
 
@@ -460,7 +462,8 @@ Harness 只管理带有 ASL 归属记录的投影内容。如果目标路径存�
 | `environment.catalog` | 读取所选本地库的 Mode、Skill、成员关系、来源与内容指纹 |
 | `mode.files` / `skill.files` | 枚举完整包并按相对路径读取正文、协议、Mermaid 或脚本 |
 | `environment.edit` | 从 stdin 接收 JSON，预检或采用内容修改；既有内容需新鲜指纹 |
-| `environment.guide` | 读取当前库的编辑边界与兼容提示词，不启动模型 |
+| `mode.create` | 从完整技能包预览并建立首个本地 Mode；目标须不存在，采用需预览指纹 |
+| `environment.guide` | 读取当前库的整理指引与编辑边界，不启动模型 |
 | `state` | 查看 Environment、Mode、Skill、Git 与投影状态 |
 | `workspace.validate` | 校验 Environment、Skill 依赖与 Mode |
 | `workspace.view.sync` | 重建人和 Agent 共读的能力地图 |
@@ -486,6 +489,8 @@ asl-harness environment.edit --workspace <本地库> < request.json
 ```
 
 最后两条是 shell 的 stdin 重定向写法；PowerShell 可用 `Get-Content -Raw -Encoding UTF8 request.json | asl-harness environment.edit --workspace <本地库> --check`，采用时移除 `--check`。`request.json` 的操作与允许字段由 `cli.describe.editOperations` 生成；常用的 `mode.save` 管成员、范式与正文，`skill.file.save` 管已有包文件。移出成员只解除引用，归档不等于删除源文件。
+
+没有工作库时，App 可从普通完整 Skill 包创建首个 Mode，不依赖 Agent 登录。Agent 使用 `mode.create --target <新库> --check`，JSON 字段读取 `cli.describe.createRequest`；通过后用同一请求和 `--expected <预览指纹>` 采用。正文、脚本与资料保持完整，必要来源只补在导入副本；已有库的新 Mode 仍使用 `environment.edit`。
 
 除 `--help` 外，命令结果和参数错误均为 UTF-8 JSON：成功 `ok: true` / 退出码 0；失败 `ok: false, error: {code, message, details?}` / 退出码 2。坏图会返回文件、图序号、起始行和修正动作；Agent 读取反馈后改同一草稿并重新提交。过期指纹须重读，不可覆盖新内容。二进制与超过 1 MB 的文件列为不可文本编辑。
 

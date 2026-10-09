@@ -147,7 +147,7 @@ spec:
             label: Verified material
 ```
 
-Every Skill has an explicit place. Shared research does not need an edge to every node. Humans and Agents edit the same `mode.yaml`; the App validates and renders it. See [Architecture View 6](docs/asl-architecture-views.md) for the contract and current implementation.
+Every Skill has an explicit place. Shared research does not need an edge to every node. Membership and categories live in `mode.yaml`; authored Mermaid diagrams live in `MODE.md` and take precedence over generated YAML relationship views. Humans and Agents use the same CLI write gate. See [Architecture View 6](docs/asl-architecture-views.md) for the contract and current implementation.
 
 ## From a Tool Collection to a Living Work Environment
 
@@ -185,13 +185,13 @@ Over time, the Environment becomes more like its owner: it retains useful judgme
 
 ### Desktop preview
 
-[Download for Windows](https://github.com/qihangzhang-272/asl-harness/releases/download/app-v0.5.11/ASL-Workspace-0.5.11-Windows-x64.zip) · [Release notes and checksums](https://github.com/qihangzhang-272/asl-harness/releases/tag/app-v0.5.11)
+[Download for Windows](https://github.com/qihangzhang-272/asl-harness/releases/download/app-v0.5.12/ASL-Workspace-0.5.12-Windows-x64.zip) · [Platform downloads and checksums](https://github.com/qihangzhang-272/asl-harness/releases/tag/app-v0.5.12) · [App with published Skills](https://github.com/qihangzhang-272/agent-skill-library/releases)
 
 No Python or Node.js installation is needed. Right-click the downloaded ZIP → **Extract All** → open the `ASL Workspace` folder → double-click **`ASL Workspace.exe`**. Keep the complete folder together. GitHub's automatically generated `Source code` archives are not the desktop App.
 
 This is an unsigned Windows x64 preview, not an installer. Windows may show an unknown-publisher warning. Administrator access and disabling system protection are not required. Download only from this repository's Releases and check the accompanying SHA-256.
 
-Start from this computer by copying an organizing prompt to the AI you already use. It edits local Mode files around your work purposes; the App does not launch an AI in the background. Alternatively, import shared Modes from [Agent Skill Library](https://github.com/qihangzhang-272/agent-skill-library) or another ASL-compatible repository. A Mode is a work context, not a fixed persona; one person can use several.
+Start from this computer by choosing complete Skills and building a Mode on the canvas; no Agent installation is required. From a repository preview, organize Skills one by one into a new or existing Mode. Your current Agent can use the same organization guidance through `cli.describe` and `environment.guide`; the App does not autonomously run AI in the background. Shared Mode packages remain available from [Agent Skill Library](https://github.com/qihangzhang-272/agent-skill-library).
 
 Sources & Updates checks upstream when the App opens and every 15 minutes while running. Review Mode differences before updating; local changes are not silently overwritten. Codex and Claude Code use standard user-level directories by default; only project-level application needs a project folder. DeepSeek receives an independent preset; WorkBuddy currently supports project scope only. Native Agents still handle authentication and complex dependencies: importing content does not prove it is ready to run. See the [architecture status](docs/asl-architecture-views.md#view-9--当前项目状态) for verified scope and remaining work.
 
@@ -205,7 +205,9 @@ npm ci --prefix desktop
 npm start --prefix desktop
 ```
 
-The first shared Mode import can create a local environment automatically. For local organization, your existing AI edits files using the supplied prompt, and the App reads them back. Existing local environments, ZIP packages, and a read-only example remain available. Content stays in ordinary files, not an App-private database.
+The first import or first Mode save can create a local environment. Humans and Agents share the validated CLI write boundary, and the App reads the result. Content stays in ordinary files, not an App-private database. Evolution history requires local Git and author configuration; saving without them does not fabricate history.
+
+macOS packages are listed only after native build and acceptance. The CPU architecture is explicit, not Universal. They are not publisher-signed or Apple-notarized; disabling system protection is not required. The bundled CLI is `ASL Workspace.app/Contents/Resources/core/asl-harness`.
 
 Windows developers can build a portable folder with the Python core included. Keep the complete folder together; the exe alone is not portable. This is an unsigned preview, not an installer. Run these commands in PowerShell from the repository root, using a new output directory:
 
@@ -279,7 +281,7 @@ MCP servers, commands, environment variable names, or required Host plugins are 
 
 ### Explicit relationships between contexts and capabilities
 
-A Mode stores only Skill roots. Harness resolves the dependency closure, rejects missing references and cycles, and generates the current capability map. Before deleting or replacing a Skill, you can see which Modes depend on it.
+A Mode stores Skill roots, optional categories and Skill collaboration organization; `MODE.md` can contain multiple Mermaid diagram types. Harness rejects missing references and cycles in hard Skill dependencies. Branches, joins and feedback loops in collaboration diagrams remain valid: they are not mandatory execution pipelines. Before deleting or replacing a Skill, you can see which Modes depend on it.
 
 ### A local entry path for external capabilities
 
@@ -458,6 +460,10 @@ Actual Mermaid rendering requires the bundled renderer; a Python-only install is
 
 | Command | Purpose |
 | --- | --- |
+| `cli.describe` | Read actual command, edit and first-Mode request fields |
+| `environment.catalog` / `mode.files` / `skill.files` | Read local content, complete package files and fingerprints |
+| `environment.edit` | Submit guarded Mode or explicitly authorized Skill edits via JSON stdin |
+| `mode.create` | Preview a first Mode from complete Skill packages, then adopt with the preview fingerprint into a new target |
 | `state` | Inspect Environment, Mode, Skill, Git, and projection state |
 | `workspace.validate` | Validate Environment structure, Skill dependencies, and Modes |
 | `workspace.view.sync` | Rebuild the human- and Agent-readable capability map |
@@ -466,6 +472,8 @@ Actual Mermaid rendering requires the bundled renderer; a Python-only install is
 | `host.verify` | Check projection integrity and source drift |
 | `deepseek.preset.export` | Export a Mode Preset from a known-good base |
 | `deepseek.preset.verify` | Validate a DeepSeek Agent Preset |
+
+No Agent login is needed to create the first Mode in the App. Agents use `mode.create --target <new-library> --check`, with JSON fields from `cli.describe.createRequest`, then submit the same request with `--expected <preview-fingerprint>`. Full Skill instructions, scripts and material are preserved; necessary provenance is added only to the adopted copy. New Modes in an existing library still use `environment.edit`.
 
 </details>
 

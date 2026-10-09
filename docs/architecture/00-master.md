@@ -10,7 +10,7 @@
 %%{init: {"theme":"base","themeVariables":{"fontFamily":"Microsoft YaHei","fontSize":"16px","clusterBkg":"#f8fafc","clusterBorder":"#cbd5e1"},"flowchart":{"nodeSpacing":35,"rankSpacing":55,"curve":"basis"}}}%%
 flowchart TB
     USER["用户<br/>管理自己的工作环境，继续用熟悉的 Agent"]
-    APP["独立 ASL App · Windows 便携版<br/>本机整理提示词 / 模式 / 技能图 / 编辑 / 导入 / 更新 / Agent 配置<br/>本地文件可读写；完整跨机运行验收待补"]
+    APP["独立 ASL App · Windows 便携版<br/>模式 / 技能图 / 偏好与记录 / 导入 / 更新 / Agent 配置<br/>本地文件可读写；完整跨机运行验收待补"]
 
     subgraph SUPPLY["外部供给"]
         SOURCES["GitHub / 公开插件目录 / KOL 推荐<br/>Agent Skill Library 装填版 / 他人环境包"]
@@ -18,12 +18,12 @@ flowchart TB
 
     subgraph MANAGE["Harness 管理机制 · 不是第二个 Agent"]
         INTAKE["导入与安装协调 · 部分实现<br/>本机 / GitHub 发现 → 添加到 Mode<br/>配套内容提示；不自动安装或拆分"]
-        UPSTREAM["公共库浏览与来源追踪<br/>公共项目以云端为准，连接即可浏览<br/>解析缓存不是工作副本；采用后本地 Mode 独立演进"]
+        UPSTREAM["公共库浏览与来源追踪<br/>有界只读快照支持续读，刷新失败保留旧内容<br/>云端供比较；采用后本地 Mode 独立演进"]
         PORTABLE["可迁移包 · 内容往返已实现<br/>Mode + 完整 Skill + 指纹清单<br/>运行依赖安装与连接待补"]
-        CORE["App / Agent 共用 Harness CLI<br/>契约发现 / 完整文件读取 / 隔离候选验收<br/>实际渲染、协作写锁、指纹与异常回滚"]
+        CORE["App / Agent 共用 Harness CLI<br/>只读隔离坏条目并报告；正式写入严格校验<br/>实际渲染、协作写锁、指纹与异常回滚"]
         EDIT["内容管理 · 验收范围见 View 9<br/>库路径 + Mode ID 隔离身份；列表可返回<br/>技能栏 + 画布原位编辑 / 独立文档标签<br/>Mode 创建 / 修改 / 复制 / 归档；完整包文件编辑"]
-        STEWARD["当前 Agent 的环境整理<br/>通过 CLI 读取、组织并提交完整 Skill / Mode<br/>失败读取定位后修正；App 不启动第二个模型"]
-        SETUP["本机配置交接 · 代码已有<br/>Mode + 原始 Skill + 本机缺项<br/>启动原生 Claude / Codex，结束后复查"]
+        STEWARD["当前 Agent 的环境整理<br/>通过 CLI 组织 Mode；修改 Skill 先确认<br/>失败读取定位后修正；App 不启动第二个模型"]
+        SETUP["本机配置与运行检查 · 代码已有<br/>保留配置告警；读取 SKILL / SOURCE 运行要求<br/>用户可交回原生 Agent；配置不等于实测通过"]
         LOCAL["本机发现 · 已验证<br/>标准技能 / MCP 位置 + 已登记项目<br/>Mode 同名与同源分开；不扫描硬盘"]
         MCPEDIT["原生 MCP 管理 · 已验证<br/>Claude / Codex 用户与项目范围<br/>逐条编辑 / 停用 / 版本检查 / 备份"]
         CONNECTIONS["Agent 中的模式 · 配置级管理<br/>读取原生回执并核对实际文件<br/>查看 / 更新 / 停用；不影响非受管内容"]
@@ -34,7 +34,7 @@ flowchart TB
         ROOT["本地工作内容 · 唯一运行真源<br/>当前为开放文件，空白版与装填版同结构<br/>已有业务数据库也应开放接口，不新增数据库"]
         MODES["Mode · 工作目的与场景环境<br/>不是个人 / 职业；同一人有多个 Mode<br/>选择完整 Skill 子图，不保存固定执行顺序"]
         SKILLS["完整 Skill 包 · 已有<br/>方法 / scripts / assets / references<br/>SOURCE / 必要原生依赖说明"]
-        CONTEXT["个人边界、资料与明确反馈<br/>PROFILE / Mode 说明 / 培养区<br/>经验关联与管理界面待完善"]
+        CONTEXT["工作偏好与明确反馈 · 受控读写已有<br/>PROFILE / feedback 原文件；默认不分享<br/>经验关联与自动培养待实现"]
         MAP["Mode 技能架构 · 验收见 View 9<br/>v0.4 范式成员；完整 Skill 是节点<br/>Mermaid 原文 → 官方画板；右键添加 / 拖动连线<br/>点击节点 → 主区域技能文件 + 右上悬浮原图<br/>双击原位修改 → 共用渲染门控；失败保留旧文件"]
         ROOT --> MODES
         MODES -->|范式或通用能力归属覆盖全部成员| MAP
@@ -97,7 +97,7 @@ flowchart TB
     SETUP -->|安装 / 授权 / 实测仍由原生 Agent| RUNTIME
     RUNTIME -.本机复查，不以会话退出冒充通过.-> SETUP
     MAP -.校验后呈现；本地变更刷新.-> APP
-    APP -.保留提示词交接；Agent 也可直接使用 CLI.-> STEWARD
+    APP -.可选整理目标；原生会话使用同一 CLI.-> STEWARD
     SOURCES -->|选择采用| INTAKE
     SOURCES -.发现与比较.-> STEWARD
     INTAKE -->|完整候选内容与绑定请求| CORE
@@ -125,14 +125,16 @@ flowchart TB
     classDef generated fill:#f3f4f6,stroke:#6b7280,color:#1f2937,stroke-dasharray:4 3;
     classDef external fill:#f5f3ff,stroke:#7c3aed,color:#4c1d95;
     class USER,HOST,ROOT,MODES locked;
-    class SKILLS,CORE,EDIT,STEWARD,CASE,SETUP,UPSTREAM,LOCAL,MCPEDIT,CONNECTIONS done;
-    class APP,INTAKE,PORTABLE,LEARN,CONTEXT,MODEL,ADAPTER,DSH,CC,CX,WB,FUTURE,HOOK,DSH_UI pending;
+    class SKILLS,CORE,EDIT,STEWARD,CASE,SETUP,UPSTREAM,LOCAL,MCPEDIT,CONNECTIONS,CONTEXT done;
+    class APP,INTAKE,PORTABLE,LEARN,MODEL,ADAPTER,DSH,CC,CX,WB,FUTURE,HOOK,DSH_UI pending;
     class PROJECTION,MAP generated;
     class SOURCES,RUNTIME external;
 
 ```
 
 **总图中的四个循环：**工作循环产出结果；安装循环把外部能力放进指定 Mode；迁移循环把同一环境交给另一台机器或另一种 Agent；培养循环把明确反馈变成适用范围更清楚的能力。四者互相连接，但不要求每次任务都走一遍。
+
+当前开发实现已把 `PROFILE.md` 与 `feedback/*.md` 接入 App 的“偏好与记录”和同一 CLI 门控；这只提供阅读、保存与反馈归档，不自动召回经验、修改 Skill 或触发模型。培养循环仍是目标。实现与已发行桌面的范围分别以[View 9](../asl-architecture-views.md#view-9--当前项目状态)为准，本图不表示本轮已发布。
 
 **不可混淆的边界：**
 
@@ -141,6 +143,7 @@ flowchart TB
 - 业务方法由完整本地 Skill 承载；插件执行代码、模型服务、登录与沙箱沿用宿主，不把基础设施硬包成伪业务 Skill。
 - App 管理内容与接入，不替 Host 回答用户或调度业务。语义冲突归 Host 与具体 Skill，确定性结构错误才交 CLI / Hook。
 - 公共库以云端为真源，可只浏览、不采用；所有采用到本地的 Mode 以本地持续使用和培养的版本为唯一真源，不是应当追平上游的镜像。来源记录只帮助比较与选择吸收，不授予自动覆盖权。宿主投影可重建；分享包或经授权发布的仓库可以传播 Mode，但不改变本地工作版本的真源地位。
+- 已读取的公开仓库可从有界持久快照续读；快照不是可编辑工作库，也不保证最新或覆盖全部来源。目录阅读返回有效条目和坏条目的定位，关联坏依赖的 Mode 不冒充正常；正式写入、导出与投影不使用只读容错放行。
 - “一切皆市场”的首期实现是**可分享的环境与能力目录**，复用 GitHub、已有插件市场和来源记录，不先造交易平台、中心账号或积分。
 - Mode、Model 分开：前者决定工作环境，后者决定哪个模型做事。切换 Mode 可以关联模型偏好，但不能假装所有宿主支持同一模型接口。
 
