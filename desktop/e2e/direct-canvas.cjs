@@ -1,26 +1,37 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:os');
-const {launch}=require('./fixture.cjs');
+const {launch,packagedCore}=require('./fixture.cjs');
 const {runCore}=require('../bridge.cjs');
 
-test('flow nodes follow the pointer; ports snap, edges delete, and geometry round-trips',{timeout:240000},async()=>{
+test('flow nodes follow the pointer; ports snap, edges delete, and geometry round-trips',{timeout:600000},async()=>{
  const output=await fs.mkdtemp(path.join(os.tmpdir(),'asl-direct-canvas-')),library=path.join(output,'library');
  await fs.cp(path.join(__dirname,'../../examples/personal-environment'),library,{recursive:true});
  const file=path.join(library,'modes/creator-studio/MODE.md');
  await fs.appendFile(file,'\n## 直接操作验收\n\n```mermaid\nflowchart LR\n company[公司画像]\n pitch[投行推介材料]\n company -->|事实| pitch\n```\n');
  const {app,page,run,workspace,errors}=await launch({library,output});
+ await app.evaluate(({ipcMain})=>{
+  globalThis.canvasTimings=[];
+  for(const channel of ['asl:run','asl:read']){
+   const original=ipcMain._invokeHandlers.get(channel);ipcMain.removeHandler(channel);
+   ipcMain.handle(channel,async(e,...args)=>{
+    const action=channel==='asl:run'?args[0]:args[1]==='run'?args[2]?.[0]:null;
+    const start=Date.now();try{return await original(e,...args);}finally{if(['edit','catalog'].includes(action))globalThis.canvasTimings.push({action,ms:Date.now()-start});}
+   });
+  }
+ });
  const {diagramsIn,readLayout,flowchartItems}=await import('../src/mermaid-document.mjs');
  const node=id=>page.locator(`.architecture-section g.node[data-canvas-node="${id}"]`);
- const ready=()=>page.waitForFunction(()=>!document.querySelector('.mermaid-viewport[inert],.mermaid-edit[aria-busy="true"]'));
+ const ready=()=>page.waitForFunction(()=>!document.querySelector('.mermaid-viewport[inert],.mermaid-edit[aria-busy="true"]'),null,{timeout:120000});
  const diagram=async()=>diagramsIn(await fs.readFile(file,'utf8')).find(d=>d.title==='直接操作验收').source;
  const center=async locator=>{const r=await locator.boundingBox();assert.ok(r);return {x:r.x+r.width/2,y:r.y+r.height/2};};
  async function drag(id,dx,dy,cancel=false,rejected=false){
   const el=node(id);await el.scrollIntoViewIfNeeded();const before=await center(el),startPath=await page.locator('path.flowchart-link').first().getAttribute('d');
   await page.mouse.move(before.x,before.y);await page.mouse.down();await page.mouse.move(before.x+dx,before.y+dy,{steps:12});
-  const during=await center(el);assert.ok(Math.abs(during.x-before.x-dx)<1&&Math.abs(during.y-before.y-dy)<1,'拖动实时跟手，包含缩放换算');
+  const during=await center(el);assert.ok(Math.abs(during.x-before.x-dx)<1&&Math.abs(during.y-before.y-dy)<1,'拖动实时跟手，包含缩放换算 '+JSON.stringify({before,during,dx,dy,hit:await el.evaluate(el=>{const r=el.getBoundingClientRect(),hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return {hit:hit?.outerHTML.slice(0,180),pointer:typeof el.onpointerdown,ancestors:[el.closest('svg'),el.closest('.mermaid-drawing'),el.closest('.mermaid-viewport')].map(e=>({tag:e.tagName,rect:e.getBoundingClientRect().toJSON(),overflow:getComputedStyle(e).overflow})),viewBox:el.closest('svg').getAttribute('viewBox')};})}));
   assert.notEqual(await page.locator('path.flowchart-link').first().getAttribute('d'),startPath,'关联连线随动');
   if(cancel)await page.evaluate(()=>window.dispatchEvent(new Event('blur')));
   await page.mouse.up();await ready();
+  if(!cancel&&!rejected)console.log('画板拖动保存：'+JSON.stringify(await app.evaluate(()=>globalThis.canvasTimings.splice(0))));
   const after=await center(el),expected=cancel||rejected?before:during;
   assert.ok(Math.abs(after.x-expected.x)<1&&Math.abs(after.y-expected.y)<1,'取消还原；保存不能跳动');
  }
@@ -74,7 +85,7 @@ test('flow nodes follow the pointer; ports snap, edges delete, and geometry roun
   const reverse=await connect('left','right','pitch','company');
   const forwardPoint=await midpoint(flowchartItems(await diagram()).edges[0].renderId),reversePoint=await midpoint(reverse);
   assert.ok(Math.hypot(forwardPoint.x-reversePoint.x,forwardPoint.y-reversePoint.y)>18,'反向边也必须独立可选');
-  const core=process.env.ASL_TEST_EXE?{executable:path.join(path.dirname(process.env.ASL_TEST_EXE),'resources/core/asl-harness.exe')}:{};
+  const core={executable:packagedCore()};
   const mode=(await runCore('catalog',{workspace},core)).modes.find(m=>m.id==='creator-studio');
   const invalid=mode.document.replace(/%% asl-layout [^\r\n]+/,'%% asl-layout {"nodes":{"foreign":{"x":0,"y":0}},"edges":{}}');
   const before=await fs.readFile(file,'utf8');

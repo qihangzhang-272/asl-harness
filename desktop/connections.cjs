@@ -48,11 +48,12 @@ async function connections(inventory, core) {
           : await core('verify', {...values, host: row.host, project: row.project});
       const changed = report.needsSync || report.warnings?.length;
       results.push({...row, id, title: mode.title, skills: mode.skills, status: report.conflicts?.length ? 'attention' : changed ? 'outdated' : 'configured',
-        issues: report.conflicts || [], discovery: report.discovery || 'native-directory'});
+        issues: [...(report.conflicts || []), ...(report.warnings || [])], discovery: report.discovery || 'native-directory'});
     } catch (error) {
       const upgrade = row.scope === 'preset' && error.code === 'DEEPSEEK_PRESET_UPGRADE_REQUIRED';
       results.push({...row, id, title: mode?.title || row.mode, skills: mode?.skills || [],
-        status: upgrade ? 'outdated' : 'attention', ...(upgrade && {repair:'upgrade'}), issues: [error.message]});
+        status: upgrade ? 'outdated' : 'attention', ...(upgrade && {repair:'upgrade'}), issues: [error.message],
+        diagnostic: {code:error.code, message:error.message, details:error.details}});
     }
   }
   return results;

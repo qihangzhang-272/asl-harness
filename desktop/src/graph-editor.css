@@ -18,7 +18,8 @@
 .graph-tabs .graph-tab-add { color: var(--brand, #3978e8); padding: 4px 7px; }
 
 /* Skill rail and canvas; editing belongs to the selected object, not a third pane. */
-.graph-workbench { display: grid; grid-template-columns: 240px minmax(0, 1fr); grid-template-rows: minmax(0,1fr); gap: 10px; height: clamp(460px, 60vh, 720px); min-height: 0; overflow: hidden; }
+.graph-workbench { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: minmax(0,1fr); gap: 10px; height: clamp(460px, 60vh, 720px); min-height: 0; overflow: hidden; }
+.graph-pane-skills { position:relative; width:var(--panel-width,240px); }
 .graph-pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; border: 1px solid var(--line, #dbe4f2); border-radius: 11px; background: var(--surface, #fff); box-shadow: inset 0 1px 0 #fff, 0 1px 2px #22324a0a, 0 8px 20px -12px #22324a1f; overflow: hidden; }
 .graph-pane-heading { display: flex; flex-shrink: 0; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 11px 7px; border-bottom: 1px solid var(--line-soft, #edf2fc); }
 .graph-pane-heading > span { font-size: 12px; font-weight: 600; color: var(--ink, #22324a); }
@@ -59,11 +60,7 @@
 .graph-status.has-error { color: var(--danger, #b0392b); }
 
 @media (max-width: 1120px) {
-  .graph-workbench { grid-template-columns: 220px minmax(0, 1fr); gap: 8px; }
-}
-/* The skill rail remains scrollable in narrow windows. */
-@media (max-width: 1000px) {
-  .graph-workbench { grid-template-columns: 204px minmax(0, 1fr); gap: 8px; }
+  .graph-workbench { gap: 8px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .graph-skill, .graph-search { transition: none; }

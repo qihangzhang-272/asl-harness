@@ -1,13 +1,13 @@
 import React,{useMemo,useRef,useState,useEffect} from 'react';
 import {createPortal} from 'react-dom';
-import {ArrowUpRight,Code2,Link2,Pencil,Plus,Search,Trash2,X} from 'lucide-react';
+import {ArrowUpRight,Code2,Link2,Pencil,Plus,Search,Trash2,X,Undo2,Redo2} from 'lucide-react';
 import MermaidView from './MermaidView.jsx';
 import {editFlowchart,flowchartItems,diagramTemplates} from './mermaid-document.mjs';
 import {structureItems,editStructure} from './mermaid-structure.mjs';
 import {renderDiagram} from './mermaid-render.mjs';
 
 // Every visual edit patches the Markdown through the existing render and save gate.
-export default function MermaidEdit({source='',onChange,onCreate,nodes=[],candidates=nodes,onNode,onSource,compact=false,selectedId,onExpand,expanded,empty=false}) {
+export default function MermaidEdit({source='',onChange,onCreate,onUndo,onRedo,nodes=[],candidates=nodes,onNode,onSource,compact=false,selectedId,onExpand,expanded,empty=false}) {
   const items=useMemo(()=>flowchartItems(source),[source]);
   const structure=useMemo(()=>structureItems(source),[source]);
   const [target,setTarget]=useState(null),[from,setFrom]=useState(''),[query,setQuery]=useState('');
@@ -34,6 +34,13 @@ export default function MermaidEdit({source='',onChange,onCreate,nodes=[],candid
       if(!active.current)return false;
       setTarget(null);setFrom('');return true;
     }catch(e){if(active.current)setError(e.message);return false;}
+    finally{pending.current=false;if(active.current)setBusy(false);}
+  }
+  async function restore(action){
+    if(pending.current)return;
+    pending.current=true;setBusy(true);setError('');
+    try{await action();if(active.current)setTarget(null);}
+    catch(error){if(active.current)setError(error.message);}
     finally{pending.current=false;if(active.current)setBusy(false);}
   }
   function open(item,event){
@@ -66,9 +73,12 @@ export default function MermaidEdit({source='',onChange,onCreate,nodes=[],candid
   return <div className={`mermaid-edit ${compact?'is-compact':''}`} aria-busy={busy} onContextMenu={event=>{
     if(!event.target.closest('button,input,textarea,g.node,[data-asl-edit],.flowchart-link,.edgeLabel,.mermaid-edge-hit,.mermaid-label-editor'))open({kind:'canvas'},event);
   }}>
+    {busy&&<span className="mermaid-save-status" role="status">正在保存…</span>}
     {from&&<div className="mermaid-connect-status">选择目标节点<button aria-label="取消连接" onClick={()=>setFrom('')}><X size={14}/></button></div>}
     {empty?<div className="mermaid-viewport" aria-label="空白画板"/>:<MermaidView source={source} nodes={nodes} onNode={onNode} items={items} structure={structure} onElement={select} compact={compact} selectedId={selectedId} onExpand={onExpand} expanded={expanded} disabled={busy} onConnect={(from,to,geometry)=>change({kind:'connect',from,to,...geometry})}/>}
     {target&&createPortal(<div ref={menu} className="canvas-menu" role="menu" aria-label="画板菜单" style={{left:target.x,top:target.y,maxHeight:`calc(100vh - ${target.y+8}px)`}}>
+      {onUndo&&<button role="menuitem" disabled={busy} onClick={()=>restore(onUndo)}><Undo2 size={15}/>撤销</button>}
+      {onRedo&&<button role="menuitem" disabled={busy} onClick={()=>restore(onRedo)}><Redo2 size={15}/>重做</button>}
       {target.kind==='templates'?<>
         <button role="menuitem" onClick={()=>setTarget({...target,kind:'canvas'})}>返回</button>
         {diagramTemplates.map(t=><button role="menuitem" key={t.id} disabled={busy} onClick={()=>change({kind:'template',id:t.id})}>{t.title}</button>)}

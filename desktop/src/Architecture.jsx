@@ -6,6 +6,7 @@ import {modeDiagramDocument,sharedDiagram,skillNodes,diagramBlock} from './mode-
 import {diagramForMode} from './presentation.mjs';
 import {diagramsIn,replaceDiagram,appendDiagramTemplate} from './mermaid-document.mjs';
 import './graph-editor.css';
+import {useViewState} from './useViewState.jsx';
 
 const icons={Box,Layers3,Puzzle,Search,Send,Palette,PenLine,ChartNoAxesCombined,PanelsTopLeft};
 export function MapIcon({value='Box',color='#007AFF',size=19}) {
@@ -19,8 +20,9 @@ export function MapIcon({value='Box',color='#007AFF',size=19}) {
 }
 
 // Render authored Mermaid verbatim; materialize existing v0.4 relations only on an explicit edit.
-export function ArchitectureMap({mode,skills,onSkill,onEdit,onSaveDocument,initialScope='',availableSkills=skills,compact=false,selectedId}) {
-  const [expanded,setExpanded]=useState(false),[chosen,setChosen]=useState(initialScope);
+export function ArchitectureMap({mode,skills,onSkill,onEdit,onSaveDocument,historyFor,initialScope='',availableSkills=skills,compact=false,selectedId}) {
+  const [expanded,setExpanded]=useState(false);
+  const [chosen,setChosen]=useViewState(`diagram:${mode.path||mode.id}:${initialScope}`,initialScope);
   const document=useMemo(()=>modeDiagramDocument(mode,skills),[mode,skills]);
   const authored=useMemo(()=>diagramsIn(document||''),[document]);
   const paradigms=mode.architecture?.paradigms||[];
@@ -33,6 +35,7 @@ export function ArchitectureMap({mode,skills,onSkill,onEdit,onSaveDocument,initi
   const nodes=documentDiagram||scopeId==='shared'?skillNodes(skills.filter(s=>mode.skills.includes(s.id)),mode.architecture?.nodes):graph?.nodes;
   const placement=scope?.id||(scopeId==='shared'?'shared':null);
   const candidates=skillNodes(placement?availableSkills:skills,mode.architecture?.nodes);
+  const history=historyFor?.(mode);
   useEffect(()=>{
     const escape=event=>{if(event.key==='Escape')setExpanded(false);};
     window.addEventListener('keydown',escape);
@@ -50,7 +53,7 @@ export function ArchitectureMap({mode,skills,onSkill,onEdit,onSaveDocument,initi
       {tabs.map(p=><button role="tab" aria-selected={scopeId===p.id} className={scopeId===p.id?'active':''} key={p.id} onClick={()=>setChosen(p.id)}>{p.title}</button>)}
       {!!mode.architecture?.shared?.length&&!tabs.some(p=>p.id==='shared')&&<button role="tab" aria-selected={scopeId==='shared'} className={scopeId==='shared'?'active':''} onClick={()=>setChosen('shared')}>通用能力</button>}
     </div>}
-    {documentDiagram||graph?.nodes.length||scopeId==='shared'&&mode.architecture?.shared?.length?(onSaveDocument?<MermaidEdit key={scopeId} source={source} nodes={nodes} candidates={candidates} compact={compact} selectedId={selectedId} onNode={selectSkill} onSource={edit} onCreate={createDiagram} onExpand={()=>setExpanded(!expanded)} expanded={expanded} onChange={(next,skill)=>onSaveDocument(mode,documentDiagram?replaceDiagram(document,tabs.findIndex(p=>p.id===scopeId),next):document+diagramBlock('通用能力',next),{skill,placement})}/>:<MermaidView key={scopeId} source={source} nodes={nodes} onNode={selectSkill} compact={compact} selectedId={selectedId} onExpand={()=>setExpanded(!expanded)} expanded={expanded}/>)
+    {documentDiagram||graph?.nodes.length||scopeId==='shared'&&mode.architecture?.shared?.length?(onSaveDocument?<MermaidEdit key={scopeId} source={source} nodes={nodes} candidates={candidates} compact={compact} selectedId={selectedId} onNode={selectSkill} onSource={edit} onCreate={createDiagram} onExpand={()=>setExpanded(!expanded)} expanded={expanded} onUndo={history?.past.length?()=>onSaveDocument(mode,'',{history:'undo'}):null} onRedo={history?.future.length?()=>onSaveDocument(mode,'',{history:'redo'}):null} onChange={(next,skill)=>onSaveDocument(mode,documentDiagram?replaceDiagram(document,tabs.findIndex(p=>p.id===scopeId),next):document+diagramBlock('通用能力',next),{skill,placement})}/>:<MermaidView key={scopeId} source={source} nodes={nodes} onNode={selectSkill} compact={compact} selectedId={selectedId} onExpand={()=>setExpanded(!expanded)} expanded={expanded}/>)
       :onSaveDocument?<MermaidEdit empty onCreate={createDiagram} onSource={edit}/>
       :<div className="architecture-empty"><Puzzle size={28}/><p>{skills.length?'尚未定义工作范式':'尚未添加技能'}</p>{onEdit&&<button onClick={edit}>编辑工作范式</button>}</div>}
   </section>;

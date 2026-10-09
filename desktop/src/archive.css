@@ -1,0 +1,4 @@
+.archive-browser .package-tree button small{margin-left:auto;flex-shrink:0;font-size:11px}
+.archive-browser .package-rendered{flex:1}
+.archive-file-picker{display:flex;align-items:center;gap:6px;min-width:0;max-width:65%}
+.archive-file-picker select{min-width:0;max-width:100%;font-size:12px}

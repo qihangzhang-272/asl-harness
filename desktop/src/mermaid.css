@@ -13,6 +13,8 @@
 .diagram-edit-toolbar{display:flex;justify-content:space-between;gap:16px;align-items:center;margin-bottom:16px}
 .diagram-edit-toolbar .tabs{overflow:auto;max-width:85%}
 .mermaid-edit{position:relative;min-height:320px}
+.mermaid-save-status{position:absolute;top:8px;right:12px;z-index:2;padding:5px 10px;border-radius:8px;color:var(--brand);background:var(--brand-soft);font-size:12px}
+.mermaid-edit[aria-busy=true] .mermaid-viewport{cursor:progress}
 .mermaid-edit .mermaid-view{min-height:320px}
 .mermaid-edit .flowchart-link[role=button]{pointer-events:stroke;cursor:pointer}
 .mermaid-edge-hit{fill:none!important;stroke:transparent!important;stroke-width:18px!important;vector-effect:non-scaling-stroke;pointer-events:stroke!important;cursor:pointer}

@@ -13,17 +13,27 @@
 .skill-canvas-heading{min-height:80px;padding:20px 328px 20px 12px;display:flex;align-items:flex-start}
 .skill-canvas-heading h2{font-size:25px;line-height:1.45;letter-spacing:-.5px;margin:0;overflow-wrap:anywhere}
 .skill-canvas-panel{animation:canvas-content-in 260ms ease-out}
-.skill-canvas-panel .file-workbench{height:65vh;min-height:380px;grid-template-columns:180px minmax(0,1fr);border-radius:14px;background:#ffffff80}
+.skill-canvas-list-return{position:relative;width:max-content}
+.skill-canvas:has(.skill-canvas-list-return) .skill-canvas-heading{padding-right:12px;min-height:64px}
+.skill-canvas:has(.skill-canvas-list-return) .package-document>header{padding-right:15px;min-height:58px}
+.skill-canvas:has(.skill-canvas-list-return) .package-rendered::before{display:none}
+.skill-canvas-panel .file-workbench{height:calc(100vh - 245px);min-height:380px;border-radius:14px;background:#ffffff80}
 .skill-canvas-panel .package-document{min-width:0}
 .skill-canvas-panel .dialog-actions{position:static;padding:12px 0;margin:0;background:transparent}
 .mode-page:has(.skill-canvas.is-focused)>.page-heading,.mode-page:has(.skill-canvas.is-focused)>.mode-installations,.mode-page:has(.skill-canvas.is-focused)>.mode-origin,.mode-page:has(.skill-canvas.is-focused)>details,.mode-page:has(.skill-canvas.is-focused)>.mode-toolbar{display:none}
-.skill-canvas-panel .file-workbench{height:calc(100vh - 245px)}
 .skill-canvas-panel .package-document>header{padding-right:320px;min-height:58px}
 .skill-canvas-panel .package-rendered::before{content:'';float:right;width:300px;height:88px;pointer-events:none}
 .skill-canvas-panel .package-tree{background:#f3f7ffab}
 .skill-canvas-panel .package-tree button.active{background:#e3eeff;color:#245fb4}
 .skill-library:has(.skill-canvas.is-focused){grid-template-columns:minmax(0,1fr)}
-.skill-library:has(.skill-canvas.is-focused)>.skill-library-tree{display:none}
+.skill-library:has(.skill-canvas.is-focused)>.skill-library-rail{display:none}
 @keyframes canvas-content-in{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
-@container(max-width:640px){.skill-canvas.is-focused .skill-canvas-graph{width:240px}.skill-canvas-heading{padding-right:258px;padding-left:0}.skill-canvas-heading h2{font-size:20px}.skill-canvas-panel .file-workbench{grid-template-columns:140px minmax(0,1fr)}.skill-canvas-panel .package-document>header{padding-right:250px;flex-wrap:wrap}.skill-canvas-panel .package-rendered::before{width:230px}}
+@container(max-width:880px){
+  .skill-canvas.is-focused .skill-canvas-graph{width:180px}
+  .skill-canvas.is-focused .mermaid-viewport{height:104px;min-height:104px;max-height:104px}
+  .skill-canvas-heading{padding-right:196px;padding-left:0}
+  .skill-canvas-heading h2{font-size:20px}
+  .skill-canvas-panel .package-document>header{padding:76px 15px 10px;flex-wrap:wrap}
+  .skill-canvas-panel .package-rendered::before{display:none}
+}
 @media(prefers-reduced-motion:reduce){.skill-canvas-graph{transition:none}.skill-canvas-panel{animation:none}}

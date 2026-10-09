@@ -1,4 +1,4 @@
-import React,{memo,useEffect,useMemo,useRef,useState} from 'react';
+import React,{memo,useEffect,useLayoutEffect,useMemo,useRef,useState} from 'react';
 import {Minus,Plus,Scan,Maximize2,Minimize2} from 'lucide-react';
 import {renderDiagram} from './mermaid-render.mjs';
 import {editRenderedLabel} from './mermaid-inline.mjs';
@@ -7,16 +7,18 @@ import {structureElements,attachStructureDrag} from './mermaid-structure-dom.mjs
 import {diagramNodes,flowCanvas,attachFlowDrag} from './mermaid-canvas.mjs';
 import {readLayout} from './mermaid-document.mjs';
 import './mermaid.css';
+import {captureDiagram,animateDiagram} from './diagram-evolution.mjs';
 
-export default memo(function MermaidView({source,onNode,nodes=[],onError,items,structure,onElement,onConnect,compact=false,selectedId,onExpand,expanded=false,disabled=false}) {
+export default memo(function MermaidView({source,onNode,nodes=[],onError,items,structure,onElement,onConnect,compact=false,selectedId,onExpand,expanded=false,disabled=false,evolve=false,renderedDiagram}) {
   const [svg,setSvg]=useState(''),[error,setError]=useState(''),[scale,setScale]=useState(null);
   const markup=useMemo(()=>({__html:svg}),[svg]);
   const [renderedSource,setRenderedSource]=useState('');
-  const [naturalWidth,setNaturalWidth]=useState(0),[naturalHeight,setNaturalHeight]=useState(0),[availableWidth,setAvailableWidth]=useState(0);
-  const fit=Math.min(1,(availableWidth-32)/naturalWidth||1,compact?150/naturalHeight:Infinity);
+  const [naturalWidth,setNaturalWidth]=useState(0),[naturalHeight,setNaturalHeight]=useState(0),[availableWidth,setAvailableWidth]=useState(0),[availableHeight,setAvailableHeight]=useState(0);
+  const fit=Math.min(1,(availableWidth-32)/naturalWidth||1,compact?(availableHeight||150)/naturalHeight:Infinity);
   const zoom=compact?Math.max(.05,fit):scale==='fit'?Math.max(.15,fit):(scale??1);
   const box=useRef(null),section=useRef(null),[visible,setVisible]=useState(false);
   const camera=useRef(null),[frame,setFrame]=useState(0);
+  const previousDiagram=useRef(new Map());
   const clickTimers=useRef(new Map());
   const callbacks=useRef({});callbacks.current={onNode,onElement,onConnect,nodes};
   const bindingKey=JSON.stringify([nodes.map(n=>[n.alias,n.data.title,n.data.skill?.id]),!!onElement,!!onConnect]);
@@ -26,7 +28,8 @@ export default memo(function MermaidView({source,onNode,nodes=[],onError,items,s
   useEffect(()=>{
     if(!visible)return;
     let current=true;setError('');
-    renderDiagram(source).then(result=>{if(current){
+    (renderedDiagram?.source===source?Promise.resolve(renderedDiagram.svg):renderDiagram(source)).then(result=>{if(current){
+      if(evolve)previousDiagram.current=captureDiagram(box.current);
       const rendered=new DOMParser().parseFromString(result,'image/svg+xml').documentElement;
       // Do not recenter the paper under the pointer after a direct manipulation.
       if(camera.current)rendered.setAttribute('viewBox',camera.current);
@@ -35,13 +38,15 @@ export default memo(function MermaidView({source,onNode,nodes=[],onError,items,s
       setSvg(new XMLSerializer().serializeToString(rendered));setRenderedSource(source);
     }}).catch(e=>{if(current){setError(e.message);onError?.(e.message);}});
     return()=>{current=false;};
-  },[source,visible,frame]);
+  },[source,visible,frame,renderedDiagram,evolve]);
+  useLayoutEffect(()=>{if(evolve)animateDiagram(box.current,previousDiagram.current);},[svg,evolve]);
   useEffect(()=>{
     if(!box.current)return;
-    const observer=new ResizeObserver(entries=>setAvailableWidth(entries[0].contentRect.width));
+    const observer=new ResizeObserver(entries=>{setAvailableWidth(entries[0].contentRect.width);setAvailableHeight(entries[0].contentRect.height);});
     observer.observe(box.current);return()=>observer.disconnect();
   },[svg]);
-  useEffect(()=>{
+  useLayoutEffect(()=>{const drawing=box.current?.querySelector('svg');return()=>drawing?.dispatchEvent(new Event('asl:release-inline'));},[svg]);
+  useLayoutEffect(()=>{
     if(!box.current)return;
     // A catalog refresh can replace callbacks without changing the SVG. Do not cancel an active drag.
     const onNode=skill=>callbacks.current.onNode?.(skill);
@@ -120,6 +125,6 @@ export default memo(function MermaidView({source,onNode,nodes=[],onError,items,s
     {error?<div role="alert" className="mermaid-error"><strong>这张图需要修正</strong><details><summary>详细错误</summary><pre>{error}</pre></details></div>:null}
     {!svg&&!error&&<div role="status" className="mermaid-pending">正在绘图…</div>}
     {svg&&<><div className="mermaid-viewport" ref={box} inert={disabled||renderedSource!==source}><div className="mermaid-drawing" style={{width:`${naturalWidth*zoom}px`}} dangerouslySetInnerHTML={markup}/></div>
-      {!compact&&<div className="mermaid-tools"><button aria-label="缩小图" disabled={zoom<=.15} onClick={()=>setScale(Math.max(.15,zoom-.2))}><Minus size={15}/></button><button aria-label="适应宽度" onClick={()=>{camera.current=null;setFrame(n=>n+1);setScale('fit');}}><Scan size={15}/></button><button aria-label="放大图" disabled={zoom>=3} onClick={()=>setScale(Math.min(3,zoom+.2))}><Plus size={15}/></button>{onExpand&&<button aria-label={expanded?'退出全屏画板':'全屏编辑画板'} onClick={onExpand}>{expanded?<Minimize2 size={15}/>:<Maximize2 size={15}/>}</button>}</div>}</>}
+      {!compact&&<div className="mermaid-tools"><button aria-label="缩小图" disabled={zoom<=.15} onClick={()=>setScale(Math.max(.15,zoom-.2))}><Minus size={15}/></button><button aria-label="适应宽度" onClick={()=>{camera.current=null;setRenderedSource('');setFrame(n=>n+1);setScale('fit');}}><Scan size={15}/></button><button aria-label="放大图" disabled={zoom>=3} onClick={()=>setScale(Math.min(3,zoom+.2))}><Plus size={15}/></button>{onExpand&&<button aria-label={expanded?'退出全屏画板':'全屏编辑画板'} onClick={onExpand}>{expanded?<Minimize2 size={15}/>:<Maximize2 size={15}/>}</button>}</div>}</>}
   </section>;
 });

@@ -62,15 +62,7 @@
 .disconnect-preview h3 { margin: 0; }
 .disconnect-preview pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 .disconnect-preview .heading-actions { margin-top: 20px; justify-content: flex-end; }
-/* The shell (top bar and sidebar) is fixed: the root snapshot must not cross-fade, only .content animates. */
-::view-transition-old(root) { display: none; }
-::view-transition-new(root) { animation: none; }
-.content { view-transition-name: asl-content; }
 .content>.read-status{position:fixed;right:24px;bottom:24px;z-index:50;max-width:min(360px,calc(100vw - 48px));max-height:40vh;overflow:auto;box-shadow:0 8px 28px #446c9d14}
-::view-transition-old(asl-content) { animation-duration: 100ms; }
-::view-transition-new(asl-content) { animation-duration: 180ms; }
-::view-transition-group(asl-content) { animation-timing-function: cubic-bezier(.22,1,.36,1); }
-::view-transition { pointer-events: none; }
 button { transition: background-color 140ms ease-out, color 140ms ease-out, box-shadow 140ms ease-out, transform 100ms ease-out; }
 button:active:not(:disabled) { transform: scale(.985); }
 .source-tree button:active:not(:disabled) { transform: none; }
@@ -94,11 +86,14 @@ button:active:not(:disabled) { transform: scale(.985); }
 .repository-skill-card{display:flex;align-items:flex-start;text-align:left;white-space:normal;overflow-wrap:anywhere;gap:14px;padding:20px;border-radius:14px;background:#ffffff90;border:1px solid #e2ebf8;min-height:110px;transition:transform 150ms ease,box-shadow 150ms ease}
 .repository-skill-card>div{flex:1;min-width:0}.repository-skill-card h2{font-size:16px;line-height:1.45;margin:0 0 9px}.repository-skill-card p{font-size:13px;line-height:1.65;margin:0;color:#627999}.repository-skill-card:hover{transform:translateY(-2px);box-shadow:0 8px 24px #4275b910}.repository-skill-card>svg{margin-top:8px;flex:none}
 @media(prefers-reduced-motion:reduce){.repository-skill-card{transition:none;transform:none}}
-.sidebar{position:relative;width:var(--sidebar-width)!important}
+.sidebar{position:relative;width:var(--panel-width,var(--sidebar-width))!important}
 .panel-resize{position:absolute;top:0;bottom:0;width:10px;z-index:6;cursor:col-resize;touch-action:none;outline:none}
-.panel-resize.right{right:-5px}.panel-resize.left{left:-5px}
+.panel-resize.right{right:0}.panel-resize.left{left:0}
 .panel-resize::after{content:'';position:absolute;top:40%;bottom:40%;left:4px;width:2px;border-radius:2px;background:#6f9ee0;opacity:0;transition:opacity 140ms}
-.panel-resize:is(:hover,:focus-visible)::after,.panel-resize:active::after{opacity:.8}
+.panel-resize:is(:hover,:focus-visible)::after,[data-resizing]>.panel-resize::after{opacity:.8}
+[data-resizing]{user-select:none;cursor:col-resize}
+.source-tree small,.skill-library-tree small,.package-tree small{flex-shrink:0;min-width:2ch;text-align:right;font-variant-numeric:tabular-nums}
+.source-tree summary>svg,.source-heading>svg,.skill-library-tree svg,.package-tree svg{flex-shrink:0}
 .installation-location{display:grid;gap:6px;margin-top:14px;color:var(--muted);font-size:12px}
 .installation-location code{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:11px/1.6 'Segoe UI',sans-serif;color:var(--ink-soft)}
 .connection-update{background:var(--brand-tint);border-radius:10px;padding:18px;margin:8px 0 18px;font-size:12px}
@@ -108,3 +103,9 @@ button:active:not(:disabled) { transform: scale(.985); }
 .diagram-examples{margin-top:28px}.diagram-examples>.tabs{flex-wrap:wrap;gap:6px}.diagram-examples>.tabs button{font-size:12px;padding:7px 10px}
 .diagram-examples textarea{width:100%;min-height:220px;resize:vertical;padding:18px;font:13px/1.8 Consolas,monospace;border:1px solid var(--line);border-radius:10px;background:#ffffffbd}
 @media(prefers-reduced-motion:reduce){.panel-resize::after{transition:none}}
+.repository-organize{position:relative}
+.repository-organize>summary{display:flex;align-items:center;gap:8px;padding:9px 12px;border:1px solid var(--line);border-radius:9px;background:var(--surface,#fff);cursor:pointer;list-style:none}
+.repository-organize>summary::-webkit-details-marker{display:none}
+.repository-organize[open]>summary{border-color:var(--brand)}
+.repository-organize>div{position:absolute;right:0;top:calc(100% + 6px);z-index:20;min-width:220px;max-height:min(50vh,360px);overflow:auto;padding:6px;border:1px solid var(--line);border-radius:12px;background:var(--surface,#fff);box-shadow:0 12px 32px #1735651a}
+.repository-organize>div>button{display:flex;align-items:center;gap:8px;width:100%;border:0;justify-content:flex-start;text-align:left}

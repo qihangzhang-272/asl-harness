@@ -6,14 +6,16 @@ import {ArrowLeft} from 'lucide-react';
 export function useLeaveGuard(dirty,busy=false,inside='.editor-page, .canvas-menu') {
   const leave=action=>{if(!busy&&(!dirty||window.confirm('有未保存的修改，放弃？')))action();};
   useEffect(()=>{
-    if(!dirty)return;
+    const refresh=event=>{if(dirty||busy)event.preventDefault();};
+    document.addEventListener('asl:before-content-refresh',refresh);
+    document.dispatchEvent(new Event('asl:editor-state'));
     const click=event=>{
-      if(event.target.closest(inside))return;
+      if(event.target.closest(inside)||event.target.closest('[data-confirm-discard]')||!event.target.closest('button,a,summary,[role="button"],[role="tab"]'))return;
       if(busy||!window.confirm('有未保存的修改，放弃？')){event.preventDefault();event.stopImmediatePropagation();}
     };
     const unload=event=>{event.preventDefault();event.returnValue='';};
-    document.addEventListener('click',click,true);window.addEventListener('beforeunload',unload);
-    return()=>{document.removeEventListener('click',click,true);window.removeEventListener('beforeunload',unload);};
+    if(dirty||busy){document.addEventListener('click',click,true);document.addEventListener('contextmenu',click,true);window.addEventListener('beforeunload',unload);}
+    return()=>{document.removeEventListener('asl:before-content-refresh',refresh);document.removeEventListener('click',click,true);document.removeEventListener('contextmenu',click,true);window.removeEventListener('beforeunload',unload);document.dispatchEvent(new Event('asl:editor-state'));};
   },[dirty,busy,inside]);
   return leave;
 }

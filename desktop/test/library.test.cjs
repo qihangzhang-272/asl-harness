@@ -3,6 +3,22 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs/promises");
 const path = require("node:path");
 
+test('all connection records survive beyond fifty, including temporarily unavailable libraries',async t=>{
+  const {writePreferences,readPreferences,rememberLibrary}=require('../library.cjs');
+  const home=await fs.mkdtemp(path.join(os.tmpdir(),'asl-records-'));
+  t.after(()=>fs.rm(home,{recursive:true,force:true}));
+  const file=path.join(home,'libraries.json');
+  const libraries=Array.from({length:55},(_,i)=>path.join(home,`library-${i}`));
+  const repositories=Array.from({length:55},(_,i)=>`https://github.com/example/repo-${i}`);
+  await writePreferences(file,{libraries,repositories,lastLibrary:libraries[54],views:{[libraries[0]]:{page:'skills'}}});
+  const read=await readPreferences(file);
+  assert.deepEqual(read.libraries,libraries);assert.deepEqual(read.repositories,repositories);
+  assert.equal(read.lastLibrary,libraries[54]);assert.equal(read.views[libraries[0]].page,'skills');
+  const example=path.resolve(__dirname,'../../examples/personal-environment');
+  await rememberLibrary(file,example);
+  assert.equal((await readPreferences(file)).libraries.length,56);
+});
+
 test('exit flush waits for the latest queued preference write',async t=>{
   const {updatePreferences,flushPreferences,readPreferences}=require('../library.cjs');
   const home=await fs.mkdtemp(path.join(os.tmpdir(),'asl-exit-flush-'));

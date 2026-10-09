@@ -15,10 +15,11 @@ test('DeepSeek runtime checks do not discover or select a different configuratio
   const app=await fs.readFile(path.join(__dirname,'../src/AgentDialogs.jsx'),'utf8');
   const setup=app.slice(app.indexOf('function SetupDialog('),app.indexOf('function ConnectDialog('));
   const start=setup.indexOf('  useEffect(() => {'),end=setup.indexOf('  const labels',start);
-  const calls=[];
-  vm.runInNewContext(setup.slice(start,end),{useEffect:fn=>fn(),task:fn=>calls.push(fn()),check:async()=>calls.push('readiness'),values:{host:'deepseek-harness'},api:async()=>{throw new Error('DeepSeek 不应扫描其他 Agent');},setAssistant:()=>{throw new Error('DeepSeek 不应选择其他 Agent');}});
-  await Promise.all(calls.filter(value=>value instanceof Promise||value?.then));
-  assert.deepEqual(calls.filter(value=>typeof value==='string'),['readiness']);
+  const calls=[],live={current:false};let cleanup;
+  vm.runInNewContext(setup.slice(start,end),{live,useEffect:fn=>{cleanup=fn();},check:async()=>calls.push('readiness'),values:{host:'deepseek-harness'},api:async()=>{calls.push('native');return {assistants:[]};},setAssistant:()=>calls.push('assistant')});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.deepEqual(calls,['readiness'],'DeepSeek 只检查当前范围，不发现或选择其他 Agent');
+  assert.equal(live.current,true);cleanup();assert.equal(live.current,false);
   assert.doesNotMatch(setup,/用谁来配置|换一个助手/);
 });
 
@@ -48,7 +49,7 @@ test('preloading and clicks share a request, refresh keeps the last good snapsho
   let resolve,calls=0,fail=false;
   const cloudCache={current:new Map()},cloudJobs={current:new Map()};
   const read=vm.runInNewContext('('+app.slice(start,end).trim()+')',{cloudCache,cloudJobs,setSourceVersion(){},api:()=>{calls++;return fail?Promise.reject(new Error('offline')):new Promise(r=>resolve=r);}});
-  const a=read('repo'),b=read('repo');assert.equal(a,b);assert.equal(calls,1);
+  const a=read('repo'),b=read('repo');assert.equal(a,b);await Promise.resolve();assert.equal(calls,1);
   resolve({commit:'one'});await a;assert.equal((await read('repo')).commit,'one');assert.equal(calls,1);
   fail=true;await assert.rejects(read('repo',true),/offline/);assert.equal(cloudCache.current.get('repo').commit,'one');assert.equal(cloudJobs.current.size,0);
 });
@@ -56,7 +57,8 @@ test('preloading and clicks share a request, refresh keeps the last good snapsho
 test('adding an existing library skill saves graph and membership together without copying it again',async()=>{
   const app=await fs.readFile(path.join(__dirname,'../src/App.jsx'),'utf8');
   const start=app.indexOf('  async function saveDiagram('),end=app.indexOf('\n  const openLibrary',start),calls=[];
-  const save=vm.runInNewContext('('+app.slice(start,end).trim()+')',{workspace:'library',catalog:{skills:[{id:'known'}]},api:async(...args)=>{calls.push(args);return{};},catalogCache:{current:{delete(){}}},currentRoot:{current:'other'},load(){},setContentSaving(){}});
+  const {createHistory}=await import('../src/graph-model.mjs');
+  const save=vm.runInNewContext('('+app.slice(start,end).trim()+')',{createHistory,historyFor:()=>null,workspace:'library',catalog:{skills:[{id:'known'}]},api:async(...args)=>{calls.push(args);return{};},catalogCache:{current:{delete(){}}},currentRoot:{current:'other'},loadRequest:{current:0},setLoadingRoot(){},load(){},setContentSaving(){},setMessage(){}});
   await save({id:'mode',fingerprint:'original',roots:['first']},'# 图',{skill:{id:'known'},placement:'research'});
   assert.equal(calls.length,1);const request=calls[0][2].request;
   assert.equal(request.operation,'mode.save');assert.equal(request.placement,'research');assert.deepEqual([...request.skills],['first','known']);assert.equal(request.document,'# 图');

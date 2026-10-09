@@ -49,3 +49,16 @@ test('missing source remains visible as an issue, and ordinary presets are not m
   assert.equal(result[0].status,'attention');
   assert.equal(result[0].issues[0],'源已移走');
 });
+
+test('drift warnings survive inventory alongside conflicts and full core diagnostics',async()=>{
+  const inventory={hosts:[{id:'codex-app',scopes:['user'],directory:os.tmpdir(),userMode:{mode:'writing',workspace:os.tmpdir()}}],projects:[],presets:[]};
+  const catalog={modes:[{id:'writing',title:'Writing',skills:[]}]};
+  const warning='Environment content changed after projection; run host.project again.';
+  const [drift]=await connections(inventory,async action=>action==='catalog'?catalog:{warnings:[warning]});
+  assert.equal(drift.status,'outdated');assert.deepEqual(drift.issues,[warning]);
+  const [conflict]=await connections(inventory,async action=>action==='catalog'?catalog:{warnings:[warning],conflicts:['本地已修改']});
+  assert.equal(conflict.status,'attention');assert.deepEqual(conflict.issues,['本地已修改',warning]);
+  const details={file:'AGENTS.md',action:'保留修改后重新核对'};
+  const [failure]=await connections(inventory,async action=>{if(action==='catalog')return catalog;throw Object.assign(new Error('投影无法读取'),{code:'HOST_PROJECTION_INVALID',details});});
+  assert.equal(failure.status,'attention');assert.deepEqual(failure.diagnostic,{code:'HOST_PROJECTION_INVALID',message:'投影无法读取',details});
+});

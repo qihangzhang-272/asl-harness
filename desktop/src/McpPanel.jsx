@@ -1,10 +1,19 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, FolderOpen, Plus, Pencil, Trash2, RotateCw, X, Eye } from 'lucide-react';
 import { useReadTasks, ReadStatus } from './useReadTasks.jsx';
+import {useLeaveGuard} from './EditorPage.jsx';
 import './mcp.css';
 
 const scopes = { user: '我的所有项目', project: '此项目 · 可共享', local: '此项目 · 仅自己' };
 const coreKeys = new Set(['type', 'command', 'args', 'url', 'env', 'headers', 'http_headers']);
+// Native declarations stay in memory, never in UI preferences (they may include secrets).
+const snapshots=new Map(),jobs=new Map();
+async function readMcp(key,values,force){
+  if(!force&&snapshots.has(key)&&Date.now()-snapshots.get(key).time<300000)return snapshots.get(key).value;
+  if(jobs.has(key)){if(!force)return jobs.get(key);await jobs.get(key).catch(()=>{});}
+  const job=api('mcp',values).then(value=>{snapshots.set(key,{value,time:Date.now()});if(snapshots.size>50)snapshots.delete(snapshots.keys().next().value);return value;}).finally(()=>{if(jobs.get(key)===job)jobs.delete(key);});
+  jobs.set(key,job);return job;
+}
 async function api(method, ...args) {
   const result = await window.asl[method](...args);
   if (!result.ok) throw new Error(result.error);
@@ -34,7 +43,7 @@ function Pairs({ label, value = {}, onChange }) {
   </div>)}{error && <p className="error-text" role="alert">{error}</p>}</section>;
 }
 
-function Editor({ host, item, existing, onSave, onClose, saving }) {
+function Editor({ host, item, existing, onSave, onClose, saving,onDirty }) {
   const form = useRef(null);
   useEffect(() => {
     if (form.current?.getBoundingClientRect().top > window.innerHeight - 100) form.current.scrollIntoView({ block: 'start' });
@@ -43,6 +52,9 @@ function Editor({ host, item, existing, onSave, onClose, saving }) {
   const [definition, setDefinition] = useState(item?.definition || { command: '', args: [] });
   const [extra, setExtra] = useState(JSON.stringify(Object.fromEntries(Object.entries(item?.definition || {}).filter(([k]) => !coreKeys.has(k))), null, 2));
   const [error, setError] = useState('');
+  const original=useRef(JSON.stringify({name,definition,extra}));
+  const dirty=JSON.stringify({name,definition,extra})!==original.current;
+  useEffect(()=>{onDirty(dirty);return()=>onDirty(false);},[dirty,onDirty]);
   const remote = 'url' in definition;
   const headers = host === 'codex-app' ? 'http_headers' : 'headers';
   const set = (key, value) => setDefinition(old => ({ ...old, [key]: value }));
@@ -83,14 +95,19 @@ export default function McpPanel({ host, name, initialProject, initialScope, pro
   const [project, setProject] = useState(initialProject || ''), [scope, setScope] = useState(initialScope || 'user');
   const [report, setReport] = useState(null), [editing, setEditing] = useState(null);
   const [message, setMessage] = useState(''), [saving, setSaving] = useState(false);
+  const [draftDirty,setDraftDirty]=useState(false);
+  const leave=useLeaveGuard(draftDirty,saving,'.mcp-panel');
   const reads = useReadTasks(error => setMessage(error.message));
   const values = { host, ...(project ? { project } : {}) };
+  const key=JSON.stringify(values),generation=useRef(0);
   const source = report?.sources.find(s => s.scope === scope);
-  const refresh = () => {
-    setReport(null); setEditing(null); setMessage('');
-    return reads.read('mcp', '读取 MCP 配置', async call => { const result = await call('mcp', values); setReport(result); return true; });
+  const refresh = (force=true) => {
+    const request=++generation.current;
+    setEditing(null); setMessage('');
+    if(!force&&snapshots.has(key))setReport(snapshots.get(key).value);
+    return reads.read('mcp', '读取 MCP 配置', async () => { const result = await readMcp(key,values,force); if(request===generation.current)setReport(result); return true; });
   };
-  useEffect(() => { setReport(null); setEditing(null); refresh(); }, [host, project]);
+  useEffect(() => { setReport(snapshots.get(key)?.value||null); setEditing(null); refresh(false);return()=>{generation.current++;}; }, [host, project]);
   async function save(request) {
     setSaving(true); setMessage('');
     try {
@@ -105,26 +122,26 @@ export default function McpPanel({ host, name, initialProject, initialScope, pro
     finally { setSaving(false); }
   }
   return <div className="mcp-panel">
-    <div className="page-heading"><div><button className="text-button" disabled={saving} onClick={onClose}><ChevronLeft size={16}/>Agent 配置</button><h1>{name} · MCP</h1></div>
-      <button disabled={saving} onClick={() => { setEditing(null); refresh(); }}><RotateCw size={16}/>重新读取</button></div>
-    <div className="mcp-scope-bar"><div className="tabs">{Object.keys(scopes).filter(s => s === 'user' || project && (s !== 'local' || host === 'claude-code')).map(s => <button disabled={saving} key={s} className={scope === s ? 'active' : ''} onClick={() => { setScope(s); setEditing(null); }}>{scopes[s]}</button>)}</div>
-      <button disabled={saving} onClick={async () => { try { const value = await api('choose', 'project'); if (value) { setProject(value); setScope('project'); } } catch (error) { setMessage(error.message); } }}><FolderOpen size={16}/>{project ? '更换项目' : '选择项目'}</button></div>
+    <div className="page-heading"><div><button className="text-button" disabled={saving} onClick={()=>leave(onClose)}><ChevronLeft size={16}/>Agent 配置</button><h1>{name} · MCP</h1></div>
+      <button disabled={saving} onClick={()=>leave(()=>refresh())}><RotateCw size={16}/>重新读取</button></div>
+    <div className="mcp-scope-bar"><div className="tabs">{Object.keys(scopes).filter(s => s === 'user' || project && (s !== 'local' || host === 'claude-code')).map(s => <button disabled={saving} key={s} className={scope === s ? 'active' : ''} onClick={()=>{if(s!==scope)leave(()=>{setScope(s);setEditing(null);});}}>{scopes[s]}</button>)}</div>
+      <button disabled={saving} onClick={()=>leave(async () => { try { const value = await api('choose', 'project'); if (value) { setProject(value); setScope('project'); } } catch (error) { setMessage(error.message); } })}><FolderOpen size={16}/>{project ? '更换项目' : '选择项目'}</button></div>
     {project && <p className="path-line">项目：{project}</p>}
-    {!!projects.length && <label className="field"><span>已发现的项目</span><select disabled={saving} aria-label="已发现的 MCP 项目" value={projects.includes(project) ? project : ''} onChange={e => { setProject(e.target.value); setScope(e.target.value ? 'project' : 'user'); }}><option value="">我的所有项目</option>{projects.map(p => <option key={p} value={p}>{p}</option>)}</select></label>}
+    {!!projects.length && <label className="field"><span>已发现的项目</span><select disabled={saving} aria-label="已发现的 MCP 项目" value={projects.includes(project) ? project : ''} onChange={e => {const value=e.target.value;leave(()=>{setProject(value);setScope(value?'project':'user');});}}><option value="">我的所有项目</option>{projects.map(p => <option key={p} value={p}>{p}</option>)}</select></label>}
     <ReadStatus tasks={reads}/>
     {message && <p className="inline-note" role="status">{message}</p>}
     {source && <><p className="path-line">{source.file}</p>{source.error && <p className="error-text" role="alert">{source.error}</p>}
     <div className={`mcp-content ${editing ? 'with-editor' : ''}`}><section className="mcp-list">
-      <div className="field-heading"><b>{source.servers.length} 个连接声明</b><button className="primary" disabled={saving || !!source.error} onClick={() => setEditing({ new: true })}><Plus size={16}/>添加 MCP</button></div>
+      <div className="field-heading"><b>{source.servers.length} 个连接声明</b><button className="primary" disabled={saving || !!source.error} onClick={()=>leave(()=>setEditing({ new: true }))}><Plus size={16}/>添加 MCP</button></div>
       {!source.servers.length && !source.error && <p className="muted">这个范围还没有配置 MCP。</p>}
       {source.servers.map(item => <article className="mcp-row" key={item.name}><div className="field-heading"><strong>{item.name}</strong><span className={`tag ${item.enabled ? 'green' : ''}`}>{item.enabled ? '已配置 · 未验证' : '已停用'}</span></div>
         <p>{item.definition.command || item.definition.url || '原生配置'}</p>
         <details><summary>查看声明</summary><pre>{JSON.stringify(item.definition, null, 2)}</pre></details>
-        <div className="heading-actions"><button disabled={saving} onClick={() => setEditing(item)}><Pencil size={14}/>编辑</button>
-          <button disabled={saving || !source.canToggle} title={host === 'claude-code' ? 'Claude 停用状态只影响所选项目' : '保留配置并切换启用状态'} onClick={() => save({ operation: 'toggle', name: item.name, enabled: !item.enabled }).catch(() => {})}>{item.enabled ? '停用' : '启用'}{host === 'claude-code' && project ? ' · 此项目' : ''}</button>
-          <button disabled={saving} aria-label={`移除 ${item.name}`} onClick={() => save({ operation: 'remove', name: item.name }).catch(() => {})}><Trash2 size={14}/></button>
+        <div className="heading-actions"><button disabled={saving} onClick={()=>leave(()=>setEditing(item))}><Pencil size={14}/>编辑</button>
+          <button disabled={saving || !source.canToggle} title={host === 'claude-code' ? 'Claude 停用状态只影响所选项目' : '保留配置并切换启用状态'} onClick={()=>leave(()=>save({ operation: 'toggle', name: item.name, enabled: !item.enabled }).catch(() => {}))}>{item.enabled ? '停用' : '启用'}{host === 'claude-code' && project ? ' · 此项目' : ''}</button>
+          <button disabled={saving} aria-label={`移除 ${item.name}`} onClick={()=>leave(()=>save({ operation: 'remove', name: item.name }).catch(() => {}))}><Trash2 size={14}/></button>
         </div></article>)}
-    </section>{editing && <Editor key={`${scope}:${editing.name || 'new'}`} host={host} item={editing.new ? null : editing} existing={source.servers.map(s => s.name)} saving={saving} onSave={save} onClose={() => setEditing(null)}/>}</div></>}
+    </section>{editing && <Editor key={`${scope}:${editing.name || 'new'}`} host={host} item={editing.new ? null : editing} existing={source.servers.map(s => s.name)} saving={saving} onSave={save} onDirty={setDraftDirty} onClose={()=>leave(()=>setEditing(null))}/>}</div></>}
     <p className="mcp-boundary">{report?.notice} {host === 'claude-code' && !project ? '选择项目后可管理该项目的停用状态。' : ''}</p>
   </div>;
 }

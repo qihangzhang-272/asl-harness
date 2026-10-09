@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { LoaderCircle, X } from 'lucide-react';
+import {coreError} from './presentation.mjs';
 
 const cancellable = new Set(['run', 'readSkill', 'githubSkills', 'repositoryOverview', 'localSkills', 'localModes', 'native', 'mcp', 'discover', 'repositoryUpdates']);
 
@@ -26,7 +27,7 @@ export function useReadTasks(onError) {
         ? await window.asl.read(request.id, method, args)
         : await window.asl[method](...args);
       if (!current()) throw new Error('读取已取消');
-      if (!reply.ok) throw new Error(reply.error);
+      if (!reply.ok) throw coreError(reply);
       return reply.value;
     };
     try { const result = await work(call); return current() ? result : undefined; }

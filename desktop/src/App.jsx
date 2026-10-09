@@ -3,6 +3,7 @@ import React, {
   createContext,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -13,11 +14,19 @@ import EditorPage,{useLeaveGuard} from './EditorPage.jsx';
 import PanelResize from './PanelResize.jsx';
 import DiagramExamples from './DiagramExamples.jsx';
 import EnvironmentGuide from './EnvironmentGuide.jsx';
+import EnvironmentDocuments from './EnvironmentDocuments.jsx';
+import ArchiveBrowser from './ArchiveBrowser.jsx';
+import ModeHistory from './ModeHistory.jsx';
 import SkillLibrary from './SkillLibrary.jsx';
 import Markdown from './Markdown.jsx';
 import {Placement} from './ParadigmEditor.jsx';
 import ModeWorkspace from './ModeWorkspace.jsx';
 import AgentPage from './AgentPage.jsx';
+import {useViewState,useScrollMemory} from './useViewState.jsx';
+import {ReadCache} from './read-cache.mjs';
+import {diagramsIn} from './mermaid-document.mjs';
+import {marked} from 'marked';
+import {createHistory,commitHistory,undoHistory,redoHistory} from './graph-model.mjs';
 import SourceLibrary, {SourceTree} from './SourceLibrary.jsx';
 import {navigate} from './motion.js';
 import { LocalModes } from './LocalModes.jsx';
@@ -49,12 +58,14 @@ import {
   AlertCircle,
   RotateCw,
   Copy,
+  History,
 } from "lucide-react";
 import {
   adoptionRequest,
   candidateImportRequest,
   localSkillCandidates,
   errorText,
+  coreError,
   shortText,
   restoreView,
   matchLocalModes,
@@ -66,8 +77,7 @@ const baseName = (value) => (value || "").split(/[\\/]/).filter(Boolean).pop();
 const NoticeContext = createContext(null);
 async function api(method, ...args) {
   const reply = await window.asl[method](...args);
-  if (!reply.ok) throw Object.assign(new Error(errorText(reply.error,reply.code)),
-    {code:reply.code,details:reply.details,diagnostic:reply.error});
+  if (!reply.ok) throw coreError(reply);
   return reply.value;
 }
 function IconButton({ icon: Icon, label, ...props }) {
@@ -152,7 +162,7 @@ function DiscoveredSkills({ report, catalog, readOnly, onInspect, onAdd, onMode,
             <details><summary>来源</summary><small className="path-line">{s.origin || s.location || s.source}</small></details>
           </div>
           <div className="discovered-actions">
-            <button className="primary" disabled={!catalog || readOnly} onClick={() => onAdd(s)}><Plus size={15} />加入模式</button>
+            <button className="primary" disabled={readOnly} onClick={() => onAdd(s)}><Plus size={15} />{catalog?'加入模式':'新建模式'}</button>
             <button onClick={() => onInspect(s)}>查看内容<ChevronRight size={15} /></button>
           </div>
         </article>;
@@ -243,161 +253,6 @@ function SkillEditor({ item, texts, onSave, onClose }) {
   );
 }
 
-function SkillDetails({
-  skill,
-  texts,
-  modes,
-  readOnly,
-  onClose,
-  onEdit,
-  onArchive,
-  onAdd,
-  onRemove,
-  onBrowse,
-}) {
-  const [tab, setTab] = useState("overview");
-  useEffect(() => setTab("overview"), [skill.id]);
-  const completion = texts?.["SKILL.md"]?.match(
-    /## 完成标准\s*([\s\S]*?)(?=\n## |$)/,
-  )?.[1];
-  return (
-    <aside className="inspector">
-      <div className="inspector-top">
-        <span>技能详情</span>
-        <IconButton icon={X} label="关闭详情" onClick={onClose} />
-      </div>
-      <div className="inspector-body">
-        <div className="large-symbol">
-          <Puzzle size={28} />
-        </div>
-        <h2>{skill.title}</h2>
-        <p className="description">{shortText(skill.description, 150)}</p>
-        <div className="inspector-actions">
-          <button onClick={onBrowse}><FolderOpen size={15}/>文件与结构</button>
-          <button onClick={onAdd} disabled={readOnly}>
-            <Plus size={15} />
-            加入模式
-          </button>
-          <IconButton
-            icon={Pencil}
-            label="编辑技能"
-            disabled={!texts || readOnly}
-            onClick={onEdit}
-          />
-          <IconButton icon={Archive} label="归档技能" onClick={onArchive} disabled={readOnly} />
-        </div>
-        <div className="tabs small">
-          {[
-            ["overview", "概览"],
-            ["requirements", "配置"],
-            ["content", "原文"],
-          ].map(([value, label]) => (
-            <button
-              key={value}
-              className={tab === value ? "active" : ""}
-              onClick={() => setTab(value)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        {tab === "overview" && (
-          <>
-            <section>
-              <h3>使用这个技能的模式</h3>
-              {skill.usedBy.length ? (
-                skill.usedBy.map((id) => (
-                  <div className="detail-line" key={id}>
-                    <Layers3 size={15} />
-                    <span>{modes.find((m) => m.id === id)?.title || id}</span>
-                    <Tag>{modes.find((m) => m.id === id)?.roots.includes(skill.id) ? "直接加入" : "依赖带入"}</Tag>
-                    {onRemove && (
-                      <IconButton
-                        icon={X}
-                        label={`从 ${id} 移出`}
-                        disabled={readOnly}
-                        onClick={() => onRemove(id)}
-                      />
-                    )}
-                  </div>
-                ))
-              ) : (
-                <p className="muted">尚未加入模式</p>
-              )}
-            </section>
-            <section>
-              <h3>交付要求</h3>
-              <p className="plain-markdown">
-                {completion?.trim() || "查看完整技能说明"}
-              </p>
-            </section>
-            <section>
-              <h3>来源</h3>
-              <p className="source-line">{skill.source}</p>
-              <span className="muted">
-                {skill.fileCount} 个文件 · 完整本地包
-              </span>
-            </section>
-          </>
-        )}
-        {tab === "requirements" && (
-          <>
-            {skill.requires.length > 0 && (
-              <section>
-                <h3>依赖技能</h3>
-                {skill.requires.map((id) => (
-                  <div key={id} className="detail-line">
-                    <Link2 size={15} />
-                    {id}
-                  </div>
-                ))}
-              </section>
-            )}
-            {skill.dependencies.length ? (
-              skill.dependencies.map((dep, index) => (
-                <section key={index}>
-                  <h3>
-                    {dep.kind}
-                    <Tag>待检查</Tag>
-                  </h3>
-                  {dep.requirements.map((name) => (
-                    <div className="detail-line" key={name}>
-                      <Circle size={12} />
-                      <span>{name}</span>
-                    </div>
-                  ))}
-                  {dep.environmentVariables.length > 0 && (
-                    <p>需要：{dep.environmentVariables.join("、")}</p>
-                  )}
-                  {dep.parseWarning && (
-                    <p className="muted">{dep.parseWarning}</p>
-                  )}
-                  <details>
-                    <summary>声明文件</summary>
-                    <code>{dep.file}</code>
-                  </details>
-                </section>
-              ))
-            ) : (
-              <section>
-                <h3>运行说明</h3>
-                <p className="muted">
-                  没有可识别的依赖清单。以技能原文中的安装和连接说明为准。
-                </p>
-                <button onClick={() => setTab("content")}>
-                  查看说明
-                  <ChevronRight size={15} />
-                </button>
-              </section>
-            )}
-            <p className="muted">账号登录由对应 Agent 处理。</p>
-          </>
-        )}
-        {tab === "content" && <><button onClick={onBrowse}><FolderOpen size={15}/>浏览全部 {skill.fileCount} 个文件</button><pre className="document">{texts?.["SKILL.md"] || "正在读取…"}</pre></>}
-      </div>
-    </aside>
-  );
-}
 
 export default function App() {
   const [initial, setInitial] = useState(null);
@@ -405,6 +260,8 @@ export default function App() {
   const [catalog, setCatalog] = useState(null);
   const currentRoot = useRef(null);
   const catalogCache = useRef(new Map());
+  const fileReads=useRef(new ReadCache());
+  const canvasHistories=useRef(new Map());
   const [loadingRoot, setLoadingRoot] = useState(null);
   const [loadError, setLoadError] = useState(null);
   const [locations, setLocations] = useState(null);
@@ -415,7 +272,6 @@ export default function App() {
   const [view, setView] = useState("map");
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState(null);
-  const [texts, setTexts] = useState(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(null);
   const reads = useReadTasks(error => setMessage({ error: true, text: error.message }));
@@ -433,15 +289,20 @@ export default function App() {
   const [localModeReport, setLocalModeReport] = useState(null);
   const [githubUrl, setGithubUrl] = useState("");
   const [cloud, setCloud] = useState(null);
+  const [cloudViews,setCloudViews]=useViewState('cloud-locations',{});
   const cloudRequest = useRef(0);
   const cloudCache = useRef(new Map());
   const cloudJobs = useRef(new Map());
   const [,setSourceVersion]=useState(0);
   function repositoryReport(url,refresh=false){
-    if(cloudJobs.current.has(url))return cloudJobs.current.get(url);
+    const previous=cloudJobs.current.get(url);
+    if(previous&&(!refresh||previous.refresh))return previous.promise;
     if(!refresh&&cloudCache.current.has(url))return Promise.resolve(cloudCache.current.get(url));
-    const job=api('githubSkills',url).then(report=>{cloudCache.current.set(url,report);setSourceVersion(v=>v+1);return report;}).finally(()=>cloudJobs.current.delete(url));
-    cloudJobs.current.set(url,job);return job;
+    const job={refresh};
+    job.promise=(previous?previous.promise.catch(()=>{}):Promise.resolve()).then(()=>api('githubSkills',url,refresh))
+      .then(report=>{cloudCache.current.set(url,report);setSourceVersion(v=>v+1);return report;})
+      .finally(()=>{if(cloudJobs.current.get(url)===job)cloudJobs.current.delete(url);});
+    cloudJobs.current.set(url,job);return job.promise;
   }
   const [githubReport, setGithubReport] = useState(null);
   const [updates, setUpdates] = useState(null);
@@ -474,11 +335,14 @@ export default function App() {
   }, [workspace]);
   const [externalChange, setExternalChange] = useState(false);
   const [contentSaving,setContentSaving]=useState(false);
+  const [editorVersion,setEditorVersion]=useState(0);
+  useEffect(()=>{const changed=()=>setEditorVersion(n=>n+1);document.addEventListener('asl:editor-state',changed);return()=>document.removeEventListener('asl:editor-state',changed);},[]);
   useEffect(() => {
     if (!workspace || workspace === initial?.example) return;
     const stop = window.asl.onEnvironmentChanged(data => {
       if (data.workspace !== workspace) return;
       if (data.error) { setMessage({error:true,text:`实时检测不可用：${data.error}。可以手动刷新。`}); return; }
+      fileReads.current.clear();
       setExternalChange(true);
     });
     api('watch', workspace).catch(error=>setMessage({error:true,text:error.message}));
@@ -486,16 +350,22 @@ export default function App() {
   }, [workspace]);
   useEffect(() => {
     if (externalChange && !modal && !busy && !contentSaving) {
+      if(!document.dispatchEvent(new Event('asl:before-content-refresh',{cancelable:true}))){
+        setMessage({text:'文件已更新，未保存内容已保留。',action:()=>{
+          if(!window.confirm('读取新版本会放弃未保存修改，继续？'))return;
+          document.dispatchEvent(new Event('asl:discard-drafts'));setExternalChange(false);
+          read('environment','读取新版本',call=>load(workspace,call,{protectDrafts:true}));
+        },actionLabel:'读取新版本',confirmDiscard:true});return;
+      }
       setExternalChange(false);
       read('environment', '刷新工作环境', async call=>{
-        try { await load(workspace, call); }
+        try { await load(workspace, call, {protectDrafts:true}); }
         catch (error) { throw new Error(`本地文件需要修正：${error.message}。界面暂保留上次有效内容。`); }
       });
     }
-  }, [modal, externalChange, busy, contentSaving]);
-  const detailRequest = useRef(0);
+  }, [modal, externalChange, busy, contentSaving,editorVersion]);
   const contentRef = useRef(null);
-  useEffect(() => { contentRef.current?.scrollTo(0, 0); }, [page, modeId]);
+  useScrollMemory(`page:${workspace||''}:${page}:${modeId||''}:${cloud?.url||''}:${cloud?.mode||''}:${cloud?.view||''}`,contentRef,cloud?!!cloud.report&&!cloud.skill&&(!!cloud.mode||cloud.view==='skills'):!!catalog);
   async function task(action) {
     if (gate.current) { setMessage({ text: '当前保存或预览尚未结束，请稍候。' }); return; }
     gate.current = true;
@@ -510,7 +380,8 @@ export default function App() {
       setBusy(false);
     }
   }
-  async function load(root, call = api, {restore = false, targetMode} = {}) {
+  async function load(root, call = api, {restore = false, targetMode, protectDrafts = false} = {}) {
+    fileReads.current.clear();
     const request = ++loadRequest.current;
     const navigation = navigationVersion.current;
     const changed = root !== currentRoot.current;
@@ -519,7 +390,6 @@ export default function App() {
     setLoadingRoot(root);
     setLoadError(null);
     if (changed) {
-      detailRequest.current++;setTexts(null);
       setCatalog(catalogCache.current.get(root) || null);
       setModeId(targetMode || null);setView('map');setSelected(null);setQuery('');
       setGithubReport(null);
@@ -527,8 +397,11 @@ export default function App() {
     try {
       const data = await call('run', 'catalog', {workspace: root});
       if (request !== loadRequest.current) return false;
+      // A read can begin before the user opens an editor. Recheck before replacing its content.
+      if(protectDrafts&&!document.dispatchEvent(new Event('asl:before-content-refresh',{cancelable:true}))){setExternalChange(true);return false;}
       catalogCache.current.set(root, data);
       setCatalog(data);
+      setSelected(previous=>previous?data.skills.find(skill=>skill.id===previous.id)||null:null);
       setModeId(previous=>data.modes.some(m=>m.id===previous)?previous:null);
       // Catalog display does not wait for a preferences write or a Skill file read.
       const preferences = await call('remember', root);
@@ -537,7 +410,7 @@ export default function App() {
         const saved=restoreView(data,preferences.views?.[root]);
         setModeId(saved.mode || null);setView(saved.view);setQuery(saved.query);updatePage(saved.page);
         setProvider(saved.provider);setGithubUrl(saved.githubUrl);
-        if(saved.skill) read('detail','读取技能',next=>selectSkill(data.skills.find(s=>s.id===saved.skill),root,next));
+        setSelected(data.skills.find(s=>s.id===saved.skill)||null);
         if(saved.page==='discover' && (saved.provider==='local'||saved.provider==='github-import'&&saved.githubUrl))setResumeDiscovery(saved);
       }
       setInitial(previous=>({...previous,views:preferences.views,libraries:preferences.libraries}));
@@ -569,7 +442,7 @@ export default function App() {
       setInitial(data);
       setReady(true);
       if(data.activeSource)openCloud(data.activeSource.url,data.activeSource.mode);
-      if (data.workspace) await load(data.workspace, call, {restore:true});
+      if (data.workspace) await load(data.workspace, call, {restore:true,protectDrafts:true});
     });
     return()=>{active=false;window.removeEventListener('focus',focus);};
   }, []);
@@ -588,12 +461,12 @@ export default function App() {
   },[resumeDiscovery,busy,cloud]);
   useEffect(()=>{
     if(!initial||workspace)return;
-    const check=()=>task(async()=>{const data=await api('initial');if(data.workspace)await load(data.workspace);});
+    const check=()=>task(async()=>{const data=await api('initial');if(data.workspace)await load(data.workspace,api,{protectDrafts:true});});
     window.addEventListener('focus',check);
     return ()=>window.removeEventListener('focus',check);
   },[initial,workspace]);
   useEffect(() => {
-    if (page === "agents" && !native) read('native', '读取 Agent 配置', async call => setNative(await call("native")));
+    if (page === "agents" && !native && !reads.items.some(item=>item.key==='native')) read('native', '读取 Agent 配置', async call => setNative(await call("native")));
     if (page === "discover" && provider === "local" && !localReport && !localIndex.current) read('local', '发现本机技能', async call => setLocalReport(await call("localSkills")));
   }, [page, provider]);
   const repositoryKey=JSON.stringify(initial?.repositories||[]);
@@ -601,7 +474,7 @@ export default function App() {
     if(!ready)return;
     let stopped=false;
     // One bounded queue shares in-flight work with navigation; no repeated click-time scan.
-    (async()=>{for(const url of initial?.repositories||[]){
+    (async()=>{for(const url of (initial?.repositories||[]).slice(0,50)){
       if(stopped)break;
       try{await repositoryReport(url,updateTick>0);}catch{/* Keep the existing snapshot and let explicit refresh report errors. */}
     }})();
@@ -628,11 +501,12 @@ export default function App() {
   const openLocalMode = async item => {
     if (busy) return;
     setModal(null);setSelected(null);setCloud(null);cloudRequest.current++;
-    reads.cancel('cloud');api('selectSource',null).catch(error=>setMessage({error:true,text:error.message}));
+    reads.cancel('cloud');reads.cancel('cloud-readme');api('selectSource',null).catch(error=>setMessage({error:true,text:error.message}));
     if(item.workspace===workspace && catalog){navigate(()=>{setModeId(item.id);setPage('modes');});return;}
     await openLibrary(item.workspace, item.id);
   };
   const mode = catalog?.modes.find((m) => m.id === modeId);
+  const modeIntro = useMemo(()=>marked.lexer(mode?.document||'').find(token=>token.type==='paragraph')?.text||'',[mode?.document]);
   const modeInstallations=(native?.connections||[]).filter(item=>item.workspace===workspace&&item.mode===modeId);
   const readOnly = workspace === initial?.example || /[\\/]resources[\\/]example-environment[\\/]*$/i.test(workspace || '');
   const modeSkills = useMemo(
@@ -656,8 +530,21 @@ export default function App() {
     for(const skill of localSkillCandidates(catalog?.skills,localReport?.skills))if(!byId.has(skill.id))byId.set(skill.id,skill);
     return [...byId.values()];
   },[catalog?.skills,localReport]);
-  async function saveDiagram(item,document,{skill,placement}={}) {
+  function historyFor(item){
+    const entry=canvasHistories.current.get(item.path);
+    return entry?.fingerprint===item.fingerprint?entry.history:null;
+  }
+  async function readSkillFile(item,file,refresh=false){
+    return fileReads.current.read(JSON.stringify([workspace,item.path,item.id,item.fingerprint,file]),()=>api('run','files',{workspace,skill:item.id,file}),refresh);
+  }
+  async function saveDiagram(item,document,{skill,placement,history:step}={}) {
     const root=workspace;
+    const snapshot=mode=>({document:mode.document,roots:mode.roots,architecture:mode.architecture});
+    const previous=historyFor(item)||createHistory(snapshot(item));
+    const restored=step==='undo'?undoHistory(previous):step==='redo'?redoHistory(previous):null;
+    if(restored){document=restored.present.document;if(restored===previous)return;}
+    let imported=false;
+    loadRequest.current++;setLoadingRoot(null);
     setContentSaving(true);
     try {
     if(skill&&!catalog.skills.some(s=>s.id===skill.id)){
@@ -666,32 +553,46 @@ export default function App() {
       const preview=await api('run','edit',{workspace:root,request});
       const result=await api('run','edit',{workspace:root,request:{...request,expectedSource:preview.sourceFingerprint},apply:true});
       if(result.canceled)throw new Error('已取消添加');
+      imported=true;
     }
-    const request={operation:'mode.save',id:item.id,expected:item.fingerprint,skills:skill?[...new Set([...item.roots,skill.id])]:item.roots,document,...(placement?{placement}:{})};
+    const request={operation:'mode.save',id:item.id,expected:item.fingerprint,skills:restored?restored.present.roots:skill?[...new Set([...item.roots,skill.id])]:item.roots,document,...(restored?{architecture:restored.present.architecture}:placement?{placement}:{})};
     const result=await api('run','edit',{workspace:root,request,apply:true});
     if(result.canceled)throw new Error('未保存修改');
-    catalogCache.current.delete(root);
-    if(currentRoot.current===root)await load(root);
+    if(result.catalog){
+      const saved=result.catalog.modes.find(mode=>mode.id===item.id);
+      if(saved){
+        canvasHistories.current.delete(item.path);
+        canvasHistories.current.set(item.path,{fingerprint:saved.fingerprint,history:restored||commitHistory(previous,snapshot(saved))});
+        if(canvasHistories.current.size>32)canvasHistories.current.delete(canvasHistories.current.keys().next().value);
+      }
+      catalogCache.current.set(root,result.catalog);if(currentRoot.current===root){setCatalog(result.catalog);setExternalChange(false);}}
+    else{catalogCache.current.delete(root);if(currentRoot.current===root)await load(root);}
+    setMessage({text:result.history&&['unavailable','not-repository'].includes(result.history.status)?`${item.title} 已保存，本次未留下演变记录。`:`${item.title} 已保存`});
+    } catch(error) {
+      // A changed explanation does not invalidate the user's still-mounted graph draft.
+      if(error.code==='EDIT_STALE'){
+        try{
+          const next=await api('run','catalog',{workspace:root}),current=next.modes.find(mode=>mode.id===item.id);
+          if(current&&JSON.stringify(diagramsIn(current.document).map(d=>d.source))===JSON.stringify(diagramsIn(item.document).map(d=>d.source))&&currentRoot.current===root){
+            catalogCache.current.set(root,next);setCatalog(next);setExternalChange(false);
+          }
+        }catch{/* Preserve the failed draft and the original write error. */}
+      }
+      setMessage(imported?{error:true,text:'技能已保存到库，尚未加入此模式。读取新版后可再次添加。',actionLabel:'读取模式后重试',action:()=>read('environment','读取工作模式',call=>load(root,call,{protectDrafts:true}))}
+        :{error:true,text:`${item.title} 未保存：${error.message}`});throw error;
     } finally {setContentSaving(false);}
   }
   const openLibrary = (root, targetMode = null) => {
-    setModal(null);setCloud(null);cloudRequest.current++;reads.cancel('cloud');
+    setModal(null);setCloud(null);cloudRequest.current++;reads.cancel('cloud');reads.cancel('cloud-readme');
     api('selectSource',null).catch(error=>setMessage({error:true,text:error.message}));
     setPage('modes');
     return read('environment', '打开模式库', call => load(root, call, {targetMode}));
   };
   function goPage(id) {
-    setModal(null);setCloud(null);cloudRequest.current++;reads.cancel('cloud');reads.cancel('detail');detailRequest.current++;
+    setModal(null);setCloud(null);cloudRequest.current++;reads.cancel('cloud');reads.cancel('cloud-readme');reads.cancel('detail');
     api('selectSource',null).catch(error=>setMessage({error:true,text:error.message}));
     if(cloud&&id===page)return;
     navigate(()=>{setPage(id);if(id==='modes')setModeId(null);setSelected(null);setQuery('');});
-  }
-  async function selectSkill(skill,root=workspace,call=api) {
-    setSelected(skill);
-    setTexts(null);
-    const sequence = ++detailRequest.current;
-    const data = await call("readSkill", root, skill.id);
-    if (sequence === detailRequest.current) setTexts(data);
   }
   async function editContent(request, addedTo) {
     const preview = await api("run", "edit", { workspace, request });
@@ -705,16 +606,26 @@ export default function App() {
     });
   }
   async function saveContent(request) {
+    if(!catalog){
+      const {operation,expected,...draft}=request;
+      const target=initial.managedLibrary;
+      const preview=await api('run','create',{target,request:draft});
+      const result=await api('run','create',{target,request:draft,expected:preview.fingerprint,apply:true});
+      if(result.canceled)return;
+      await openLibrary(target,request.id);
+      setModal(null);setMessage({text:'工作模式已保存到本地。'});return;
+    }
     const result=await api("run", "edit", {workspace, request, apply:true});
     if(result.canceled)return;
     await load(workspace);
     setModal(null);
-    if(request.operation === "mode.save" && request.id) showMode(request.id);
-    setMessage({text:"已保存到本地；Agent 可读取同一份内容。"});
+    if(request.operation === "mode.save" && request.id) {setCloud(null);showMode(request.id);api('selectSource',null).catch(error=>setMessage({error:true,text:error.message}));}
+    setMessage({text:result.history&&['unavailable','not-repository'].includes(result.history.status)?'已保存，本次未留下演变记录。':'已保存到本地。'});
   }
   async function saveFile(request,refresh=true) {
     const result=await api('run','edit',{workspace,request,apply:true});
     if(result.canceled)throw new Error('未保存更改');
+    fileReads.current.clear();
     if(refresh)await load(workspace);
   }
   async function applyEdit() {
@@ -730,18 +641,6 @@ export default function App() {
       ? `已添加到 ${modal.addedTo.title}。可从卡片上的模式名称查看；已连接的 Agent 需重新应用模式。`
       : result.archivePath ? "已归档，原文件已保留。" : "已保存。" });
   }
-  async function removeFromMode(id) {
-    const current = catalog.modes.find((m) => m.id === id);
-    if (!current.roots.includes(selected.id))
-      throw new Error("这是其他技能的必要依赖，请先调整依赖它的技能。");
-    await editContent({
-      operation: "mode.save",
-      id: current.id,
-      expected: current.fingerprint,
-      document: current.document,
-      skills: current.roots.filter((s) => s !== selected.id),
-    });
-  }
   async function importSkill() {
     const source = await api("choose", "skillFolder");
     if (!source) return;
@@ -750,6 +649,7 @@ export default function App() {
     else { setLocalReport({...report,directory:source}); setProvider("local"); setPage("discover"); }
   }
   function adoptSkill(skill, targetMode) {
+    if(!catalog){void createModeWithSkill(skill);return;}
     setModal({ kind: "local-import", ...skill, mode: targetMode || (page === "modes" ? mode?.id || "" : ""), category: "",
       useExisting: catalog.skills.some(s => s.id === skill.id) });
   }
@@ -758,6 +658,7 @@ export default function App() {
   // import or the draft never creates an empty Mode.
   async function createModeWithSkill(skill) {
     if (!skill?.id) return;
+    if(!catalog){setCloud(null);setModal({kind:'mode-workspace',draft:{roots:[skill.id],packages:[{...skill,path:skill.source}]}});return;}
     const existing = catalog.skills.find(s => s.id === skill.id);
     if (!existing) {
       const request = candidateImportRequest(skill, null);
@@ -785,7 +686,8 @@ export default function App() {
     const sequence=++cloudRequest.current;
     reads.cancel('cloud');reads.cancel('cloud-readme');
     const report=cloudCache.current.get(url);
-    const next=refresh&&cloud?.url===url?{...cloud,report}:{url,mode:id||null,view:'overview',skill:null,report};
+    const saved=cloudViews[url];
+    const next=refresh&&cloud?.url===url?{...cloud,report}:{url,...(saved&&(id===undefined||id===saved.mode)?saved:{mode:id||null,view:'overview',skill:null}),report};
     if(!refresh&&report&&initial?.repositories.includes(url)){setCloud(next);return;}
     setCloud({...next,loading:true});
     if(!report)read('cloud-readme','读取仓库介绍',async call=>{
@@ -803,7 +705,8 @@ export default function App() {
     try {
       if(result.error)throw result.error;
       const report=result.report;
-      if(cloudCache.current.size>12)cloudCache.current.delete(cloudCache.current.keys().next().value);
+      reads.cancel('cloud-readme');
+      if(cloudCache.current.size>50)cloudCache.current.delete(cloudCache.current.keys().next().value);
       if(connect&&!initial?.repositories.includes(url)) {
         const repositories=await api('connectRepository',url,report.snapshot);
         if(sequence!==cloudRequest.current)return;
@@ -815,6 +718,9 @@ export default function App() {
   useEffect(()=>{
     if(cloud?.report)api('selectSource',{url:cloud.url,mode:cloud.mode||null}).catch(error=>setMessage({error:true,text:error.message}));
   },[cloud?.url,cloud?.mode,cloud?.report]);
+  useLayoutEffect(()=>{
+    if(cloud?.report)setCloudViews(previous=>({...previous,[cloud.url]:{mode:cloud.mode,view:cloud.view,skill:cloud.skill}}));
+  },[cloud?.url,cloud?.mode,cloud?.view,cloud?.skill,cloud?.report]);
   // Cloud refresh only replaces the remote preview, never the user's adopted Mode.
   useEffect(()=>{
     if(!cloud?.url||modal||busy)return;
@@ -824,7 +730,7 @@ export default function App() {
       if(document.hidden||pending||Date.now()-last<5*60*1000)return;
       pending=true;last=Date.now();
       try{
-        const report=await api('githubSkills',url);
+        const report=await repositoryReport(url,true);
         cloudCache.current.set(url,report);
         if(active)setCloud(previous=>previous?.url===url?{...previous,report,error:null,
           mode:report.modes.some(m=>m.id===previous.mode)?previous.mode:null}:previous);
@@ -841,6 +747,20 @@ export default function App() {
     if(!result.removed)return;
     setInitial(previous=>({...previous,repositories:result.repositories}));cloudCache.current.delete(url);
     if(cloud?.url===url){goPage('modes');setModeId(null);}
+  }
+  async function localMenu(root,id){
+    const {action}=await api('libraryMenu',root,id);if(!action)return;
+    if(action==='open-library'){await chooseLibrary();return;}
+    if(!await openLibrary(root,id||null))return;
+    const data=catalogCache.current.get(root),item=data?.modes.find(m=>m.id===id);
+    if(action==='new-mode')setModal({kind:'mode-workspace'});
+    else if(action==='environment-documents')setModal({kind:'environment-documents'});
+    else if(action==='archive-browser')setModal({kind:'archive-browser'});
+    else if(action==='mode-history'&&item)setModal({kind:'mode-history',item});
+    else if(action==='new-library')setModal({kind:'library-create',workspace:root,modes:data.modes});
+    else if(action==='edit-mode'&&item)setModal({kind:'mode-workspace',item});
+    else if(action==='copy-mode'&&item)setModal({kind:'mode-workspace',item:{...item,id:`${item.id}-copy`,fingerprint:null}});
+    else if(action==='archive-mode'&&item)setModal({kind:'review',request:{operation:'mode.archive',id:item.id,expected:item.fingerprint},preview:await api('run','edit',{workspace:root,request:{operation:'mode.archive',id:item.id,expected:item.fingerprint}})});
   }
   function openGuide(modeId, repository=null) {
     const target=workspace&&!readOnly?workspace:initial.managedLibrary;
@@ -896,7 +816,7 @@ export default function App() {
     const report = await api("run", "import", { source: modal.source, target });
     setModal({ kind: "import-review", source: modal.source, target, report, replace: false });
   }
-  const editorOpen=['mode-workspace','skill-editor','skill-files','discovered-detail','import-review','connect','agent-guide'].includes(modal?.kind);
+  const editorOpen=['mode-workspace','library-create','skill-editor','skill-files','discovered-detail','import-review','connect','agent-guide','environment-documents','archive-browser','mode-history'].includes(modal?.kind);
   const activePage=cloud?'modes':page;
 
   return (
@@ -936,7 +856,8 @@ export default function App() {
           </nav>
           <SourceTree groups={libraryGroups(localModeReport?.modes,initial?.libraries,workspace,catalog?.modes??null)}
             repositories={initial?.repositories||[]} workspace={workspace} mode={modeId} cloud={cloud}
-            onLocal={openLocalMode} onCloud={openCloud} onNavigate={navigateCloud} onContext={url=>task(()=>sourceMenu(url))}/>
+            onLocal={openLocalMode} onCloud={openCloud} onNavigate={navigateCloud} onContext={url=>task(()=>sourceMenu(url))}
+            onRoot={openLibrary} onLocalContext={(root,id)=>task(()=>localMenu(root,id))}/>
           {catalog&&!readOnly&&<button className="new-mode-button" onClick={()=>setModal({kind:'mode-workspace'})}><Plus size={15}/>新建模式</button>}
           <div className="sidebar-footer">
             <button onClick={() => task(importPack)}>
@@ -989,7 +910,8 @@ export default function App() {
                 onRefresh={()=>openCloud(cloud.url,cloud.mode,true,true)}
                 onUse={item=>task(()=>importRepositoryMode(item,null,true,cloud.report))}
                 onSave={item=>task(()=>importRepositoryMode(item,null,false,cloud.report))}
-                onAdd={catalog&&!readOnly?adoptSkill:null}/>
+                localModes={catalog?.modes||[]}
+                onOrganize={!readOnly?(item,skill)=>setModal({kind:'mode-workspace',item,draft:{report:cloud.report,query:skill?.id||'',repository:true}}):null}/>
               : !catalog && loadingRoot && !["discover", "agents", "updates"].includes(page) ? <div className="source-loading" role="status"><h2>{baseName(loadingRoot)}</h2><span className="loading-line"/><span className="loading-line"/></div>
               : !catalog && loadError && page==="modes" ? <div className="empty-state" role="alert"><h2>未能打开模式库</h2><p>{errorText(loadError.message)}</p><button onClick={()=>openGuide('')}>交给 AI 修复</button><button onClick={()=>openLibrary(loadError.root)}>重试</button><button onClick={()=>task(chooseLibrary)}>选择其他模式库</button></div>
               : !catalog && !["discover", "agents", "updates"].includes(page) ? (
@@ -1006,7 +928,7 @@ export default function App() {
                   <button
                     className="primary"
                     disabled={!initial}
-                    onClick={()=>openGuide()}
+                    onClick={()=>setModal({kind:'mode-workspace'})}
                   >
                     <FolderOpen size={18} />
                     从这台电脑开始
@@ -1077,7 +999,8 @@ export default function App() {
                     })}</div>}
                   </section>}
                   {page === 'modes' && catalog && !mode && <section className="mode-library-overview">
-                    <div className="page-heading"><h1>工作模式</h1><button className="primary" disabled={readOnly} onClick={()=>setModal({kind:'mode-workspace'})}><Plus size={16}/>新建模式</button></div>
+                    <div className="page-heading"><h1>工作模式</h1><div className="heading-actions"><button onClick={()=>setModal({kind:'environment-documents'})}>偏好与记录</button><button onClick={()=>setModal({kind:'archive-browser'})}><Archive size={16}/>归档</button><button className="primary" disabled={readOnly} onClick={()=>setModal({kind:'mode-workspace'})}><Plus size={16}/>新建模式</button></div></div>
+                    {!!catalog.issues?.length&&<details className="scan-issues"><summary>{catalog.issues.length} 处内容需要检查</summary>{catalog.issues.map((issue,index)=><p className="path-line" key={index}>{issue.path}：{issue.message}</p>)}</details>}
                     <h2 className="library-section-title" title={workspace}><FolderOpen size={18}/>{baseName(workspace)}</h2>
                     <div className="source-mode-grid">{catalog.modes.map(item=><button className="source-mode-card" key={item.id} onClick={()=>showMode(item.id)}>
                       <span className="source-mode-icon"><Layers3 size={24}/></span><h2>{item.title}</h2>
@@ -1089,19 +1012,7 @@ export default function App() {
                       <div className="page-heading">
                         <div>
                           <h1>{mode.title}</h1>
-                          {mode.document.split("\n").find(line => line.trim() && !line.startsWith("#")) && (
-                            <p>
-                              {shortText(
-                                mode.document
-                                  .split("\n")
-                                  .find(
-                                    (line) =>
-                                      line.trim() && !line.startsWith("#"),
-                                  ),
-                                110,
-                              )}
-                            </p>
-                          )}
+                          {modeIntro&&<p>{shortText(modeIntro,110)}</p>}
                         </div>
                         <div className="heading-actions">
                           {!mode.upstream && (
@@ -1135,6 +1046,7 @@ export default function App() {
                               setModal({ kind: 'mode-workspace', item: mode })
                             }
                           />
+                          <IconButton icon={History} label="演变记录" onClick={()=>setModal({kind:'mode-history',item:mode})}/>
                           <IconButton
                             icon={Archive}
                             label="归档模式"
@@ -1193,7 +1105,7 @@ export default function App() {
                         </div>
                       </div>
                       {view === "map" ? (
-                        <SkillCanvas selected={selected} onSelect={setSelected} readOnly={readOnly} readFile={(item,file)=>api('run','files',{workspace,skill:item.id,file})} saveFile={saveFile}>
+                        <SkillCanvas selected={selected} onSelect={setSelected} readOnly={readOnly} readFile={readSkillFile} saveFile={saveFile}>
                         <ArchitectureMap
                           key={`${workspace}:${mode.id}`}
                           mode={mode}
@@ -1204,16 +1116,19 @@ export default function App() {
                           onSkill={item=>setSelected(item)}
                           onEdit={readOnly?null:title=>setModal({kind:'mode-workspace',item:mode,title,editSource:true})}
                           onSaveDocument={readOnly?null:saveDiagram}
+                          historyFor={historyFor}
                         />
                         </SkillCanvas>
                       ) : (
                         <SkillLibrary
                           catalog={modeCatalog}
+                          selected={selected} onSelect={setSelected}
                           query={query}
                           onSkill={item=>setModal({kind:'skill-files',item})}
-                          readOnly={readOnly} readFile={(item,file)=>api('run','files',{workspace,skill:item.id,file})} saveFile={saveFile}
+                          readOnly={readOnly} readFile={readSkillFile} saveFile={saveFile}
                           onEditMode={readOnly?undefined:(_,title)=>setModal({kind:'mode-workspace',item:mode,title,editSource:true})}
                           onSaveDocument={readOnly?null:saveDiagram}
+                          historyFor={historyFor}
                         />
                       )}
                     </div>
@@ -1257,9 +1172,9 @@ export default function App() {
                           />
                         )}
                       </div>
-                      <SkillLibrary catalog={catalog} query={query} onSkill={item=>setModal({kind:'skill-files',item})}
-                        readOnly={readOnly} readFile={(item,file)=>api('run','files',{workspace,skill:item.id,file})} saveFile={saveFile}
-                        onEditMode={readOnly?undefined:(id,title)=>setModal({kind:'mode-workspace',item:catalog.modes.find(m=>m.id===id),title,editSource:true})} onSaveDocument={readOnly?null:saveDiagram}/>
+                      <SkillLibrary catalog={catalog} query={query} selected={selected} onSelect={setSelected} onSkill={item=>setModal({kind:'skill-files',item})}
+                        readOnly={readOnly} readFile={readSkillFile} saveFile={saveFile}
+                        onEditMode={readOnly?undefined:(id,title)=>setModal({kind:'mode-workspace',item:catalog.modes.find(m=>m.id===id),title,editSource:true})} onSaveDocument={readOnly?null:saveDiagram} historyFor={historyFor}/>
                     </>
                   )}
                   {page === "discover" && (
@@ -1413,33 +1328,6 @@ export default function App() {
                 </>
               )}
             </main>
-            {!cloud && selected && catalog && !(page==='modes'&&view==='map') && (
-              <SkillDetails
-                skill={selected}
-                readOnly={readOnly}
-                texts={texts}
-                modes={catalog.modes}
-                onClose={() => {
-                  setSelected(null);
-                  detailRequest.current++;
-                }}
-                onEdit={() =>
-                  setModal({ kind: "skill-files", item: selected })
-                }
-                onBrowse={()=>setModal({kind:'skill-files',item:selected})}
-                onArchive={() =>
-                  task(() =>
-                    editContent({
-                      operation: "skill.archive",
-                      id: selected.id,
-                      expected: selected.fingerprint,
-                    }),
-                  )
-                }
-                onAdd={() => setModal({ kind: "add-to-mode" })}
-                onRemove={(id) => task(() => removeFromMode(id))}
-              />
-            )}
           </div>
           {message && (
             <div
@@ -1448,6 +1336,7 @@ export default function App() {
             >
               {message.error ? <AlertCircle size={18} /> : <Check size={18} />}
               <span>{message.text}</span>
+              {message.action&&<button data-confirm-discard={message.confirmDiscard||undefined} onClick={message.action}>{message.actionLabel}</button>}
               <IconButton
                 icon={X}
                 label="关闭提示"
@@ -1509,17 +1398,17 @@ export default function App() {
             <button onClick={()=>task(async()=>{const target=await api('choose','newEnvironment');if(target)await importRepositoryMode(modal.item,target);})}>另存为独立环境</button>
           </div>
         </Dialog>}
-        {modal?.kind === "mode-workspace" && catalog && (
+        {modal?.kind === "mode-workspace" && (
           <ModeWorkspace
             preloadedReport={localReport}
             mode={modal.item || null}
             initialTitle={modal.title}
             editSource={modal.editSource}
-            readFile={(item,file)=>api('run','files',{workspace,skill:item.id,file})}
+            readFile={readSkillFile}
             saveFile={request=>saveFile(request,false)}
             draft={modal.draft || null}
             catalog={catalog}
-            workspace={workspace}
+            workspace={workspace||initial?.managedLibrary}
             api={api}
             read={read}
             reads={reads}
@@ -1530,6 +1419,7 @@ export default function App() {
             onClose={() => setModal(null)}
           />
         )}
+        {modal?.kind==='library-create'&&<EditorPage title="新建工作库" onClose={()=>setModal(null)}><form onSubmit={event=>{event.preventDefault();const id=new FormData(event.currentTarget).get('mode');task(async()=>{const target=await api('choose','newEnvironment');if(!target)return;const result=await api('createLibrary',{workspace:modal.workspace,mode:id,target});if(!result.canceled)await openLibrary(target,id);});}}><Field label="首个工作模式"><select name="mode">{modal.modes.map(item=><option key={item.id} value={item.id}>{item.title}</option>)}</select></Field><div className="dialog-actions"><button type="button" onClick={()=>setModal(null)}>取消</button><button className="primary">选择位置并创建</button></div></form></EditorPage>}
         {modal?.kind === "skill-editor" && (
           <SkillEditor
             item={modal.item}
@@ -1538,8 +1428,8 @@ export default function App() {
             onClose={() => setModal(null)}
           />
         )}
-        {modal?.kind === 'skill-files' && <SkillFiles item={modal.item} Dialog={EditorPage} readOnly={readOnly} onClose={()=>setModal(null)}
-          readFile={file=>api('run','files',{workspace,skill:modal.item.id,file})}
+        {modal?.kind === 'skill-files' && <SkillFiles item={modal.item} initialFile={modal.initialFile} Dialog={EditorPage} readOnly={readOnly} onClose={()=>setModal(null)}
+          readFile={(file,refresh)=>readSkillFile(modal.item,file,refresh)}
           saveFile={saveFile}/>}
         {modal?.kind === 'agent-guide' && <EnvironmentGuide workspace={modal.workspace} mode={modal.mode} repository={modal.repository} api={api} read={read}
           onVerified={async root=>{if(await load(root)){setCloud(null);setPage('modes');setModeId(null);setModal(null);}}}
@@ -1608,7 +1498,7 @@ export default function App() {
             locations={locations}
             task={task}
             onClose={() => setModal(null)}
-            onApplied={(text,values) => { setMessage({ text });setAgentHost(values.host);setPage('agents');api("native").then(setNative).catch(error=>setMessage({error:true,text:error.message})); }}
+            onApplied={(text,values,result) => { setMessage({ text });setAgentHost(values.host);setPage('agents');if(result)setModal({kind:'setup',values,resultMessage:text,activation:result.activation});api("native").then(setNative).catch(error=>setMessage({error:true,text:error.message})); }}
           />
         )}
         {modal?.kind === "discovered-detail" && <EditorPage title={modal.skill.title} onClose={() => setModal(null)}>
@@ -1622,10 +1512,13 @@ export default function App() {
           </details>
           <div className="dialog-actions"><button onClick={() => setModal(null)}>关闭</button>
             {modal.skill.origin && <button onClick={() => task(() => api("external", modal.skill.origin))}>查看原仓库<ArrowUpRight size={15} /></button>}
-            {catalog&&!readOnly&&<button className="primary" onClick={() => adoptSkill(modal.skill)}>加入模式</button>}
+            {!readOnly&&<button className="primary" onClick={() => adoptSkill(modal.skill)}>{catalog?'加入模式':'新建模式'}</button>}
           </div>
         </EditorPage>}
-        {modal?.kind === "setup" && <SetupDialog api={api} Dialog={Dialog} Tag={Tag} values={modal.values} resultMessage={modal.resultMessage} title={catalog?.modes.find(m => m.id === modal.values.mode)?.title || modal.values.mode} task={task} onClose={() => setModal(null)} />}
+        {modal?.kind === 'environment-documents' && <EnvironmentDocuments workspace={workspace} api={api} readOnly={readOnly} onClose={()=>setModal(null)} onSaved={()=>setExternalChange(true)}/>}
+        {modal?.kind === 'archive-browser' && <ArchiveBrowser workspace={workspace} api={api} readOnly={readOnly} onClose={()=>setModal(null)} onSaved={()=>load(workspace)}/>}
+        {modal?.kind === 'mode-history' && <ModeHistory workspace={workspace} mode={catalog.modes.find(item=>item.id===modal.item.id)||modal.item} skills={catalog.skills} api={api} readOnly={readOnly} onClose={()=>setModal(null)} onSaved={()=>load(workspace)} onContinue={item=>setModal({kind:'mode-workspace',item})}/>}
+        {modal?.kind === "setup" && <SetupDialog api={api} Dialog={Dialog} Tag={Tag} values={modal.values} activation={modal.activation} resultMessage={modal.resultMessage} title={catalog?.modes.find(m => m.id === modal.values.mode)?.title || modal.values.mode} task={task} onReadNote={({skill,path})=>task(async()=>{const root=modal.values.workspace;if(!await load(root))return;const item=catalogCache.current.get(root)?.skills.find(item=>item.id===skill);const prefix=item?.path.replaceAll('\\','/')+'/';const normalized=path.replaceAll('\\','/');if(!item||!normalized.startsWith(prefix))throw new Error('说明不在对应技能包内，请重新检查');setModal({kind:'skill-files',item,initialFile:normalized.slice(prefix.length)});})} onClose={() => setModal(null)} />}
         {modal?.kind === "add-to-mode" && (
           <Dialog title="加入工作模式" onClose={() => setModal(null)}>
             <div className="library-list">

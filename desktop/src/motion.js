@@ -1,10 +1,4 @@
-import {flushSync} from 'react-dom';
-
-let current;
-// Keep the navigation frame still; only the changing content participates.
+// The existing content fade keeps the real canvas hit-testable from the first frame.
 export function navigate(update) {
-  if (!document.startViewTransition || matchMedia('(prefers-reduced-motion: reduce)').matches) {update();return;}
-  current?.skipTransition();
-  current=document.startViewTransition(()=>flushSync(update));
-  current.finished.catch(()=>{});
+  update();
 }

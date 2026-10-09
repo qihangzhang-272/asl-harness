@@ -8,13 +8,13 @@ function CanvasPanel({title,children}) {
 }
 
 // The same graph stays mounted while its viewport becomes a floating navigator.
-export default function SkillCanvas({selected,onSelect,readFile,saveFile,readOnly,children}) {
+export default function SkillCanvas({selected,onSelect,readFile,saveFile,readOnly,children,hasGraph=true}) {
   const focused=!!selected;
   return <div className={`skill-canvas ${focused?'is-focused':''}`}>
-    <div className="skill-canvas-graph">
-      {focused&&<button className="canvas-return" onClick={()=>onSelect(null)}><Network size={15}/>技能逻辑架构</button>}
-      {children}
+    <div className={focused&&!hasGraph?'skill-canvas-list-return':'skill-canvas-graph'}>
+      {focused&&<button className="canvas-return" onClick={()=>onSelect(null)}><Network size={15}/>{hasGraph?'技能逻辑架构':'返回技能'}</button>}
+      {(!focused||hasGraph)&&children}
     </div>
-    {selected&&<SkillFiles key={selected.id} item={selected} Dialog={CanvasPanel} embedded readOnly={readOnly} onClose={()=>onSelect(null)} readFile={file=>readFile(selected,file)} saveFile={saveFile}/>}
+    {selected&&<SkillFiles key={selected.id} item={selected} Dialog={CanvasPanel} embedded readOnly={readOnly} onClose={()=>onSelect(null)} readFile={(file,refresh)=>readFile(selected,file,refresh)} saveFile={saveFile}/>}
   </div>;
 }

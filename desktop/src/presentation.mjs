@@ -49,6 +49,10 @@ export function errorText(text,code) {
     ? "技能开头的名称和说明格式不完整，请保留原文顶部的 --- 信息区。"
     : String(text||'操作未完成').split('\n')[0].slice(0,100);
 }
+export function coreError(reply) {
+  return Object.assign(new Error(errorText(reply.error,reply.code)),
+    {code:reply.code,details:reply.details,diagnostic:reply.error});
+}
 export function scopeLabel(scope, target = "") {
   return scope === "user"
     ? "我的所有项目"
@@ -85,7 +89,7 @@ export function restoreView(catalog, saved={}) {
   // Legacy 'categories' (and any 'skills') collapse into that single list; missing stays on the map.
   const view=['list','categories','skills'].includes(saved.view)?'list':'map';
   return {mode:mode?.id||'',page,view,
-    skill:skill?.id||'',query:saved.query||'',provider:['github-import','local','dsh','github'].includes(saved.provider)?saved.provider:'github-import',githubUrl:saved.githubUrl||''};
+    skill:skill?.id||'',query:saved.query||'',provider:['github-import','local','local-modes','diagrams','dsh','github'].includes(saved.provider)?saved.provider:'github-import',githubUrl:saved.githubUrl||''};
 }
 
 const EDGE_HANDLES = ['top', 'right', 'bottom', 'left'];

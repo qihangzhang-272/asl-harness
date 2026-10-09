@@ -2,7 +2,7 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs/promises');
 const path=require('node:path');
-const {launch}=require('./fixture.cjs');
+const {launch,packagedCore}=require('./fixture.cjs');
 const {runCore}=require('../bridge.cjs');
 
 test('canvas templates and structure can be created and edited without source or modifier keys',{timeout:240000},async()=>{
@@ -101,7 +101,7 @@ test('canvas templates and structure can be created and edited without source or
     await page.getByRole('tab',{name:'时序图',exact:true}).click();
     await page.locator('text.messageText').filter({hasText:'复核资料'}).waitFor();
     // A caller such as an Agent submits ordinary Mermaid through the real CLI.
-    const core=process.env.ASL_TEST_EXE?{executable:path.join(path.dirname(process.env.ASL_TEST_EXE),'resources/core/asl-harness.exe')}:{};
+    const core={executable:packagedCore()};
     const catalog=await runCore('catalog',{workspace},core),mode=catalog.modes.find(m=>m.id==='creator-studio');
     const document=mode.document+'\n## Agent 草稿\n\n```mermaid\nmindmap\n root((协作))\n  review[复核]\n  improve[改进]\n```\n';
     const request={operation:'mode.save',id:mode.id,expected:mode.fingerprint,skills:mode.roots,document};
@@ -127,6 +127,6 @@ test('canvas templates and structure can be created and edited without source or
     assert.deepEqual(errors,[]);
     await fs.writeFile(path.join(run,'result.json'),JSON.stringify({ok:true,checks:['three-templates','inline-blur','message-connect-retarget','condition-add-drag','branch-add-remove','participant-note-add-remove','mindmap-sibling-drag','undo-redo','new-node','flow-drag-direction-connect','fullscreen','save-reopen','agent-cli-roundtrip','reading-append','empty-mode-cancel'],errors},null,2));
     console.log('鼠标画板验收：'+run);
-  }catch(error){console.error(run,errors);await page.screenshot({path:path.join(run,'failure.png')});throw error;}
+  }catch(error){console.error(run,errors,error.stack);await page.screenshot({path:path.join(run,'failure.png')});await fs.writeFile(path.join(run,'failure.html'),await page.locator('body').innerHTML());throw error;}
   finally{await page.close();await app.close();}
 });

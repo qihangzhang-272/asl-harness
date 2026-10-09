@@ -9,6 +9,6 @@ export function repositoryFileLink(href,baseUrl) {
     const start=url.hostname==='github.com'?(target[2]==='blob'?4:0):3;
     if(!start)return null;
     const file=decodeURIComponent(target.slice(start).join('/'));
-    return /\.md$/i.test(file)&&!file.split('/').some(p=>p==='..')?file:null;
+    return /\.md$/i.test(file)&&!file.split('/').some(p=>p==='..')?file.replaceAll('%','%25').replaceAll('#','%23')+url.hash:null;
   }catch{return null;}
 }

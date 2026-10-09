@@ -1,4 +1,4 @@
-import React,{useEffect,useState} from 'react';
+import React,{useEffect,useRef,useState} from 'react';
 import {SlidersHorizontal,FolderOpen,LoaderCircle,AlertCircle,Check,RotateCw,Copy,ArrowUpRight,Circle} from 'lucide-react';
 import EditorPage from './EditorPage.jsx';
 const baseName = (value) => (value || "").split(/[\\/]/).filter(Boolean).pop();
@@ -9,41 +9,70 @@ const AGENT_CHOICES = [
   {id:'workbuddy',name:'WorkBuddy',scopes:['project']},
 ];
 
-export function SetupDialog({ api, Dialog, Tag, values, title, onClose, task, resultMessage }) {
+export function SetupDialog({ api, Dialog, Tag, values, title, onClose, task, resultMessage, activation, onReadNote }) {
   const [report, setReport] = useState(null);
   const [assistant, setAssistant] = useState("");
   const [session, setSession] = useState(null);
   const [checking, setChecking] = useState(false);
+  const [checkError, setCheckError] = useState('');
+  const [copied, setCopied] = useState(false);
+  const live=useRef(false);
   async function check(probe = false) {
     setChecking(true);
+    setCheckError('');
+    setCopied(false);
     try {
-      setReport(await api("run", "readiness", { ...values, probe }));
-      if (session) setSession(await api("setupStatus", session.id));
-    } finally { setChecking(false); }
+      const next=await api("run", "readiness", { ...values, probe });
+      if(!live.current)return;
+      setReport(next);
+      if (session) {
+        const status=await api("setupStatus", session.id);
+        if(live.current)setSession(status);
+      }
+    } catch(error) { if(live.current){setReport(null);setCheckError(JSON.stringify({message:error.diagnostic||error.message,code:error.code,details:error.details},null,2));} }
+    finally { if(live.current)setChecking(false); }
   }
   useEffect(() => {
-    task(async () => {
-      await Promise.all([check(), ["codex-app","claude-code"].includes(values.host) ? api("native").then(native=>{
-        setAssistant(native.assistants.find(a => a.available && a.id === values.host)?.id || "");
-      }).catch(()=>{}) : Promise.resolve()]);
-    });
+    live.current=true;
+    check();
+    if(["codex-app","claude-code"].includes(values.host))api("native").then(native=>{
+      if(live.current)setAssistant(native.assistants.find(a => a.available && a.id === values.host)?.id || "");
+    }).catch(()=>{});
+    return ()=>{live.current=false;};
   }, []);
-  const labels = { found: "已找到", configured: "有配置 · 待实测", missing: "待安装 / 连接", unknown: "需检查", ok: "渠道体检通过", warn: "需处理", off: "未连接", error: "检查异常" };
+  const labels = { found: "已找到", configured: "已配置，待试用", missing: "待安装或连接", unknown: "需检查", ok: "检查通过", warn: "需处理", off: "未连接", error: "检查异常" };
+  const hostName=AGENT_CHOICES.find(item=>item.id===values.host)?.name || '当前 Agent';
+  const attention=report?.checks.filter(item=>['missing','unknown','warn','off','error'].includes(item.status)).length || 0;
   return <Dialog title="运行检查" onClose={onClose}>
     {resultMessage && <p role="status" className="inline-note">{resultMessage}</p>}
-    <div className="apply-summary"><SlidersHorizontal size={19} /><span>{title}<small>{{"codex-app": "Codex", "claude-code": "Claude Code", "deepseek-harness": "DeepSeek Harness", workbuddy: "WorkBuddy"}[values.host]} · {values.scope === "user" ? "当前用户" : values.scope === "preset" ? "工作模式" : "所选项目"}</small></span></div>
+    <div className="apply-summary"><SlidersHorizontal size={19} /><span>{title}<small>{hostName} · {values.scope === "user" ? "当前用户" : values.scope === "preset" ? "工作模式" : "所选项目"}</small></span></div>
+    {resultMessage && <p>下一步：{values.scope === 'preset' ? '在 DeepSeek 新会话中选择此模式。' : values.scope === 'user' ? `在 ${hostName} 中开始新会话。` : `在 ${hostName} 中打开此项目并开始新会话。`}</p>}
+    {(values.project || activation?.openProject || report?.userPaths) && <details className="setup-notes"><summary>配置位置</summary>
+      {(values.project || activation?.openProject) && <p className="path-line">{values.project || activation.openProject}{activation?.instructionFile && <small> · {activation.instructionFile}</small>}</p>}
+      {values.scope === 'user' && <p className="path-line">{values.skillsDir || report?.userPaths?.skills}<br/>{report?.userPaths?.instructions}</p>}
+    </details>}
+    {checkError && <><p className="error-text" role="alert">检查未完成，请重试。</p><details className="setup-notes"><summary>查看详情</summary><pre>{checkError}</pre></details></>}
     {report ? <>
-      {report.nativeDiscoveryUnverified && <div className="inline-note"><FolderOpen size={18} /><span>所选目录还需与 Agent 关联<small>{report.chosenSkillsDirectory}</small></span></div>}
-      <div className="setup-checks">
-        {report.checks.map(item => <div className="sync-item" key={`${item.kind}:${item.name}`}><span><strong>{item.name}</strong><small>{item.kind === "mcp" ? "MCP" : item.kind === "binary" ? "本机工具" : "登录 / 环境变量"}</small></span><Tag tone={["missing", "unknown"].includes(item.status) ? "warning" : ""}>{labels[item.status]}</Tag></div>)}
-        {!report.checks.length && <p>未声明额外安装项。</p>}
-      </div>
-      {!!report.setupNotes.length && <details className="setup-notes"><summary>技能中的运行说明</summary>{report.setupNotes.map((item, index) => <small key={index}>{item.skill}</small>)}</details>}
-      {report.doctor && <div className="setup-channels"><h3>Agent Reach</h3>{report.doctor.map(item => <div className="sync-item" key={item.id}><span>{item.name}</span><Tag tone={item.status === "ok" ? "green" : "warning"}>{labels[item.status] || "需检查"}</Tag></div>)}</div>}
-      {report.doctorError && <p className="error-text">{report.doctorError}</p>}
-    </> : <div className="inline-note"><LoaderCircle size={18} className="spin" />正在检查本机环境…</div>}
+      <p role="status">{attention ? `${attention} 项需要处理` : report.setupNotes.length ? '请核对技能中的运行说明。' : '已核对安装项，仍需实际试用。'}</p>
+      {report.nativeDiscoveryUnverified && <div className="inline-note"><FolderOpen size={18} /><span>所选目录还需与 {hostName} 关联。</span></div>}
+      {report.hooks && <details className="setup-notes">
+        <summary>自动检查 · {report.hooks.coverage === 'none' ? '未覆盖' : report.hooks.commandFound ? '尚未实测' : '待配置'}</summary>
+        {report.hooks.coverage === 'none' ? <p>{values.host === 'workbuddy' ? '此 Agent 尚未接入自动检查，可按需使用 CLI 手动核对。' : '当前用户默认模式不在项目 Hook 覆盖范围内；可为具体项目配置模式后再检查。'}</p> : <>
+          <p>适用范围：{report.hooks.coverage === 'preset' ? '此 DeepSeek 工作模式' : '所选项目'}。{report.hooks.commandFound ? '已找到检查命令；原生 Hook 是否启用及真实触发尚未核实。' : '未找到检查命令，请在目标 Agent 中补齐 Harness CLI 后再检查。'}</p>
+          <p>{values.scope === 'preset' ? '工作模式已包含自动检查设置，仍需在 DeepSeek 中加载并验证。' : '请在目标 Agent 中启用 ASL Environment Host 插件，再用新会话验证。'}缺少 Hook 不影响已配置模式的使用。</p>
+          <p className="path-line">检查命令：{report.hooks.commandPath || report.hooks.command}</p>
+        </>}
+      </details>}
+      {!!report.checks.length && <details className="setup-notes"><summary>检查项 · {report.checks.length}</summary><div className="setup-checks">
+        {report.checks.map(item => <div className="sync-item" key={`${item.kind}:${item.name}`}><span><strong>{item.name}</strong><small>{item.kind === "mcp" ? "MCP" : item.kind === "binary" ? "本机工具" : "登录 / 环境变量"}{item.skills?.length ? ` · ${item.skills.join('、')}` : ''}</small></span><Tag tone={["missing", "unknown"].includes(item.status) ? "warning" : ""}>{labels[item.status]}</Tag></div>)}
+      </div></details>}
+      {!!report.setupNotes.length && <details className="setup-notes"><summary>技能中的运行说明</summary>{report.setupNotes.map((item, index) => <p className="path-line" key={index}><button className="plain-title" disabled={!onReadNote} onClick={()=>onReadNote({skill:item.skill,path:item.path})}>{item.skill} · {baseName(item.path)}<ArrowUpRight size={14}/></button><br/>{item.path}</p>)}</details>}
+      {report.doctor && <details className="setup-notes"><summary>联网工具 · {report.doctor.filter(item=>item.status!=='ok').length ? '需检查' : '已检查'}</summary><div className="setup-channels"><h3>Agent Reach</h3>{report.doctor.map(item => <div className="sync-item" key={item.id}><span>{item.name}</span><Tag tone={item.status === "ok" ? "green" : "warning"}>{labels[item.status] || "需检查"}</Tag></div>)}</div></details>}
+      {report.doctorError && <><p className="error-text" role="alert">联网工具检查未完成，请重试。</p><details className="setup-notes"><summary>查看详情</summary><pre>{report.doctorError}</pre></details></>}
+    </> : !checkError && <div className="inline-note"><LoaderCircle size={18} className="spin" />正在检查本机环境…</div>}
     {session && <div className="inline-note">{session.status === "failed" ? <AlertCircle size={18} /> : <Check size={18} />}<span>{session.status === "failed" ? "未完成，请在目标 Agent 中检查连接后重试。" : session.status === "ended" ? "会话已结束，可以重新检查。" : "已打开，请在对应 Agent 中继续。"}</span></div>}
-    <div className="dialog-actions"><button onClick={() => task(() => check(true))} disabled={checking}><RotateCw size={16} className={checking ? "spin" : ""} />重新检查</button><button className={!assistant?'primary':''} disabled={!report || checking} onClick={()=>task(()=>api('copyText',report.brief))}><Copy size={16}/>复制给{values.host==='deepseek-harness'?' DeepSeek':values.host==='workbuddy'?' WorkBuddy':'当前 Agent'}</button>{assistant&&<button className="primary" disabled={!report || checking} onClick={() => task(async () => { const result = await api("setup", assistant, values); if (!result.canceled) setSession(result); })}>在{assistant==='codex-app'?' Codex':' Claude Code'} 中继续<ArrowUpRight size={16} /></button>}</div>
+    {copied && <p role="status">已复制。在 {hostName} 新会话中粘贴并发送。</p>}
+    <div className="dialog-actions"><button onClick={() => task(() => check(true))} disabled={checking}><RotateCw size={16} className={checking ? "spin" : ""} />重新检查</button><button className={!assistant?'primary':''} disabled={!report || checking} onClick={()=>task(async()=>{await api('copyText',report.brief);setCopied(true);})}><Copy size={16}/>复制给 {hostName}</button>{assistant&&<button className="primary" disabled={!report || checking} onClick={() => task(async () => { const result = await api("setup", assistant, values); if (!result.canceled) {setCopied(false);setSession(result);} })}>在 {hostName} 中继续<ArrowUpRight size={16} /></button>}</div>
   </Dialog>;
 }
 
@@ -120,7 +149,7 @@ export function ConnectDialog({
           </button>
         ))}
       </div>
-      {locationError && <p role="alert">{locationError}<button onClick={()=>api('nativeLocations').then(value=>{setNative(value);setLocationError('');}).catch(error=>setLocationError(error.message))}>重试</button></p>}
+      {locationError && <><p className="error-text" role="alert">未能读取配置位置。<button onClick={()=>api('nativeLocations').then(value=>{setNative(value);setLocationError('');}).catch(error=>setLocationError(error.message))}>重试</button></p><details><summary>查看详情</summary><pre>{locationError}</pre></details></>}
           <div className="field-heading">
             <b>在哪里使用</b>
           </div>
@@ -169,22 +198,22 @@ export function ConnectDialog({
               </button>
             </Field></details>
           ) : scope === "project" ? (project && <p className="path-line">{project}</p>)
-          : <div className="user-location"><div>{native?<Check size={16}/>:<LoaderCircle size={16} className="spin"/>}<strong>用户技能目录</strong></div><p className="path-line">{skillsDir || selected?.skillRoot || '正在读取位置…'}</p><details><summary>高级设置</summary><button onClick={() => task(async () => { const folder = await api("choose", "userSkills"); if (folder) setSkillsDir(folder); })}><FolderOpen size={15} />更换技能目录</button>{skillsDir && <button onClick={() => setSkillsDir("")}>恢复标准目录</button>}</details></div>}
+          : <details className="user-location"><summary>保存位置</summary><p className="path-line">{skillsDir || selected?.skillRoot || '正在读取位置…'}</p><button onClick={() => task(async () => { const folder = await api("choose", "userSkills"); if (folder) setSkillsDir(folder); })}><FolderOpen size={15} />更换技能目录</button>{skillsDir && <button onClick={() => setSkillsDir("")}>恢复标准目录</button>}</details>}
           {preview && <div className="sync-preview">
-            <h3>同步预览</h3>
+            <h3>将要更改</h3>
             {preview.previousMode && <small>原默认模式：{preview.previousMode}</small>}
             {preview.items.filter(item => item.action !== "unchanged").map(item => <div className="sync-item" key={item.skill}>
               <span>{item.skill}</span><Tag tone={item.action === "conflict" ? "warning" : ""}>{({add:"加入",update:"更新",remove:"移出",conflict:"需处理同名内容"})[item.action]}</Tag>
             </div>)}
-            {!preview.needsSync && <p>已与技能源一致。</p>}
+            {!preview.needsSync && <p>内容已是最新。</p>}
             {preview.conflicts.map(text => <p className="error-text" key={text}>{text}</p>)}
-            <small>只管理 ASL 同步的副本；不删除你的原技能源。</small>
+            <small>只更新此 Agent 的副本，原技能库保留。</small>
           </div>}
           <div className="dialog-actions">
             {scope === "user" && native?.hosts.find(h => h.id === host)?.userMode?.mode === mode.id ? <button onClick={() => task(async () => {
               const plan = await api("run", "userSync", { workspace, mode: mode.id, host, remove: true, ...(skillsDir && { skillsDir }) });
               const result = await api("run", "userSync", { workspace, mode: mode.id, host, remove: true, expected: plan.fingerprint, apply: true, ...(skillsDir && { skillsDir }) });
-              if (!result.canceled) { onClose(); onApplied("已停用用户级默认模式，原技能源不变。",{host}); }
+              if (!result.canceled) { onClose(); onApplied("已停用默认模式，原技能库保留。",{host}); }
             })}>停用默认模式</button> : <button onClick={onClose}>取消</button>}
             <button
               className="primary"
@@ -220,7 +249,7 @@ export function ConnectDialog({
                     const status = host === "deepseek-harness"
                       ? result.presetRegistered ? "已添加到 DeepSeek，请在新会话中选择这个工作模式。" : "工作模式已保存，但 DeepSeek 尚未识别。请检查配置位置。"
                       : result.discovery === "requires-connection" ? "已放入所选目录，还需关联 Agent。" : `${selected.name} 的模式已同步。`;
-                    onApplied(status, { workspace, mode: mode.id, host, scope: host === "deepseek-harness" ? "preset" : scope, ...(target && { project: target }), ...(scope === "user" && skillsDir && { skillsDir }) });
+                    onApplied(status, { workspace, mode: mode.id, host, scope: host === "deepseek-harness" ? "preset" : scope, ...(target && { project: target }), ...(scope === "user" && skillsDir && { skillsDir }) }, result);
                   }
                 })
               }

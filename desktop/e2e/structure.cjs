@@ -24,6 +24,7 @@ test('native diagrams edit in place and persist semantic drag, context actions a
     await savedMatches(new RegExp(value));
   }
   async function drag(from,to,relative={x:.5,y:.1}){
+    await page.waitForFunction(()=>!document.querySelector('.mermaid-edit[aria-busy="true"],.mermaid-viewport[inert]'));
     await from.scrollIntoViewIfNeeded();
     const a=await from.boundingBox(),b=await to.boundingBox();
     await page.mouse.move(a.x+a.width/2,a.y+a.height/2);await page.mouse.down();
@@ -76,8 +77,9 @@ test('native diagrams edit in place and persist semantic drag, context actions a
     await page.locator('.editor-page').waitFor({state:'detached',timeout:60000});
     assert.ok(!(await fs.readFile(file,'utf8')).includes('evidence['));
     await source('stateDiagram-v2\n state "分析" as skill_product_analysis\n state "检索" as skill_source_research\n skill_product_analysis --> skill_source_research: 核对');
-    await edit(page.locator('g.node[id*="state-skill_product_analysis-"]'),'事实研究');
-    await page.locator('g.node[id*="state-skill_source_research-"]').click();
+    await edit(page.locator('.architecture-section .mermaid-drawing g.node[id*="state-skill_product_analysis-"]'),'事实研究');
+    await page.waitForFunction(()=>!document.querySelector('.mermaid-edit[aria-busy="true"],.mermaid-viewport[inert]'));
+    await page.locator('.architecture-section .mermaid-drawing g.node[id*="state-skill_source_research-"]').click();
     await page.locator('.skill-canvas-panel .markdown-content').waitFor();
     await page.getByRole('button',{name:'技能逻辑架构',exact:true}).click();
     await page.locator('.skill-canvas-graph').evaluate(el=>Promise.all(el.getAnimations().map(animation=>animation.finished.catch(()=>{}))));

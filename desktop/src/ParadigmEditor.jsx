@@ -2,6 +2,7 @@ import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {Network, Plus, Puzzle, Redo2, Save, Search, Undo2, X, Pencil} from 'lucide-react';
 import './graph-editor.css';
 import {useLeaveGuard} from './EditorPage.jsx';
+import PanelResize from './PanelResize.jsx';
 import {
   LIMITS, SHARED, addParadigm, assignedScopes, commitHistory, createHistory,
   displayTitle, installCandidates, isSkillId, memberIds, mergeInventory,
@@ -51,7 +52,7 @@ function SkillRow({row,onOpen,onPlace,onClear}) {
 
 // One install source. The drag payload is the unique sourceKey (never the bare
 // id), so two folders offering the same skill id can never collapse into one row.
-function CandidateRow({candidate,busy,onInstall}) {
+function CandidateRow({candidate,busy,onInstall,onOpen}) {
   const [source,setSource]=useState(candidate.sourceKey);
   const chosen=candidate.sources?.find(row=>row.sourceKey===source)||candidate;
   return <div
@@ -66,14 +67,14 @@ function CandidateRow({candidate,busy,onInstall}) {
   >
     <Puzzle size={13} aria-hidden="true" />
     <span className="graph-skill-text">
-      <strong>{candidate.title || candidate.id}</strong>
+      <button type="button" className="graph-skill-open" onClick={()=>onOpen?.(chosen)}><strong>{candidate.title || candidate.id}</strong></button>
       {candidate.sources?.length>1?<select aria-label={`${candidate.id} 的来源`} value={chosen.sourceKey} onChange={event=>setSource(event.target.value)}>
         {candidate.sources.map(row=><option key={row.sourceKey} value={row.sourceKey}>{row.source}</option>)}
       </select>:<small title={chosen.source}>{candidate.id}</small>}
     </span>
     <button type="button" className="icon-button" disabled={busy}
       aria-label={`加入 ${candidate.title || candidate.id}`}
-      title="安装并加入"
+      title="加入画板"
       onClick={() => onInstall(chosen.sourceKey)}><Plus size={13} /></button>
   </div>;
 }
@@ -84,7 +85,7 @@ function CandidateRow({candidate,busy,onInstall}) {
 //   localSkills  install sources {id, title, description, requires?, source, ...}; source is the drag key
 //   onLocalSkillAdded(skill)  async; installs then resolves {skills} (updated library inventory), throws on failure
 //   onSave(request)  receives saveRequest(...) for mode.save; Dialog / onClose are host chrome
-export default function ParadigmEditor({mode,skills,Dialog,onSave,onClose,localSkills=[],onLocalSkillAdded,metadataDirty=false,metadataValid=true,documentOpen=false,documentEditor=null,renderCanvas,onOpenSkill,onAddToDiagram,onDocumentChange,onRemoveFromDiagram,initialScopeTitle,onScopeChange}) {
+export default function ParadigmEditor({mode,skills,Dialog,onSave,onClose,localSkills=[],onLocalSkillAdded,candidateLabel='本机',initialQuery='',onOpenCandidate,metadataDirty=false,metadataValid=true,documentOpen=false,documentEditor=null,renderCanvas,onOpenSkill,onAddToDiagram,onDocumentChange,onRemoveFromDiagram,initialScopeTitle,onScopeChange}) {
   // `skills` is the whole current library. `available` starts from it and grows
   // only through a successful install; members stay the roots' requires closure.
   const [available,setAvailable] = useState(() => (Array.isArray(skills) ? skills : []));
@@ -103,7 +104,7 @@ export default function ParadigmEditor({mode,skills,Dialog,onSave,onClose,localS
   const [history,setHistory] = useState(() => createHistory(initial));
   const [scopeId,setScopeId] = useState(() => initial.draft.paradigms.find(p=>p.title===initialScopeTitle)?.id || (initialScopeTitle==='通用能力'?SHARED:initial.draft.paradigms[0]?.id) || SHARED);
   const [editingScope,setEditingScope]=useState(false);
-  const [query,setQuery] = useState('');
+  const [query,setQuery] = useState(initialQuery);
   const [notice,setNotice] = useState('');
   const [installing,setInstalling] = useState('');
   const [saving,setSaving]=useState(false);
@@ -164,7 +165,7 @@ export default function ParadigmEditor({mode,skills,Dialog,onSave,onClose,localS
 
   function addRootAt(skillId, diagramAlreadyChanged=false, document=mode.document, inventory=available) {
     try{if(!diagramAlreadyChanged)document=onAddToDiagram?.(inventory.find(s=>s.id===skillId)||{id:skillId,title:skillId})||document;}
-    catch(error){setNotice(error.message);return;}
+    catch(error){setNotice(error.message);return false;}
     update(present => {
       const roots = present.roots.includes(skillId) ? present.roots : [...present.roots, skillId];
       let draft = placeSkill(present.draft, skillId, scopeId);
@@ -172,6 +173,7 @@ export default function ParadigmEditor({mode,skills,Dialog,onSave,onClose,localS
         if (!assignedScopes(draft, dependency).length) draft = placeSkill(draft, dependency, scopeId);
       return {...present, roots, draft, document};
     });
+    return true;
   }
 
   // Install only through the callback, and only write references after it
@@ -181,6 +183,7 @@ export default function ParadigmEditor({mode,skills,Dialog,onSave,onClose,localS
     const candidate = candidates.find(row => row.sourceKey === sourceKey);
     if (!candidate) return;
     if (index.has(candidate.id)) {
+      if(!window.confirm(`库内已有“${index.get(candidate.id).title||candidate.id}”，将使用本地版本，继续？`))return;
       setNotice(`库内已有 ${candidate.id}，用库内版本`);
       addRootAt(candidate.id);
       return;
@@ -191,17 +194,19 @@ export default function ParadigmEditor({mode,skills,Dialog,onSave,onClose,localS
     }
     if (installing) return;
     setInstalling(candidate.sourceKey);
-    setNotice(`安装 ${candidate.title || candidate.id}…`);
+    setNotice(`正在加入 ${candidate.title || candidate.id}…`);
     try {
       const result = await onLocalSkillAdded(candidate);
       const inventory = Array.isArray(result?.skills) ? result.skills : null;
       if (!inventory) throw new Error('安装回调没有返回 {skills} 目录');
       if (!inventory.some(skill => skill?.id === candidate.id)) throw new Error('安装结果里没有这个技能');
       setAvailable(previous => mergeInventory(previous, inventory));
-      addRootAt(candidate.id,false,mode.document,inventory);
-      setNotice(`已安装 ${candidate.title || candidate.id}`);
+      if(!addRootAt(candidate.id,false,mode.document,inventory)){
+        setNotice(message=>`${result.staged?'技能已留在草稿':'技能已保存到库'}，尚未加入画板：${message}`);return;
+      }
+      setNotice(result.staged?'已加入草稿，保存后写入工作库。':'技能已采用到本地，保存后更新模式。');
     } catch (error) {
-      setNotice(`未安装 ${candidate.id}：${error?.message || error}`);
+      setNotice(`未加入 ${candidate.id}：${error?.message || error}`);
     } finally {
       setInstalling('');
     }
@@ -247,7 +252,7 @@ export default function ParadigmEditor({mode,skills,Dialog,onSave,onClose,localS
   const localRows = useMemo(() => {
     const needle = query.trim().toLowerCase();
     const byId=new Map();
-    for(const candidate of candidates.filter(item=>!index.has(item.id))) {
+    for(const candidate of candidates) {
       if(!byId.has(candidate.id))byId.set(candidate.id,{...candidate,sources:[]});
       byId.get(candidate.id).sources.push(candidate);
     }
@@ -317,6 +322,7 @@ export default function ParadigmEditor({mode,skills,Dialog,onSave,onClose,localS
 
       <div className="graph-workbench">
         <aside className="graph-pane graph-pane-skills" aria-label="技能清单">
+          <PanelResize name="mode-skills" label="调整模式技能栏宽度" initial={240} min={180}/>
           <div className="graph-pane-heading"><span>技能</span><small>{members.length}</small></div>
           <div className="graph-search"><Search size={13} aria-hidden="true" /><input type="search" aria-label="搜索技能" placeholder="搜索" value={query} onChange={event => setQuery(event.target.value)} /></div>
           <div className="graph-skills">
@@ -337,14 +343,15 @@ export default function ParadigmEditor({mode,skills,Dialog,onSave,onClose,localS
                   event.dataTransfer.effectAllowed = 'copy';
                 }}>
                 <Puzzle size={13} aria-hidden="true" />
-                <span className="graph-skill-text"><strong>{skill.title || skill.id}</strong><small>{skill.id}</small></span>
+                <button type="button" className="graph-skill-open" onClick={()=>onOpenSkill?.(skill)}><span className="graph-skill-text"><strong>{skill.title || skill.id}</strong><small>{skill.id}</small></span></button>
                 <button type="button" className="icon-button" aria-label={`加入 ${skill.title || skill.id}`} title="加入当前归属" onClick={() => addRootAt(skill.id)}><Plus size={13} /></button>
               </div>)}
             </section> : null}
             {localRows.length ? <section className="graph-skill-group">
-              <h4>本机 · {localRows.length}</h4>
+              <h4>{candidateLabel} · {localRows.length}</h4>
               {localRows.map(candidate => <CandidateRow key={candidate.id} candidate={candidate}
                 busy={!!installing}
+                onOpen={onOpenCandidate}
                 onInstall={sourceKey => { void installBySource(sourceKey); }} />)}
             </section> : null}
           </div>

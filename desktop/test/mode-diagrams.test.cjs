@@ -22,3 +22,9 @@ test('adding a Skill node retains its authored scenario label',async()=>{
   assert.equal(node.data.skill,skill);
   assert.equal(node.alias,'skill_public_writing');
 });
+test('unauthored member collections become editable nodes, not a read-only block chart',async()=>{
+  const {modeDiagramDocument}=await import('../src/mode-diagrams.mjs');
+  const {diagramsIn,editFlowchart}=await import('../src/mermaid-document.mjs');
+  const document=modeDiagramDocument({document:'# Test',roots:['a'],architecture:{shared:[],paradigms:[{id:'work',title:'工作',skills:['a'],edges:[]}]}},[{id:'a',title:'A'}]);
+  assert.match(editFlowchart(diagramsIn(document)[0].source,{kind:'add',id:'skill_b',label:'B'}),/skill_b/);
+});

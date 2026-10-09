@@ -20,7 +20,7 @@ test('a failed Skill file read offers retry without misreporting a binary file',
     await page.getByRole('alert').filter({hasText:'文件暂时无法读取'}).waitFor();
     assert.equal(await page.getByText(/此文件为二进制/).count(),0,'读取失败不能误报为不支持的文件');
     await page.getByRole('button',{name:'重新读取',exact:true}).click();
-    await page.locator('.editor-page .package-rendered .markdown-content h1').waitFor();
+    await page.locator('.skill-canvas-panel .package-rendered .markdown-content h1').waitFor();
     assert.equal(await page.getByRole('alert').count(),0);
     assert.deepEqual(errors,[]);
   } finally {await page.close();await app.close();}
@@ -31,7 +31,7 @@ test('leaving a Skill draft through the source tree protects unsaved edits',{tim
   try {
     await page.getByRole('button',{name:'全部技能',exact:true}).first().click();
     await page.locator('.skill-table-row').first().click();
-    await page.locator('.editor-page .package-rendered .markdown-content').waitFor();
+    await page.locator('.skill-canvas-panel .package-rendered .markdown-content').waitFor();
     await page.getByRole('button',{name:'编辑',exact:true}).click();
     const editor=page.getByRole('textbox',{name:'文件内容',exact:true});
     const draft=(await editor.inputValue())+'\n未保存的测试草稿。';
@@ -41,13 +41,16 @@ test('leaving a Skill draft through the source tree protects unsaved edits',{tim
     await page.locator('.source-tree button').filter({hasText:'Creator Studio'}).click();
     assert.equal(confirmations,1,'来源树导航必须先确认草稿');
     assert.equal(await editor.inputValue(),draft);
+    await page.locator('.source-tree button').filter({hasText:'Creator Studio'}).click({button:'right'});
+    assert.equal(confirmations,2,'侧栏右键不能绕过草稿确认');
+    assert.equal(await editor.inputValue(),draft);
     await page.getByRole('button',{name:'发现',exact:true}).first().click();
-    assert.equal(confirmations,2,'每次离开只询问一次');
+    assert.equal(confirmations,3,'每次离开只询问一次');
     assert.equal(await editor.inputValue(),draft);
     discard=true;
-    await page.locator('.editor-page-heading').getByRole('button',{name:'返回',exact:true}).click();
-    await page.locator('.editor-page').waitFor({state:'detached'});
-    assert.equal(confirmations,3,'返回不重复确认');
+    await page.locator('.skill-canvas-panel').getByRole('button',{name:'关闭',exact:true}).click();
+    await page.locator('.skill-canvas-panel').waitFor({state:'detached'});
+    assert.equal(confirmations,4,'返回不重复确认');
     assert.deepEqual(errors,[]);
   } finally {await page.close();await app.close();}
 });
@@ -211,7 +214,7 @@ test('cloud navigation preserves local position and refresh keeps the same repos
     await page.locator('.source-library').waitFor();
     await page.waitForFunction(async()=>!!(await window.asl.initial()).value.activeSource);
     await page.reload();
-    await page.locator('.source-library .repository-tabs').waitFor();
+    await page.getByText('选中的技能。',{exact:true}).waitFor();
     await page.locator('.read-status').waitFor({state:'detached',timeout:60000});
     assert.deepEqual(JSON.parse(await fs.readFile(preferences,'utf8')).views[workspace],local,'恢复云端时不重置本地位置');
     await page.getByRole('button',{name:'全部技能',exact:true}).first().click();

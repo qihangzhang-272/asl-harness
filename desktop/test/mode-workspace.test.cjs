@@ -35,7 +35,8 @@ test("App routes new and existing Modes through the workspace and keeps two Mode
   assert.match(app, /kind === "mode-workspace"/);
   assert.match(app, /kind: "mode-workspace"/);
   assert.match(app, /kind:'mode-workspace'/);
-  assert.ok(app.includes("['mode-workspace','skill-editor'"));
+  assert.match(app,/const editorOpen=\[[^\]]*'mode-workspace'[^\]]*'skill-editor'/);
+  assert.match(app,/const editorOpen=\[[^\]]*'library-create'/);
   assert.match(app, /Dialog=\{EditorPage\}/);
   assert.match(app, /onCatalog=\{next => setCatalog\(next\)\}/);
   assert.match(app, /createModeWithSkill/);
@@ -46,7 +47,7 @@ test("App routes new and existing Modes through the workspace and keeps two Mode
   assert.ok(!app.includes('"技能列表"'), "the list tab is merged into the grouped skill list");
   assert.ok(!app.includes("ModeSkills"), "the duplicate skill-management page is gone");
   assert.ok(!app.includes("CategoryEditor"), "categories are kept as data, not a second entry");
-  assert.match(app, /if\(request\.operation === "mode\.save" && request\.id\) showMode\(request\.id\)/);
+  assert.match(app, /if\(request\.operation === "mode\.save" && request\.id\) \{setCloud\(null\);showMode\(request\.id\)/);
   // The local-mode list stays on the discover page only, and the sources page leaves one way in.
   assert.match(app, /provider==='local-modes'&&<LocalModes/);
   assert.ok(!app.includes("连接符合 ASL 协议的 GitHub 仓库后"), "the empty sources page keeps only its action");
@@ -144,15 +145,9 @@ test("the Mode document round-trips the name and the Markdown body", async () =>
   assert.deepEqual(readModeDocument(""), { name: "", body: "" });
 });
 
-test("the fixed shell does not cross-fade while the content keeps its short transition", () => {
+test("navigation keeps the real canvas available without a root snapshot", () => {
   const css = read("product.css").replace(/\/\*[\s\S]*?\*\//g, "");
-  // The root snapshot is the top bar and sidebar: it switches instantly instead of cross-fading.
-  assert.match(css, /::view-transition-old\(root\)\s*\{\s*display:\s*none;?\s*\}/);
-  assert.match(css, /::view-transition-new\(root\)\s*\{\s*animation:\s*none;?\s*\}/);
-  // The content area keeps its 100/180ms transition and the overlay stays click-through.
-  assert.match(css, /::view-transition-old\(asl-content\)\s*\{\s*animation-duration:\s*100ms;?\s*\}/);
-  assert.match(css, /::view-transition-new\(asl-content\)\s*\{\s*animation-duration:\s*180ms;?\s*\}/);
-  assert.match(css, /::view-transition\s*\{\s*pointer-events:\s*none;?\s*\}/);
-  assert.ok(!/::view-transition\s*\{[^}]*animation:\s*none/.test(css), "only the root is disabled, not the content motion");
+  assert.doesNotMatch(css, /view-transition/);
+  assert.doesNotMatch(read('motion.js'), /startViewTransition/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
 });

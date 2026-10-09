@@ -11,17 +11,21 @@ export function editRenderedLabel(element,item,onCommit) {
   const input=document.createElement('div');input.contentEditable='true';input.setAttribute('role','textbox');input.setAttribute('aria-label',item.kind==='node'?'节点文字':'连线文字');input.spellcheck=false;input.textContent=item.label;
   if(label)label.style.visibility='hidden';
   let finished=false;
-  const restore=()=>{if(label)label.style.visibility='';object.remove();};
+  const protect=event=>event.preventDefault();
+  const discard=()=>finish(false);
+  const restore=()=>{if(label)label.style.visibility='';object.remove();document.removeEventListener('asl:before-content-refresh',protect);document.removeEventListener('asl:discard-drafts',discard);svg.removeEventListener('asl:release-inline',restore);document.dispatchEvent(new Event('asl:editor-state'));};
   const finish=save=>{
     if(finished)return;finished=true;const value=input.innerText.trim();
     if(!save||value===item.label){restore();return;}
     // Keep the new text in place until the saved source replaces this SVG.
-    input.contentEditable='false';input.removeAttribute('role');input.removeAttribute('aria-label');input.blur();
-    Promise.resolve(onCommit(value)).then(accepted=>{if(accepted===false)restore();},restore);
+    input.contentEditable='false';input.blur();
+    const retry=()=>{if(!object.isConnected)return;finished=false;input.contentEditable='true';input.focus();};
+    Promise.resolve().then(()=>onCommit(value)).then(accepted=>{if(accepted===false)retry();else restore();},retry);
   };
-  input.onblur=()=>finish(true);
+  input.onblur=event=>{if(!event.relatedTarget?.closest('[data-confirm-discard]'))finish(true);};
   input.onkeydown=event=>{event.stopPropagation();if(event.isComposing)return;if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();finish(true);}else if(event.key==='Escape'){event.preventDefault();finish(false);}};
   input.onclick=input.ondblclick=input.oncontextmenu=event=>event.stopPropagation();
   object.appendChild(input);svg.appendChild(object);input.focus();
+  document.addEventListener('asl:before-content-refresh',protect);document.addEventListener('asl:discard-drafts',discard);svg.addEventListener('asl:release-inline',restore);document.dispatchEvent(new Event('asl:editor-state'));
   const range=document.createRange();range.selectNodeContents(input);const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);
 }

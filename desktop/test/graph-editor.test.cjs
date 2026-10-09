@@ -59,6 +59,8 @@ test("the editor awaits local installs, drags sources and keeps every scope", ()
 test("narrow windows keep a scrollable skill rail and leave room for direct editing", () => {
   const sheets = ["graph-editor.css", "mode-workspace.css", "guide.css", "product.css", "mcp.css"];
   const declared = new Set([...fs.readFileSync(path.join(__dirname, "..", "style.css"), "utf8").matchAll(/--([a-z0-9-]+)\s*:/g)].map(match => match[1]));
+  // Per-panel width is set by the shared resizer, not a second visual token set.
+  for(const [,token] of read('PanelResize.jsx').matchAll(/setProperty\('--([a-z0-9-]+)'/g))declared.add(token);
   for (const name of sheets) {
     const css = read(name);
     // One token set: a sheet may only reference tokens the root sheet already declares, and it
@@ -71,12 +73,9 @@ test("narrow windows keep a scrollable skill rail and leave room for direct edit
   // The rail is the only place a skill is added to the canvas, so no breakpoint may hide a pane.
   const editor = read("graph-editor.css");
   assert.doesNotMatch(editor, /\.graph-pane[^{]*\{[^}]*display:\s*none/);
-  const narrow = (editor.match(/@media \(max-width: 1000px\) \{([\s\S]*?)\n\}/) || [])[1] || "";
-  const rails = narrow.match(/(\d+)px minmax\(0, 1fr\)/);
-  assert.ok(rails, "the 900px-class breakpoint keeps the rail and a shrinkable canvas");
-  const canvas = 900 - 48 - Number(rails[1]) - 8;
-  assert.ok(canvas >= 500, `the skill rail leaves the canvas only ${canvas}px at 900px`);
+  assert.match(editor,/grid-template-columns: auto minmax\(0, 1fr\)/,'the same resizable rail owns width at all breakpoints');
   const source = read("ParadigmEditor.jsx");
+  assert.match(source,/<PanelResize name="mode-skills"/);
   assert.match(source, /className="graph-pane graph-pane-skills" aria-label="技能清单"/);
   assert.match(source, /aria-label=\{`加入 \$\{skill\.title \|\| skill\.id\}`\}/);
   // The 168px rail cuts a nowrap title down to a few characters, so the name wraps to two lines

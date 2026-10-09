@@ -41,10 +41,11 @@ export default function ModeWorkspace({
   Dialog = EditorPage, Field = DefaultField, onSave, onCatalog, onClose, readFile, saveFile, initialTitle = '', preloadedReport, editSource=false,
 }) {
   const source = useMemo(() => readModeDocument(mode?.document), [mode]);
+  const initialSkills=catalog?.skills||draft?.packages||[];
   const [name, setName] = useState(() => draft?.name ?? source.name);
   const [body, setBody] = useState(() => mode
     ? readModeDocument(modeDiagramDocument(mode,catalog?.skills||[])).body
-    : (draft?.body||'')+diagramBlock('技能协作',['flowchart LR',...skillNodes((catalog?.skills||[]).filter(s=>memberIds(draft?.roots||[],catalog?.skills||[]).includes(s.id))).map(n=>`${n.alias}["${diagramLabel(n.data.title)}"]`)].join('\n')));
+    : (draft?.body||'')+diagramBlock('技能协作',['flowchart LR',...skillNodes(initialSkills.filter(s=>memberIds(draft?.roots||[],initialSkills).includes(s.id))).map(n=>`${n.alias}["${diagramLabel(n.data.title)}"]`)].join('\n')));
   const [diagramIndex,setDiagramIndex]=useState(()=>Math.max(0,diagramsIn(body).findIndex(d=>d.title===initialTitle)));
   const [selected,setSelected]=useState(null);
   const [expanded,setExpanded]=useState(false);
@@ -67,12 +68,12 @@ export default function ModeWorkspace({
       nodes: Array.isArray(saved?.nodes) ? saved.nodes : [],
       shared,
       paradigms: [{id: 'main', title: '技能协作', description: draft?.body || source.body || '组织本模式使用的技能',
-        skills: memberIds(roots,catalog?.skills||[]).filter(skill => !shared.includes(skill))}],
+        skills: memberIds(roots,initialSkills).filter(skill => !shared.includes(skill))}],
     };
   });
-  const [librarySkills, setLibrarySkills] = useState(() => catalog?.skills || []);
+  const [librarySkills, setLibrarySkills] = useState(() => initialSkills);
   const [report, setReport] = useState(() => draft?.report || preloadedReport || null);
-  useEffect(()=>{if(preloadedReport)setReport(preloadedReport);},[preloadedReport]);
+  useEffect(()=>{if(preloadedReport&&!draft?.report)setReport(preloadedReport);},[preloadedReport,draft?.report]);
   const [importing, setImporting] = useState('');
   const [error, setError] = useState('');
   const [pane,setPane]=useState(editSource?'document':'canvas');
@@ -84,8 +85,8 @@ export default function ModeWorkspace({
   useEffect(() => { if (catalog?.skills) setLibrarySkills(catalog.skills); }, [catalog]);
 
   const candidates = useMemo(
-    () => localSkillCandidates(librarySkills, report?.skills || []).filter(candidate=>candidate.state!=='installed'),
-    [librarySkills, report],
+    () => localSkillCandidates(librarySkills, report?.skills || []).filter(candidate=>candidate.state!=='installed'||draft?.repository&&report===draft.report),
+    [librarySkills, report, draft?.repository, draft?.report],
   );
   const isNew = !fingerprint;
   const idValid = MODE_FOLDER_VALID.test(id);
@@ -118,6 +119,11 @@ export default function ModeWorkspace({
       || candidates.find(candidate => candidate.id === skill?.id) || skill;
     if (!entry?.id) throw new Error('没有可加入的技能来源');
     const existing = librarySkills.find(candidate => candidate.id === entry.id);
+    if(!catalog){
+      const skills=existing?librarySkills:[...librarySkills,{...entry,path:entry.source}];
+      setLibrarySkills(skills);
+      return {skills,staged:true};
+    }
     const request = candidateImportRequest(entry, existing);
     if (!request) return {skills: librarySkills};
     setImporting(entry.id);
@@ -145,6 +151,7 @@ export default function ModeWorkspace({
       const allowed = new Set(request.skills || []);
       next.capabilities = capabilities.map(group => ({...group, skills: (group.skills || []).filter(skill => allowed.has(skill))}));
     }
+    if(!catalog)next.sources=librarySkills.filter(skill=>memberIds(request.skills,librarySkills).includes(skill.id)).map(skill=>({id:skill.id,source:skill.path||skill.source,...(skill.origin?{sourceOrigin:skill.origin}:{})}));
     return onSave(next);
   }
 
@@ -215,7 +222,7 @@ export default function ModeWorkspace({
             if(scopes.length===1)onSelectScope(scopes[0].id);
           }}>{d.title}</button>)}</div>
             </nav>
-          <SkillCanvas selected={selected} onSelect={setSelected} readFile={readFile} saveFile={saveFile}>
+          <SkillCanvas selected={selected} onSelect={setSelected} readFile={catalog&&!selected?.sourcePreview?readFile:async skill=>({file:'SKILL.md',files:[{path:'SKILL.md',group:'技能内容',editable:false}],document:await api('sourceDocument',skill.source||skill.path)})} saveFile={saveFile} readOnly={!catalog||!!selected?.sourcePreview}>
             <MermaidEdit key={index} source={diagram?.source}
               empty={!diagram||!members.length&&diagram.source.trim()==='flowchart LR'}
               nodes={skillNodes(available.filter(s=>members.includes(s.id)),map.nodes)}
@@ -233,6 +240,9 @@ export default function ModeWorkspace({
       </section>}
       skills={librarySkills}
       localSkills={candidates}
+      candidateLabel={draft?.repository&&report===draft.report?'仓库技能':'本机'}
+      initialQuery={draft?.query||''}
+      onOpenCandidate={skill=>setSelected({...skill,sourcePreview:true})}
       onLocalSkillAdded={addLocalSkill}
       Dialog={WorkspaceFrame}
       onSave={handleSave}

@@ -42,12 +42,12 @@ export function attachStructureDrag(svg,entries,model,onMove) {
   function stop(){
     if(drag){drag.element.classList.remove('is-dragging');drag.target?.classList.remove('is-drop-target');if(drag.target)delete drag.target.dataset.drop;drag=null;}
     window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',finish);
-    window.removeEventListener('pointercancel',cancel);window.removeEventListener('keydown',key);
+    window.removeEventListener('pointercancel',cancel);window.removeEventListener('keydown',key);window.removeEventListener('blur',cancel);
   }
-  function cancel(){suppressClick=!!drag?.started;stop();}
+  function cancel(event){if(event?.pointerId!==undefined&&event.pointerId!==drag?.pointerId)return;suppressClick=!!drag?.started;stop();}
   function key(event){if(event.key==='Escape'){event.preventDefault();cancel();}}
   function move(event){
-    if(!drag)return;
+    if(!drag||event.pointerId!==drag.pointerId)return;
     if(!drag.started&&Math.hypot(event.clientX-drag.x,event.clientY-drag.y)<6)return;
     event.preventDefault();drag.started=true;drag.element.classList.add('is-dragging');
     const target=document.elementFromPoint(event.clientX,event.clientY)?.closest('[data-asl-edit]');
@@ -57,7 +57,7 @@ export function attachStructureDrag(svg,entries,model,onMove) {
     if(drag.target)drag.target.dataset.drop=dropPlacement(model.type,drag.item.kind,drag.target.getBoundingClientRect(),event.clientX,event.clientY);
   }
   function finish(event){
-    const current=drag;if(!current)return;
+    const current=drag;if(!current||event.pointerId!==current.pointerId)return;
     suppressClick=current.started;
     const target=current.target,to=entries.find(entry=>entry.element===target)?.item;
     stop();
@@ -72,11 +72,11 @@ export function attachStructureDrag(svg,entries,model,onMove) {
     element.dataset.aslEdit=item.key;
     if(!model.structural||model.activation||item.kind==='condition'&&!item.first)continue;
     element.onpointerdown=event=>{
-      if(event.button!==0||event.target.closest('.mermaid-label-editor'))return;
+      if(event.button!==0||drag||event.target.closest('.mermaid-label-editor'))return;
       event.preventDefault();
-      stop();suppressClick=false;drag={element,item,x:event.clientX,y:event.clientY,started:false};
+      stop();suppressClick=false;drag={element,item,pointerId:event.pointerId,x:event.clientX,y:event.clientY,started:false};
       window.addEventListener('pointermove',move);window.addEventListener('pointerup',finish);
-      window.addEventListener('pointercancel',cancel);window.addEventListener('keydown',key);
+      window.addEventListener('pointercancel',cancel);window.addEventListener('keydown',key);window.addEventListener('blur',cancel);
     };
   }
   return ()=>{stop();svg.removeEventListener('click',click,true);entries.forEach(({element})=>{delete element.dataset.aslEdit;element.onpointerdown=null;});};

@@ -30,7 +30,7 @@ function watchEnvironment(root, notify) {
   // libuv can abort on Windows 8.3 aliases; subscribe with the native long path.
   const watcher = fs.watch(fs.realpathSync.native(root), { recursive: true, persistent: false }, (_event, file) => {
     const parts = String(file || '').split(/[\\/]/);
-    if (!['skills', 'modes', 'PROFILE.md'].includes(parts[0]) || parts.some(p => ['.git', '__pycache__', 'node_modules', '.pytest_cache'].includes(p))) return;
+    if (!['skills', 'modes', 'feedback', 'PROFILE.md'].includes(parts[0]) || parts.some(p => ['.git', '__pycache__', 'node_modules', '.pytest_cache'].includes(p))) return;
     // Windows also reports parent-directory metadata for ignored cache writes.
     if (fs.statSync(path.join(root, ...parts), { throwIfNoEntry: false })?.isDirectory()) return;
     clearTimeout(timer);

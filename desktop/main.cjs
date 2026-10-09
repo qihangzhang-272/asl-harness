@@ -4,6 +4,7 @@ const path = require("node:path");
 const { randomUUID, createHash } = require("node:crypto");
 const { pathToFileURL } = require("node:url");
 const { runCore, commandArgs } = require("./bridge.cjs");
+const { trashArchive } = require('./archive-actions.cjs');
 const {
   readPreferences,
   rememberLibrary,
@@ -88,6 +89,18 @@ if(primary) app.whenReady().then(() => {
   const preferenceFile = path.join(app.getPath("userData"), "libraries.json");
   const sessionRoot = path.join(app.getPath("userData"), "setup-sessions");
   const managedLibrary = path.join(app.getPath("userData"), "workspace");
+  handle('asl:trash-archive',async values=>{
+    commandArgs('archiveCleanup',values);
+    if(!values.expected||!selected.has(path.resolve(values.workspace))||path.resolve(values.workspace)===example||bundledExample(values.workspace))throw new Error('请先查看本地归档');
+    if(busy)throw new Error('当前保存尚未完成');
+    busy=true;
+    try{return await trashArchive(values,{
+      run:(action,values)=>runCore(action,values,options),
+      confirm:async plan=>(await dialog.showMessageBox(window,{type:'warning',buttons:['保留','移到回收站'],defaultId:0,cancelId:0,
+        message:'将这项归档移到回收站？',detail:`${plan.archivePath}\n${plan.size} 字节\n活动模式和技能不变。可从系统回收站找回。`})).response===1,
+      trash:target=>shell.trashItem(target),
+    });}finally{busy=false;}
+  });
   handle('asl:source-menu',async url=>{
     if(!(await readPreferences(preferenceFile)).repositories.includes(url))throw new Error('这个仓库尚未连接');
     return new Promise((resolve,reject)=>{
@@ -97,11 +110,44 @@ if(primary) app.whenReady().then(() => {
       }}]).popup({window,callback:()=>{if(!chosen)resolve({removed:false});}});
     });
   });
+  handle('asl:library-menu',async(root,mode)=>{
+    if(typeof root!=='string'||!selected.has(path.resolve(root))||mode!==undefined&&!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(mode))throw new Error('请先打开这个工作库');
+    const writable=path.resolve(root)!==example&&!bundledExample(root);
+    const choices=mode?[
+      ['open-mode','打开模式'],['new-mode','新建同级模式',writable],['edit-mode','编辑模式',writable],['mode-history','演变记录'],['copy-mode','复制模式',writable],['archive-mode','归档模式',writable],
+    ]:[['open','打开工作库'],['environment-documents','偏好与记录'],['archive-browser','归档'],['new-mode','新建模式',writable],['new-library','新建工作库'],['open-library','打开已有工作库']];
+    return new Promise(resolve=>{
+      let chosen=false;
+      Menu.buildFromTemplate(choices.map(([action,label,enabled=true])=>({label,enabled,click:()=>{chosen=true;resolve({action});}}))).popup({window,callback:()=>{if(!chosen)resolve({});}});
+    });
+  });
+  handle('asl:create-library',async({workspace,mode,target})=>{
+    if(busy)throw new Error('当前保存尚未完成');
+    if(![workspace,target].every(value=>typeof value==='string'&&selected.has(path.resolve(value)))||!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(mode))throw new Error('请先选择工作库和新位置');
+    try{await fs.lstat(target);throw new Error('这个位置已存在，请选择新的工作库名称');}catch(error){if(error.code!=='ENOENT')throw error;}
+    busy=true;
+    try{
+      const bundle=path.join(app.getPath('temp'),'asl-library-'+randomUUID()+'.zip');
+      await runCore('export',{workspace,mode,output:bundle,apply:true},options);
+      const plan=await runCore('import',{source:bundle,target},options);
+      const answer=await dialog.showMessageBox(window,{type:'question',buttons:['取消','创建工作库'],defaultId:0,cancelId:0,message:'创建独立工作库？',detail:`首个模式：${mode}\n位置：${target}\n复制此模式及完整技能包；原库、个人资料和账号保持不变。`});
+      if(answer.response!==1)return {canceled:true};
+      await runCore('import',{source:bundle,target,expected:plan.fingerprint,apply:true},options);
+      return {workspace:target,preferences:await rememberLibrary(preferenceFile,target)};
+    }finally{busy=false;}
+  });
+  const machineJobs = new Map();
   async function machineInventory(signal) {
     const preferences = await readPreferences(preferenceFile);
     const source = [...new Set([...preferences.libraries, ...preferences.targets.map(t => t.project), managedLibrary])]
       .filter(p => typeof p === 'string' && path.isAbsolute(p)).slice(0, 64);
-    const report = await runCore('nativeMcp', { source }, { ...options, signal });
+    const key=JSON.stringify(source);
+    if(!machineJobs.has(key)){
+      const job=runCore('nativeMcp',{source},options).finally(()=>machineJobs.delete(key));
+      machineJobs.set(key,job);
+    }
+    const report = await machineJobs.get(key);
+    signal?.throwIfAborted();
     for (const project of report.projects) selected.add(path.resolve(project));
     return report;
   }
@@ -122,6 +168,18 @@ if(primary) app.whenReady().then(() => {
   });
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   window.removeMenu();
+  window.on('close',event=>{
+    if(!busy)return;
+    event.preventDefault();
+    dialog.showMessageBox(window,{type:'info',buttons:['继续等待'],message:'正在保存，请完成后再关闭。'}).catch(()=>{});
+  });
+  window.webContents.on('will-prevent-unload',event=>{
+    const choice=dialog.showMessageBoxSync(window,busy?{
+      type:'info',buttons:['继续等待'],defaultId:0,cancelId:0,message:'正在保存，请完成后再关闭。',
+    }:{type:'question',buttons:['继续编辑','放弃并关闭'],defaultId:0,cancelId:0,message:'有未保存的修改，是否关闭？'});
+    // Electron: preventing this event overrides the renderer's unload veto.
+    if(!busy&&choice===1)event.preventDefault();
+  });
   window.webContents.on("will-navigate", (event, url) => {
     if (url !== page) event.preventDefault();
   });
@@ -158,7 +216,7 @@ if(primary) app.whenReady().then(() => {
   });
   handle('asl:connect-repository', async (url,snapshot) => {
     if(!repositories.get(snapshot)?.urls.has(new URL(url).href))throw new Error('请先读取这个仓库');
-    const preferences=await updatePreferences(preferenceFile,p=>({...p,repositories:[url,...p.repositories.filter(v=>v!==url)].slice(0,12)}));
+    const preferences=await updatePreferences(preferenceFile,p=>({...p,repositories:[url,...p.repositories.filter(v=>v!==url)]}));
     return preferences.repositories;
   });
 
@@ -243,6 +301,29 @@ if(primary) app.whenReady().then(() => {
     } finally { busy = false; }
   });
   handle("asl:setup-status", (id) => sessionStatus(sessionRoot, id));
+  readHandle('assistants','asl:assistants',()=>assistantInventory());
+  handle('asl:organize',async(assistant,values)=>{
+    if(!values||typeof values!=='object'||Array.isArray(values)||Object.keys(values).some(key=>!['workspace','mode','goal','snapshot'].includes(key)))throw new Error('无效的整理请求');
+    const {goal='',snapshot,...scope}=values;
+    commandArgs('guide',scope);
+    if(!selected.has(path.resolve(scope.workspace))||path.resolve(scope.workspace)===path.resolve(example))throw new Error('请先选择可编辑的本地工作库');
+    if(typeof goal!=='string'||goal.length>2000||goal.includes('\0'))throw new Error('整理目标过长或无效');
+    const repository=snapshot?repositories.get(snapshot)?.report:null;
+    if(snapshot&&!repository)throw new Error('来源已过期，请重新读取仓库');
+    const installed=(await assistantInventory()).find(item=>item.id===assistant&&item.available);
+    if(!installed)throw new Error('未发现可启动的 Agent，可在已有 Agent 中使用 ASL CLI');
+    if(busy)throw new Error('当前操作尚未完成');
+    busy=true;
+    try{
+      const context=await runCore('guide',scope,options);
+      const {guidePrompt}=require('./assistant.cjs');
+      const cli=options.executable||process.env.ASL_CORE_EXECUTABLE;
+      const entry=cli?`当前 CLI 程序：${JSON.stringify(cli)}。先用它执行 cli.describe。`:`开发 CLI：${JSON.stringify({python:process.env.ASL_PYTHON||'python',module:'asl_harness.commands',pythonPath:path.join(root,'src')})}；仅在调用进程设置 PYTHONPATH，执行 -m asl_harness.commands cli.describe。`;
+      const roots=await registeredSkillRoots();
+      const brief=guidePrompt({goal,document:entry+'\n'+context.document,included:roots.map(item=>item.path),repository});
+      return await launchAssistant({id:installed.id,executable:installed.executable,brief,workspace:scope.workspace,project:scope.workspace},{root:sessionRoot});
+    }finally{busy=false;}
+  });
   readHandle('localSkills', "asl:local-skills", async ([extra,refresh=false], signal) => {
     if(typeof refresh!=='boolean')throw new Error('无效的刷新选项');
     if (extra && !selected.has(path.resolve(extra))) throw new Error("请先选择要扫描的目录");
@@ -296,10 +377,11 @@ if(primary) app.whenReady().then(() => {
   });
   readHandle('repositoryOverview','asl:repository-overview',([url,document],signal)=>readOverview(url,(...args)=>net.fetch(...args),signal,document));
   handle('asl:repository-document',(snapshot,file)=>readRepositoryDocument(snapshot,file,repositories));
-  readHandle("githubSkills", "asl:github-skills", async ([url], signal) => {
+  readHandle("githubSkills", "asl:github-skills", async ([url, refresh = false], signal) => {
+    if (typeof refresh !== 'boolean') throw new Error('无效的刷新请求');
     return readRepository(url, { fetch: (...args) => net.fetch(...args),
       core: (action, values, signal) => runCore(action, values, { ...options, signal }),
-      temp: app.getPath("temp"), selected, repositories,
+      temp: app.getPath("temp"), cacheRoot: path.join(app.getPath('userData'), 'repository-cache'), refresh, selected, repositories,
     }, signal);
   });
   handle("asl:repository-mode", async (snapshot, mode) => {
@@ -403,11 +485,16 @@ if(primary) app.whenReady().then(() => {
   readHandle('run', "asl:run", async ([action, values], signal) => {
     if (["scan", "unpack", "mcp", "mcpSave", "localModes", "nativeMcp"].includes(action)) throw new Error("请使用对应管理入口");
     commandArgs(action, values);
-    if ((action === "edit" && (path.resolve(values.workspace) === example || bundledExample(values.workspace))) ||
+    if ((['edit','restoreHistory'].includes(action) && (path.resolve(values.workspace) === example || bundledExample(values.workspace))) ||
         (action === "import" && (path.resolve(values.target) === example || bundledExample(values.target))))
       throw new Error("内置示例只供查看。请先分享模式，再导入为独立技能库后编辑。");
     if (["userSync", "disconnect"].includes(action) && values.apply && !values.expected) throw new Error("请先查看变更预览");
     if (action === "import" && values.apply && !values.expected) throw new Error("请先查看导入预览");
+    if (action === 'create') {
+      if (values.apply && !values.expected) throw new Error('请先校验新建内容');
+      if (!Array.isArray(values.request.sources) || values.request.sources.some(item => !item || typeof item.source !== 'string' || !selected.has(path.resolve(item.source))))
+        throw new Error('请先选择要加入的技能目录');
+    }
     for (const key of [
       "workspace",
       "source",
@@ -443,13 +530,13 @@ if(primary) app.whenReady().then(() => {
           defaultId: 0,
           cancelId: 0,
           message:
-            action === "edit" ? "确认这次内容变更？" : action === 'import' ? '保存这个工作模式？' : action === 'export' ? '保存分享包？' :
+            action === 'restoreHistory' ? '恢复到这个版本？' : action === "edit" ? "确认这次内容变更？" : ['import','create'].includes(action) ? '保存这个工作模式？' : action === 'export' ? '保存分享包？' :
               `${values.remove || action === 'disconnect' ? '在' : '配置到'} ${({'codex-app':'Codex','claude-code':'Claude Code','deepseek-harness':'DeepSeek Harness',workbuddy:'WorkBuddy'})[values.host] || 'DeepSeek Harness'}${values.remove || action === 'disconnect' ? ' 中停用此模式？' : '？'}`,
-          detail: action === 'disconnect'
+          detail: action === 'restoreHistory' ? `恢复 ${values.mode} 的结构，并留下新记录。后来的记录仍保留，技能内容不变。` : action === 'disconnect'
             ? `模式：${values.mode}\n位置：${values.project}\n仅停用该位置的 ASL 模式，原技能库与其他配置不变；受管副本会保留到本地归档。`
             : action === "userSync"
             ? `范围：当前用户的所有项目\nAgent：${values.host}\n模式：${values.mode}\n${values.skillsDir ? "自选技能目录：" + values.skillsDir + "\n" : ""}${values.remove ? "停用 ASL 默认模式并移除其受管副本，保留原技能源。" : "按预览同步所选模式，其他原生技能和模型账号保持不变。"}`
-            : `${action === "import" && values.replace ? "将替换预览中冲突的同名内容。\n" : ""}${action === "project" ? "范围：仅所选项目\n" : ""}目标：${values.output || values.target || values.project || values.workspace}\n${action === "edit" ? values.request.id : "不更改其他项目或模型账号。"}`,
+            : `${action === "import" && values.replace ? "将替换预览中冲突的同名内容。\n" : ""}${action === "project" ? "范围：仅所选项目\n" : ""}目标：${values.output || values.target || values.project || values.workspace}\n${action === "edit" ? values.request.file || values.request.id : "不更改其他项目或模型账号。"}`,
         });
         if (answer.response !== 1) return { canceled: true };
       }

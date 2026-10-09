@@ -1,10 +1,56 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
-const { randomUUID } = require('node:crypto');
+const { randomUUID, createHash } = require('node:crypto');
 const { githubSnapshot, githubRepository } = require('./market.cjs');
 const { isLibrary } = require('./library.cjs');
-// Reuse inspected snapshots in this App session; never treat the cache as a content source.
+// Keep each URL's last successful read; reuse matching inspected snapshots across aliases.
 const cache = new Map();
+const MAX_ARCHIVE = 64 * 1024 * 1024, MAX_CACHE = 256 * 1024 * 1024, MAX_REPOSITORIES = 50;
+let cacheWrites = Promise.resolve();
+const digest = data => createHash('sha256').update(data).digest('hex');
+
+async function cacheFile(root, file, limit) {
+  const target=path.join(root,file),stat=await fs.lstat(target);
+  if(!stat.isFile()||stat.isSymbolicLink()||stat.size>limit||path.dirname(await fs.realpath(target))!==root)throw new Error('仓库缓存文件无效');
+  return fs.readFile(target);
+}
+
+async function cachedArchive(url, cacheRoot) {
+  if(!cacheRoot)return null;
+  try {
+    const root=await fs.realpath(cacheRoot),key=digest(url),record=JSON.parse(await cacheFile(root,key+'.json',65536));
+    const expected=githubRepository(url),repo=record.repo;
+    if(record.version!==1||record.url!==url||repo?.url!==expected.url||!/^([a-f0-9]{40})$/.test(repo.commit)
+      ||typeof repo.subpath!=='string'||/[\\:\0]/.test(repo.subpath)||repo.subpath&&repo.subpath.split('/').some(p=>!p||p==='.'||p==='..')
+      ||typeof record.checkedAt!=='string'||!Number.isFinite(Date.parse(record.checkedAt))||!/^([a-f0-9]{64})$/.test(record.digest))return null;
+    const bytes=await cacheFile(root,key+'.zip',MAX_ARCHIVE);
+    // This detects damaged local bytes, not proof that a cache writer represents GitHub.
+    if(bytes.length!==record.size||digest(bytes)!==record.digest)return null;
+    return{repo:{...expected,commit:repo.commit,subpath:repo.subpath},bytes,checkedAt:record.checkedAt};
+  } catch { return null; }
+}
+
+function saveArchive(url,cacheRoot,repo,bytes,checkedAt) {
+  if(!cacheRoot)return Promise.resolve();
+  const write=async()=>{
+    await fs.mkdir(cacheRoot,{recursive:true});
+    const root=await fs.realpath(cacheRoot),key=digest(url),names=await fs.readdir(root);
+    const files=await Promise.all(names.filter(name=>name.endsWith('.zip')||name===key+'.json').map(async name=>({name,stat:await fs.lstat(path.join(root,name))})));
+    if(files.some(({name,stat})=>name.startsWith(key)&&(!stat.isFile()||stat.isSymbolicLink())))return;
+    const archives=files.filter(({name})=>name.endsWith('.zip'));
+    const previous=archives.find(({name})=>name===key+'.zip');
+    // ponytail: bounded cache never evicts files; add explicit cleanup only when users need it.
+    if(!previous&&archives.length>=MAX_REPOSITORIES||archives.reduce((sum,{stat})=>sum+stat.size,0)-(previous?.stat.size||0)+bytes.length>MAX_CACHE)return;
+    const record={version:1,url,repo:{url:repo.url,commit:repo.commit,subpath:repo.subpath},checkedAt,size:bytes.length,digest:digest(bytes)};
+    for(const [suffix,data] of [['zip',bytes],['json',JSON.stringify(record)]]) {
+      const pending=path.join(root,`${key}.${randomUUID()}.tmp`);
+      try {await fs.writeFile(pending,data,{flag:'wx'});await fs.rename(pending,path.join(root,key+'.'+suffix));}
+      finally {await fs.unlink(pending).catch(()=>{});}
+    }
+  };
+  const job=cacheWrites.catch(()=>{}).then(write);cacheWrites=job;
+  return job.catch(()=>{}); // Cache failure must not prevent reading a downloaded public repository.
+}
 
 async function readOverview(url, fetch, signal, document) {
   const repo=githubRepository(url);
@@ -22,31 +68,63 @@ async function readOverview(url, fetch, signal, document) {
   return{file:body.path,text,url:body.html_url};
 }
 
-async function readRepository(url, { fetch, core, temp, selected, repositories }, signal) {
+async function readRepository(url, { fetch, core, temp, selected, repositories, cacheRoot, refresh=false }, signal) {
+    githubRepository(url);
+    url=new URL(url).href;
+    signal?.throwIfAborted();
     const request = (url, options = {}) => fetch(url, { ...options, signal: AbortSignal.any([signal, options.signal].filter(Boolean)) });
-    const repo = await githubSnapshot(url, request);
-    const key = `${repo.url}:${repo.commit}:${repo.subpath}`;
-    const cached = cache.get(key);
-    if (cached && repositories.has(cached.snapshot) && await fs.stat(cached.snapshot).then(s => s.isDirectory()).catch(() => false)) {
+    let previous=cache.get(url);
+    if(previous&&(!repositories.get(previous.snapshot)?.urls.has(url)||!await fs.stat(previous.snapshot).then(s=>s.isDirectory()).catch(()=>false)))previous=null;
+    if(previous&&!refresh)return{...previous,cacheStatus:'cached'};
+    const stored=await cachedArchive(url,cacheRoot);
+    let repo,bytes,checkedAt,cacheStatus='fresh',refreshError;
+    if(stored&&!refresh){({repo,bytes,checkedAt}=stored);cacheStatus='cached';}
+    else try {repo=await githubSnapshot(url,request);}
+    catch(error) {
       signal?.throwIfAborted();
-      repositories.get(cached.snapshot).urls.add(new URL(url).href);
-      return {...cached,checkedAt:new Date().toISOString()};
+      if(previous)return{...previous,cacheStatus:'stale',refreshError:error.message};
+      if(!stored)throw error;
+      ({repo,bytes,checkedAt}=stored);cacheStatus='stale';refreshError=error.message;
     }
-    cache.delete(key);
-    const response = await request(repo.archive, { signal: AbortSignal.timeout(90000) });
-    if (!response.ok) throw new Error(`下载失败（${response.status}），请稍后重试`);
-    const chunks = []; let bytes = 0;
-    for await (const chunk of response.body) {
-      bytes += chunk.length;
-      if (bytes > 64 * 1024 * 1024) throw new Error("仓库超过 64 MB，请在本机下载后选择具体技能目录");
-      chunks.push(chunk);
+    // ponytail: scan at most 50 URL records; no second content index is needed.
+    const cached = [...cache.values()].find(report=>report.repository===repo.url&&report.commit===repo.commit&&report.subpath===repo.subpath&&repositories.has(report.snapshot));
+    if (cached && await fs.stat(cached.snapshot).then(s => s.isDirectory()).catch(() => false)) {
+      signal?.throwIfAborted();
+      repositories.get(cached.snapshot).urls.add(url);
+      const result={...cached,cacheStatus,checkedAt:cacheStatus==='fresh'?new Date().toISOString():cached.checkedAt};
+      if(refreshError)result.refreshError=refreshError;else delete result.refreshError;
+      if(refresh&&cacheStatus==='fresh')repositories.get(cached.snapshot).report=result;
+      cache.delete(url);
+      if(cache.size>=MAX_REPOSITORIES)cache.delete(cache.keys().next().value);
+      cache.set(url,result);
+      if(cacheRoot&&cacheStatus==='fresh') {
+        const archiveBytes=stored?.repo.commit===repo.commit?stored.bytes:await cacheFile(path.dirname(cached.snapshot),'source.zip',MAX_ARCHIVE).catch(()=>null);
+        if(archiveBytes)await saveArchive(url,cacheRoot,repo,archiveBytes,result.checkedAt);
+      }
+      return result;
+    }
+    if(!bytes)try {
+      const response = await request(repo.archive, { signal: AbortSignal.timeout(90000) });
+      if (!response.ok) throw new Error(`下载失败（${response.status}），请稍后重试`);
+      const chunks = []; let size = 0;
+      for await (const chunk of response.body) {
+        size += chunk.length;
+        if (size > MAX_ARCHIVE) throw new Error("仓库超过 64 MB，请在本机下载后选择具体技能目录");
+        chunks.push(chunk);
+      }
+      bytes=Buffer.concat(chunks);checkedAt=new Date().toISOString();
+    } catch(error) {
+      signal?.throwIfAborted();
+      if(previous)return{...previous,cacheStatus:'stale',refreshError:error.message};
+      if(!stored)throw error;
+      ({repo,bytes,checkedAt}=stored);cacheStatus='stale';refreshError=error.message;
     }
     // Keep downloaded repositories out of deeply nested project/profile paths on Windows.
     let folder = path.join(temp, "asl-github", randomUUID());
     await fs.mkdir(folder, { recursive: true });
     folder = await fs.realpath(folder);
     const archive = path.join(folder, "source.zip");
-    await fs.writeFile(archive, Buffer.concat(chunks));
+    await fs.writeFile(archive, bytes);
     const output = path.join(folder, "content");
     const report = await core("unpack", { source: archive, output }, signal);
     const repositoryRoot = output;
@@ -103,9 +181,12 @@ async function readRepository(url, { fetch, core, temp, selected, repositories }
       readme={file,text:await fs.readFile(actual,'utf8'),url:`${repo.url}/blob/${repo.commit}/${file.split('/').map(encodeURIComponent).join('/')}`};
       break;
     }
-    const result = { ...report, readme, repository: repo.url, commit: repo.commit, subpath:repo.subpath, snapshot: output, modes, modeError, catalog, checkedAt:new Date().toISOString() };
-    if (cache.size >= 4) cache.delete(cache.keys().next().value);
-    cache.set(key, result);
+    const result = { ...report, readme, repository: repo.url, commit: repo.commit, subpath:repo.subpath, snapshot: output, modes, modeError, catalog, checkedAt,cacheStatus,...(refreshError?{refreshError}:{}) };
+    repositories.get(output).report = result;
+    cache.delete(url);
+    if (cache.size >= MAX_REPOSITORIES) cache.delete(cache.keys().next().value);
+    cache.set(url, result);
+    if(cacheStatus==='fresh')await saveArchive(url,cacheRoot,repo,bytes,checkedAt);
     return result;
 }
 

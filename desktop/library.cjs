@@ -34,7 +34,8 @@ async function readPreferences(file) {
   } catch {}
   const libraries = [];
   for (const root of Array.isArray(value.libraries) ? value.libraries : [])
-    if (!bundledExample(root) && await isLibrary(root)) libraries.push(path.resolve(root));
+    // Saved references are not a discovery cache: an offline/moved folder must not erase history.
+    if (typeof root==='string' && path.isAbsolute(root) && !root.includes('\0') && !bundledExample(root)) libraries.push(path.resolve(root));
   const views = {};
   for(const root of libraries) {
     try { if(value.views?.[root]) views[root]=viewValue(value.views[root]); } catch {}
@@ -44,7 +45,7 @@ async function readPreferences(file) {
       /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+(?:\/|$)/.test(value.activeSource.url) &&
       (value.activeSource.mode === null || typeof value.activeSource.mode === 'string' && /^[\w.-]{1,100}$/.test(value.activeSource.mode)) ? value.activeSource : null,
     views,
-    libraries: [...new Set(libraries)].slice(0, 12),
+    libraries: [...new Set(libraries)],
     lastLibrary: libraries.includes(value.lastLibrary)
       ? value.lastLibrary
       : null,
@@ -58,7 +59,7 @@ async function readPreferences(file) {
           )
           .slice(0, 30)
       : [],
-    repositories: Array.isArray(value.repositories) ? value.repositories.filter(url => typeof url === "string" && /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+(?:\/|$)/.test(url)).slice(0, 12) : [],
+    repositories: Array.isArray(value.repositories) ? [...new Set(value.repositories.filter(url => typeof url === "string" && /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+(?:\/|$)/.test(url)))] : [],
   };
 }
 const RENAME_LOCKS = new Set(["EPERM", "EACCES", "EBUSY"]);
@@ -82,7 +83,7 @@ async function rememberLibrary(file, root) {
   root = path.resolve(root);
   if (!(await isLibrary(root))) throw new Error("这个文件夹不是 ASL 技能库");
   return updatePreferences(file,value=>({...value,lastLibrary:root,
-    libraries:value.libraries.includes(root)?value.libraries:[...value.libraries,root].slice(-12)}));
+    libraries:value.libraries.includes(root)?value.libraries:[...value.libraries,root]}));
 }
 function updatePreferences(file,update) {
   const next=pending.catch(()=>{}).then(async()=>{

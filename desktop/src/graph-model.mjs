@@ -8,6 +8,7 @@ export const LIMITS = Object.freeze({
   coordinate: 100000, paradigms: 24, nodes: 120, edges: 240,
 });
 const SKILL_ID = /^[a-z0-9][a-z0-9-]{0,79}$/;
+const LIBRARY_SKILL_ID = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const COLOR = /^#[a-fA-F0-9]{6}$/;
 const NODE_FIELDS = ['title', 'note', 'icon', 'color'];
 const HISTORY_LIMIT = 100;
@@ -21,7 +22,7 @@ export function isSkillId(value) {
 
 export function skillIndex(skills = []) {
   const map = new Map();
-  for (const skill of skills || []) if (skill && isSkillId(skill.id)) map.set(skill.id, skill);
+  for (const skill of skills || []) if (skill && LIBRARY_SKILL_ID.test(skill.id)) map.set(skill.id, skill);
   return map;
 }
 
@@ -50,7 +51,7 @@ export function mergeInventory(existing = [], incoming = []) {
 /** Declared Mode roots. An empty list stays empty; it never means "the whole library". */
 export function rootIds(mode) {
   const declared = Array.isArray(mode?.roots) ? mode.roots : Array.isArray(mode?.skills) ? mode.skills : [];
-  return unique(declared.filter(isSkillId));
+  return unique(declared.filter(id=>typeof id==='string'&&LIBRARY_SKILL_ID.test(id)));
 }
 
 export function removeRoot(state, id, skills) {
@@ -75,7 +76,7 @@ export function memberIds(roots = [], skills = []) {
   const ordered = [];
   const seen = new Set();
   const visit = (id) => {
-    if (!isSkillId(id) || seen.has(id)) return;
+    if (typeof id!=='string'||!LIBRARY_SKILL_ID.test(id) || seen.has(id)) return;
     seen.add(id);
     ordered.push(id);
     for (const dependency of index.get(id)?.requires || []) visit(dependency);

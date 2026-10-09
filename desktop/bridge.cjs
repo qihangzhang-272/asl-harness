@@ -5,9 +5,15 @@ const definitions = {
   scan: ["skill.scan", ["source"]],
   unpack: ["skill.unpack", ["source", "output"]],
   catalog: ["environment.catalog", ["workspace"]],
+  documents: ['environment.documents', ['workspace', 'file']],
+  archives: ['environment.archive', ['workspace']],
+  archiveCleanup: ['environment.archive.cleanup', ['workspace', 'entry']],
+  history: ['environment.history', ['workspace']],
+  restoreHistory: ['mode.history.restore', ['workspace','mode','revision','expected']],
   files: ['skill.files', ['workspace', 'skill', 'file']],
   guide: ['environment.guide', ['workspace']],
   edit: ["environment.edit", ["workspace"]],
+  create: ['mode.create', ['target']],
   describe: ["workspace.validate", ["workspace"]],
   state: ["state", ["workspace"]],
   export: ["mode.export", ["workspace", "mode", "output"]],
@@ -49,12 +55,12 @@ function commandArgs(action, values = {}) {
     throw new Error("不支持的操作");
   const [command, required] = definition;
   const optional =
-    action === 'guide' ? ['mode'] : action === "readiness"
+    action === 'history' ? ['mode','revision','file','limit','offset'] : action === 'restoreHistory' ? ['apply'] : action === 'archives' ? ['entry','file'] : action === 'archiveCleanup' ? ['expected'] : action === 'guide' ? ['mode'] : action === "readiness"
       ? ["project", "probe", "skillsDir"]
       : action === 'disconnect' ? ['apply', 'expected'] : action === "userSync"
       ? ["apply", "expected", "remove", "skillsDir"]
-      : action === "edit"
-      ? ["request", "apply"]
+      : action === "edit" || action === 'create'
+      ? ["request", "apply", ...(action === 'create' ? ['expected'] : [])]
       : action === "export"
         ? ["includeProfile", "apply"]
         : action === "import"
@@ -77,15 +83,19 @@ function commandArgs(action, values = {}) {
       throw new Error(`缺少有效的 ${key}`);
   }
   if (
-    action === "edit" &&
+    ['edit', 'create'].includes(action) &&
     (!values.request ||
       typeof values.request !== "object" ||
       Array.isArray(values.request))
   )
     throw new Error("修改请求必须是对象");
-  for (const key of optional.filter((key) => !["request", "expected", "project", "skillsDir", "mode"].includes(key)))
+  for (const key of ['entry','file'])
+    if (key in values && (typeof values[key] !== 'string' || !values[key].trim() || values[key].includes('\0'))) throw new Error('请选择有效的归档内容');
+  for (const key of optional.filter((key) => !["request", "expected", "project", "skillsDir", "mode", "entry", "file", "revision", "limit", "offset"].includes(key)))
     if (key in values && typeof values[key] !== "boolean")
       throw new Error("开关必须是布尔值");
+  if(values.revision!==undefined&&!/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(values.revision))throw new Error('请选择有效的记录');
+  for(const [key,min,max] of [['limit',1,50],['offset',0,10000]])if(values[key]!==undefined&&(!Number.isInteger(values[key])||values[key]<min||values[key]>max))throw new Error('记录范围无效');
   if (values.mode && !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(values.mode))
     throw new Error("无效的 Mode");
   if (
@@ -106,16 +116,18 @@ function commandArgs(action, values = {}) {
   const args = [command];
   const names = { host: "host-id", basePreset: "base-preset" };
   for (const key of required)
-    for (const value of Array.isArray(values[key]) ? values[key] : [values[key]]) args.push(`--${names[key] || key}`, value);
+    for (const value of Array.isArray(values[key]) ? values[key] : [values[key]]) if(key!=='expected')args.push(`--${names[key] || key}`, value);
   if (action === "readiness" && values.project) args.push("--project", values.project);
   if (action === 'guide' && values.mode) args.push('--mode',values.mode);
+  if (action === 'archives') for (const key of ['entry','file']) if (values[key]) args.push('--'+key,values[key]);
+  if(action==='history')for(const key of ['mode','revision','file','limit','offset'])if(values[key]!==undefined)args.push('--'+key,String(values[key]));
   if (values.probe) args.push("--probe");
   if (values.skillsDir) args.push("--skills-dir", values.skillsDir);
   if (values.includeProfile) args.push("--include-profile");
   if (values.replace) args.push("--replace");
   if (values.remove) args.push("--remove");
   if (values.expected) args.push("--expected", values.expected);
-  if (["export", "import", "edit", "userSync", "disconnect"].includes(action) && !values.apply)
+  if (["export", "import", "edit", "create", "userSync", "disconnect", "restoreHistory"].includes(action) && !values.apply)
     args.push("--check");
   return args;
 }
@@ -172,7 +184,7 @@ function runCore(action, values, options = {}) {
       },
     );
     child.stdin.on("error", () => {});
-    child.stdin.end(['edit', 'mcpSave'].includes(action) ? JSON.stringify(values.request) : "");
+    child.stdin.end(['edit', 'create', 'mcpSave'].includes(action) ? JSON.stringify(values.request) : "");
   });
 }
 
