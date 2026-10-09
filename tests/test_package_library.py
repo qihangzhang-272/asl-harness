@@ -46,7 +46,7 @@ def fixture(tmp_path, *, mac=False, secret=None):
     (resources / 'app/package.json').write_text('{"version":"0.5.12"}', encoding='utf-8')
     (resources / 'core').mkdir()
     (resources / 'core' / ('asl-harness' if mac else 'asl-harness.exe')).write_bytes(b'CLI')
-    executable = app / ('Contents/MacOS/Electron' if mac else 'ASL Workspace.exe')
+    executable = app / ('Contents/MacOS/ASL Workspace' if mac else 'ASL Workspace.exe')
     executable.parent.mkdir(exist_ok=True)
     executable.write_bytes(b'APP')
     return app, library, revision
@@ -71,7 +71,7 @@ def test_content_edition_uses_only_published_snapshot_and_relative_launcher(tmp_
         assert 'Agent Skill Library' in launcher and 'ASL Workspace' in launcher
         if mac:
             assert archive.getinfo('Start.command').external_attr >> 16 & 0o111
-            assert '"$ROOT/ASL Workspace.app/Contents/MacOS/Electron"' in launcher
+            assert '"$ROOT/ASL Workspace.app/Contents/MacOS/ASL Workspace"' in launcher
         else:
             assert r'"%~dp0ASL Workspace\ASL Workspace.exe"' in launcher
             assert '"%~dp0Agent Skill Library"' in launcher

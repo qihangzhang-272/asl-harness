@@ -72,7 +72,9 @@ jobs:
           python scripts/package_library.py --app "$RUNNER_TEMP/asl-build/ASL Workspace.app" --repository .local/release-content --revision "$ASL_LIBRARY_REVISION" --output "$RUNNER_TEMP/asl-package/$library_archive"
           ditto -x -k "$RUNNER_TEMP/asl-package/$library_archive" "$RUNNER_TEMP/library-unpack"
           codesign --verify --deep --strict "$RUNNER_TEMP/library-unpack/ASL Workspace.app"
+          sh -n "$RUNNER_TEMP/library-unpack/Start.command"
           "$RUNNER_TEMP/library-unpack/ASL Workspace.app/Contents/Resources/core/asl-harness" workspace.validate --workspace "$RUNNER_TEMP/library-unpack/Agent Skill Library"
+          ASL_TEST_EXE="$RUNNER_TEMP/library-unpack/ASL Workspace.app/Contents/MacOS/ASL Workspace" ASL_E2E_OUTPUT="$RUNNER_TEMP" node --test desktop/e2e/packaged-renderer.cjs
           cd "$RUNNER_TEMP/asl-package"
           shasum -a 256 "$archive" > "$archive.sha256"
           echo "name=ASL-Workspace-${version}-macOS-${architecture}" >> "$GITHUB_OUTPUT"

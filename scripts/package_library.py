@@ -74,7 +74,7 @@ def package(app: Path, repository: Path, revision: str, output: Path) -> dict:
     if app.name != expected_name:
         raise ValueError(f'Use the native built {expected_name} directory')
     resources = app / ('Contents/Resources' if mac else 'resources')
-    executable = app / ('Contents/MacOS/Electron' if mac else 'ASL Workspace.exe')
+    executable = app / ('Contents/MacOS/ASL Workspace' if mac else 'ASL Workspace.exe')
     core = resources / 'core' / ('asl-harness' if mac else 'asl-harness.exe')
     if not executable.is_file() or not core.is_file():
         raise ValueError('The native App and its frozen CLI are required')
@@ -85,7 +85,7 @@ def package(app: Path, repository: Path, revision: str, output: Path) -> dict:
         if path.is_symlink() and not path.resolve(strict=True).is_relative_to(app):
             raise ValueError(f'App symlink leaves its bundle: {path.relative_to(app)}')
     launcher = ('#!/bin/sh\nROOT=$(CDPATH= cd -- "$(dirname "$0")" && pwd)\n'
-                'exec "$ROOT/ASL Workspace.app/Contents/MacOS/Electron" --workspace "$ROOT/Agent Skill Library"\n') if mac else (
+                'exec "$ROOT/ASL Workspace.app/Contents/MacOS/ASL Workspace" --workspace "$ROOT/Agent Skill Library"\n') if mac else (
                 '@echo off\r\nstart "" "%~dp0ASL Workspace\\ASL Workspace.exe" --workspace "%~dp0Agent Skill Library"\r\n')
     manifest = {'appVersion': version, 'libraryRevision': revision, 'platform': 'macOS' if mac else 'Windows',
                 'generatedViews': ['WORKSPACE.md'],
