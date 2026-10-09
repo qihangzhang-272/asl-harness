@@ -36,6 +36,8 @@ test('all navigation rails resize, retain preferences, cancel safely and leave r
     await page.locator('.skill-canvas-panel .package-rendered').waitFor();
     await resize('调整技能文件目录宽度',40);
     const fileWidth=Number(await page.getByRole('separator',{name:'调整技能文件目录宽度'}).getAttribute('aria-valuenow'));
+    const scrollTarget=await page.locator('.package-tree').evaluate(element=>{const box=element.getBoundingClientRect(),hit=document.elementFromPoint(box.x+box.width/2,box.y+box.height/2);return {box:box.toJSON(),inside:element.contains(hit),viewport:{width:innerWidth,height:innerHeight}};});
+    assert.ok(scrollTarget.inside,'滚轮落点必须在文件目录的可见区域：'+JSON.stringify(scrollTarget));
     await page.locator('.package-tree').hover();await page.mouse.wheel(0,1200);
     await page.waitForFunction(()=>document.querySelector('.package-tree').scrollTop>0);
     const handle=page.getByRole('separator',{name:'调整技能文件目录宽度'});
