@@ -2,7 +2,7 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs/promises');
 const path=require('node:path');
-const {launch}=require('./fixture.cjs');
+const {launch,dispose}=require('./fixture.cjs');
 
 for(const empty of [true,false])test(`repository Skills can be read and chosen one by one into ${empty?'a first':'an existing'} Mode`,{timeout:180000},async()=>{
   const {app,page,run,workspace,errors}=await launch({empty});
@@ -85,5 +85,5 @@ for(const empty of [true,false])test(`repository Skills can be read and chosen o
     }
     await page.screenshot({path:path.join(run,'repository-mode.png')});console.log('仓库逐项组织：'+run);
   }catch(error){console.error(run,errors,await page.locator('body').innerText());throw error;}
-  finally{await page.close();await app.close();}
+  finally{await dispose(app);}
 });

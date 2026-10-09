@@ -1,7 +1,7 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const path=require('node:path');
-const {launch}=require('./fixture.cjs');
+const {launch,dispose}=require('./fixture.cjs');
 
 test('Agent results preserve drift, Hook scope, runtime sources and conflict protection',{timeout:120000},async()=>{
   const {app,page,workspace,run,errors}=await launch();
@@ -98,5 +98,5 @@ test('Agent results preserve drift, Hook scope, runtime sources and conflict pro
     assert.deepEqual(await app.evaluate(()=>globalThis.agentResultsProbe),{writes:1,starts:0,copies:2},'配置调用仅在隔离IPC替身中计数，不改真实投影');
     assert.deepEqual(errors,[]);console.log('Agent配置结果验收：'+run);
   }catch(error){await page.screenshot({path:path.join(run,'agent-results-failure.png')});console.error(run);throw error;}
-  finally{await page.close();await app.close();}
+  finally{await dispose(app);}
 });

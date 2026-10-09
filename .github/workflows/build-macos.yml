@@ -43,11 +43,19 @@ jobs:
       - run: python -m pytest
       - run: npm test
         working-directory: desktop
+      - name: 核对 App 调用随包核心及真实渲染
+        timeout-minutes: 4
+        run: node --test e2e/packaged-renderer.cjs
+        working-directory: desktop
+        env:
+          ASL_TEST_EXE: ${{ runner.temp }}/asl-build/ASL Workspace.app/Contents/MacOS/ASL Workspace
+          ASL_E2E_OUTPUT: ${{ runner.temp }}
       - name: 验收打包后的桌面交互
+        timeout-minutes: 15
         run: npm run test:e2e
         working-directory: desktop
         env:
-          ASL_TEST_EXE: ${{ runner.temp }}/asl-build/ASL Workspace.app/Contents/MacOS/Electron
+          ASL_TEST_EXE: ${{ runner.temp }}/asl-build/ASL Workspace.app/Contents/MacOS/ASL Workspace
           ASL_E2E_OUTPUT: ${{ runner.temp }}
       - name: 保存原生 App 包及校验值
         id: package

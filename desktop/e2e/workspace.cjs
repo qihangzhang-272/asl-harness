@@ -2,7 +2,7 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs/promises');
 const path=require('node:path');
-const {launch}=require('./fixture.cjs');
+const {launch,dispose}=require('./fixture.cjs');
 
 test('isolated Electron: native create/edit, complete skill, rejection and navigation', {timeout:180000},async()=>{
   const {app,page,workspace,run,errors}=await launch();
@@ -85,5 +85,5 @@ test('isolated Electron: native create/edit, complete skill, rejection and navig
     await fs.writeFile(path.join(run,'result.json'),JSON.stringify({ok:true,checks:['create-native','undo-redo','context-add','draft-guard','save-readback','skill-focus','bad-diagram-rejected','sequence-source-edit','state-source-edit','mindmap-source-edit','back-to-library','legacy-scope-navigation','legacy-open-no-write'],errors},null,2));
     console.log('验收证据：'+run);
   }catch(error){await page.screenshot({path:path.join(run,'failure.png')});console.error('验收证据：'+run,errors);throw error;}
-  finally{await page.close();await app.close();}
+  finally{await dispose(app);}
 });

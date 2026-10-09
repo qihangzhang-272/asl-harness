@@ -1,6 +1,6 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:os');
-const {launch,packagedCore}=require('./fixture.cjs');
+const {launch,packagedCore,dispose}=require('./fixture.cjs');
 const {runCore}=require('../bridge.cjs');
 
 test('flow nodes follow the pointer; ports snap, edges delete, and geometry round-trips',{timeout:600000},async()=>{
@@ -93,5 +93,5 @@ test('flow nodes follow the pointer; ports snap, edges delete, and geometry roun
   assert.equal(await fs.readFile(file,'utf8'),before,'CLI 渲染门控拒绝坏布局，不污染原文');
   assert.deepEqual(errors,[]);console.log('直接操作验收：'+run);
  }catch(error){console.error(run,errors);await page.screenshot({path:path.join(run,'failure.png')});throw error;}
- finally{await app.close();}
+ finally{await dispose(app);}
 });

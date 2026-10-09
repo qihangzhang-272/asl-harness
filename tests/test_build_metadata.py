@@ -115,6 +115,9 @@ def test_native_bundle_includes_every_desktop_entry_and_frozen_core(tmp_path, mo
         assert app.name == 'ASL Workspace.app'
         info = plistlib.loads((app / 'Contents/Info.plist').read_bytes())
         assert info['CFBundleName'] == 'ASL Workspace'
+        assert info['CFBundleExecutable'] == 'ASL Workspace'
+        assert (app / 'Contents/MacOS/ASL Workspace').read_bytes() == b'native-electron'
+        assert not (app / 'Contents/MacOS/Electron').exists()
         assert info['CFBundleShortVersionString'] == json.loads((desktop / 'package.json').read_text())['version']
         assert (resources / 'licenses/Electron-LICENSE.txt').read_text() == 'Electron license'
         assert (resources / 'licenses/LICENSES.chromium.html').read_text() == 'Chromium licenses'

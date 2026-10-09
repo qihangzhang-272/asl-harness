@@ -2,7 +2,7 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs/promises');
 const path=require('node:path');
-const {launch}=require('./fixture.cjs');
+const {launch,dispose}=require('./fixture.cjs');
 
 test('archive browsing, restore, conflicts and canceled cleanup preserve content',{timeout:120000},async()=>{
   const {app,page,workspace,run,errors}=await launch();
@@ -53,5 +53,5 @@ test('archive browsing, restore, conflicts and canceled cleanup preserve content
     await page.screenshot({path:path.join(run,'archive-browser.png')});
     assert.deepEqual(errors,[]);console.log('归档浏览验收：'+run);
   }catch(error){await page.screenshot({path:path.join(run,'archive-browser-failure.png')});console.error(run);throw error;}
-  finally{await page.close();await app.close();}
+  finally{await dispose(app);}
 });

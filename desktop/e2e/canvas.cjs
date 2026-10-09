@@ -2,7 +2,7 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs/promises');
 const path=require('node:path');
-const {launch,packagedCore}=require('./fixture.cjs');
+const {launch,packagedCore,dispose}=require('./fixture.cjs');
 const {runCore}=require('../bridge.cjs');
 
 test('canvas templates and structure can be created and edited without source or modifier keys',{timeout:240000},async()=>{
@@ -128,5 +128,5 @@ test('canvas templates and structure can be created and edited without source or
     await fs.writeFile(path.join(run,'result.json'),JSON.stringify({ok:true,checks:['three-templates','inline-blur','message-connect-retarget','condition-add-drag','branch-add-remove','participant-note-add-remove','mindmap-sibling-drag','undo-redo','new-node','flow-drag-direction-connect','fullscreen','save-reopen','agent-cli-roundtrip','reading-append','empty-mode-cancel'],errors},null,2));
     console.log('鼠标画板验收：'+run);
   }catch(error){console.error(run,errors,error.stack);await page.screenshot({path:path.join(run,'failure.png')});await fs.writeFile(path.join(run,'failure.html'),await page.locator('body').innerHTML());throw error;}
-  finally{await page.close();await app.close();}
+  finally{await dispose(app);}
 });

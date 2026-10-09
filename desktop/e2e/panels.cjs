@@ -2,7 +2,7 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const path=require('node:path');
 const fs=require('node:fs/promises');
-const {launch}=require('./fixture.cjs');
+const {launch,dispose}=require('./fixture.cjs');
 
 test('all navigation rails resize, retain preferences, cancel safely and leave readable content',{timeout:120000},async()=>{
   const {app,page,run,workspace,errors}=await launch();
@@ -78,5 +78,5 @@ test('all navigation rails resize, retain preferences, cancel safely and leave r
     await page.screenshot({path:path.join(run,'panels-wide.png')});
     console.log(JSON.stringify({evidence:run}));
   }catch(error){await page.screenshot({path:path.join(run,'panels-failure.png')});console.error(run);throw error;}
-  finally{await page.close();await app.close();}
+  finally{await dispose(app);}
 });

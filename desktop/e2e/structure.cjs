@@ -2,7 +2,7 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs/promises');
 const path=require('node:path');
-const {launch}=require('./fixture.cjs');
+const {launch,dispose}=require('./fixture.cjs');
 
 test('native diagrams edit in place and persist semantic drag, context actions and history', {timeout:180000},async()=>{
   const {app,page,workspace,run,errors}=await launch();
@@ -88,5 +88,5 @@ test('native diagrams edit in place and persist semantic drag, context actions a
     await fs.writeFile(path.join(run,'result.json'),JSON.stringify({ok:true,checks:['sequence-inline-labels','zoom-retained','message-drag','participant-drag','note-remove','mindmap-subtree-drag','mindmap-remove-undo-redo','state-inline-label','state-skill-open'],errors},null,2));
     console.log('结构编辑验收：'+run);
   }catch(error){console.error('结构编辑验收：'+run,errors);await page.screenshot({path:path.join(run,'structure-failure.png')});await fs.writeFile(path.join(run,'structure-failure.html'),await page.locator('body').innerHTML());throw error;}
-  finally {await page.close();await app.close();}
+  finally {await dispose(app);}
 });

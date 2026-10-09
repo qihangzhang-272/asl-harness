@@ -27,7 +27,7 @@ def test_frozen_renderer_stays_inside_native_app_bundle(tmp_path, monkeypatch, p
     root = tmp_path / ('ASL Workspace.app/Contents' if platform == 'darwin' else 'ASL Workspace')
     core = root / ('Resources/core/asl-harness' if platform == 'darwin' else 'resources/core/asl-harness.exe')
     monkeypatch.setattr(mermaid.sys, 'executable', str(core))
-    binary = root / ('MacOS/Electron' if platform == 'darwin' else 'ASL Workspace.exe')
+    binary = root / ('MacOS/ASL Workspace' if platform == 'darwin' else 'ASL Workspace.exe')
     assert mermaid.renderer_command() == [str(binary.resolve()), '--validate-mermaid']
 
 

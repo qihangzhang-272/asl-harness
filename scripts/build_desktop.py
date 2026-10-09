@@ -82,10 +82,11 @@ def build(output: Path) -> Path:
                     ignore=shutil.ignore_patterns('default_app.asar'))
     resources = app / ('Contents/Resources' if mac else 'resources')
     if mac:
+        (app / 'Contents/MacOS/Electron').rename(app / 'Contents/MacOS/ASL Workspace')
         info_file = app / 'Contents/Info.plist'
         info = plistlib.loads(info_file.read_bytes())
         version = json.loads((desktop / 'package.json').read_text(encoding='utf-8'))['version']
-        info.update(CFBundleName='ASL Workspace', CFBundleDisplayName='ASL Workspace',
+        info.update(CFBundleName='ASL Workspace', CFBundleDisplayName='ASL Workspace', CFBundleExecutable='ASL Workspace',
                     CFBundleIdentifier='com.asl.workspace', CFBundleVersion=version,
                     CFBundleShortVersionString=version)
         info_file.write_bytes(plistlib.dumps(info))

@@ -5,6 +5,12 @@ const {pathToFileURL}=require('node:url');
 const {_electron}=require('playwright');
 const desktop=path.resolve(__dirname,'..');
 
+async function dispose(app){
+  // Only the process created by this fixture; never a real user's window.
+  if(app.windows().some(window=>!window.isClosed()))await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().forEach(window=>window.destroy()));
+  await app.close();
+}
+
 function packagedCore(executable=process.env.ASL_TEST_EXE){
   if(!executable)return undefined;
   const directory=path.dirname(executable);
@@ -30,7 +36,7 @@ async function launch({output=process.env.ASL_E2E_OUTPUT,baseline,core,library,e
   // Reload after selecting the measured assets/core; production IPC and Electron
   // stay unchanged. The profile is isolated from real host configuration.
   try{await page.locator(resume?'.source-library,.mode-library-overview,.welcome,.skill-library':empty?'.welcome':'.mode-library-overview').first().waitFor({timeout:60000});}
-  catch(error){await page.screenshot({path:path.join(run,'launch-failure.png')});console.error(run,errors,await page.locator('body').innerText());await app.close();throw error;}
+  catch(error){await page.screenshot({path:path.join(run,'launch-failure.png')});console.error(run,errors,await page.locator('body').innerText());await dispose(app);throw error;}
   const frontend=baseline||process.env.ASL_TEST_FRONTEND;
   if(frontend)await app.evaluate(async({app,session,net},{original,replacement})=>{
     if(app.isPackaged){const path=process.getBuiltinModule('node:path');original=process.getBuiltinModule('node:url').pathToFileURL(path.join(process.resourcesPath,'app','dist')+path.sep).href;}
@@ -50,4 +56,4 @@ async function launch({output=process.env.ASL_E2E_OUTPUT,baseline,core,library,e
   if(process.env.ASL_TEST_FRONTEND){await page.reload();await page.locator(empty?'.welcome':'.mode-library-overview').waitFor();}
   return {app,page,run,workspace,errors};
 }
-module.exports={launch,packagedCore};
+module.exports={launch,packagedCore,dispose};
