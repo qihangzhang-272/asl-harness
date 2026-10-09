@@ -25,7 +25,7 @@ test('canvas templates and structure can be created and edited without source or
   async function create(title){await menu();await page.getByRole('menuitem',{name:'新建图表',exact:true}).click();await page.getByRole('menuitem',{name:title,exact:true}).click();await page.locator('.mode-workspace-native .diagram-edit-toolbar button.active').filter({hasText:title}).waitFor();await page.locator('.mode-workspace-native .mermaid-drawing>svg').waitFor();await ready();}
   async function edit(node,text){await node.dblclick();await page.locator('.mermaid-label-editor [role=textbox]').fill(text);await blank();await page.locator('.mermaid-label-editor').waitFor({state:'detached'});}
   async function drag(from,to,x=.5,y=.5){
-    await from.scrollIntoViewIfNeeded();const a=await from.boundingBox(),b=await to.boundingBox();
+    await from.scrollIntoViewIfNeeded();await to.hover();const a=await from.boundingBox(),b=await to.boundingBox();
     const target={x:b.x+b.width*x,y:b.y+b.height*y};
     const hit=await to.evaluate((element,{x,y})=>element.contains(document.elementFromPoint(x,y)),target);
     assert.ok(hit,'拖拽落点必须在目标元素的可见区域：'+JSON.stringify({a,b,target}));
