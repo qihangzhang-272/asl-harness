@@ -36,8 +36,10 @@ test('all navigation rails resize, retain preferences, cancel safely and leave r
     await page.locator('.skill-canvas-panel .package-rendered').waitFor();
     await resize('调整技能文件目录宽度',40);
     const fileWidth=Number(await page.getByRole('separator',{name:'调整技能文件目录宽度'}).getAttribute('aria-valuenow'));
-    const scrollTarget=await page.locator('.package-tree').evaluate(element=>{const box=element.getBoundingClientRect(),hit=document.elementFromPoint(box.x+32,box.y+80);return {box:box.toJSON(),inside:element.contains(hit),viewport:{width:innerWidth,height:innerHeight}};});
+    const scrollTarget=await page.locator('.package-tree').evaluate(element=>{const box=element.getBoundingClientRect(),hit=document.elementFromPoint(box.x+32,box.y+80);return {box:box.toJSON(),inside:element.contains(hit),viewport:{width:innerWidth,height:innerHeight},height:element.clientHeight,contentHeight:element.scrollHeight};});
     assert.ok(scrollTarget.inside,'滚轮落点必须在文件目录的可见区域：'+JSON.stringify(scrollTarget));
+    assert.ok(scrollTarget.contentHeight>scrollTarget.height,'测试目录必须具有可滚动内容：'+JSON.stringify(scrollTarget));
+    await page.evaluate(()=>{window.__panelWheel=[];document.addEventListener('wheel',event=>{const tree=document.querySelector('.package-tree'),box=tree.getBoundingClientRect();window.__panelWheel.push({inside:tree.contains(event.target),target:event.target.outerHTML.slice(0,250),x:event.clientX,y:event.clientY,deltaY:event.deltaY,box:box.toJSON(),height:tree.clientHeight,contentHeight:tree.scrollHeight,top:tree.scrollTop,outerTop:document.querySelector('.content').scrollTop});},{capture:true,once:true});});
     await page.locator('.package-tree').hover({position:{x:32,y:80}});await page.mouse.wheel(0,1200);
     await page.waitForFunction(()=>document.querySelector('.package-tree').scrollTop>0);
     const handle=page.getByRole('separator',{name:'调整技能文件目录宽度'});
@@ -79,6 +81,6 @@ test('all navigation rails resize, retain preferences, cancel safely and leave r
     assert.deepEqual(errors,[]);
     await page.screenshot({path:path.join(run,'panels-wide.png')});
     console.log(JSON.stringify({evidence:run}));
-  }catch(error){console.error(run,error.stack);await page.screenshot({path:path.join(run,'panels-failure.png'),timeout:10000}).catch(capture=>console.error('截图未完成：'+capture.message));await fs.writeFile(path.join(run,'panels-failure.html'),await page.locator('body').innerHTML({timeout:10000}).catch(()=>''));throw error;}
+  }catch(error){console.error(run,error.stack);console.error('目录滚动事实：',await page.evaluate(()=>({events:window.__panelWheel,trees:[...document.querySelectorAll('.package-tree')].map(el=>({box:el.getBoundingClientRect().toJSON(),height:el.clientHeight,contentHeight:el.scrollHeight,top:el.scrollTop,overflow:getComputedStyle(el).overflow})),outerTop:document.querySelector('.content')?.scrollTop})).catch(()=>null));await page.screenshot({path:path.join(run,'panels-failure.png'),timeout:10000}).catch(capture=>console.error('截图未完成：'+capture.message));await fs.writeFile(path.join(run,'panels-failure.html'),await page.locator('body').innerHTML({timeout:10000}).catch(()=>''));throw error;}
   finally{await dispose(app);}
 });
