@@ -185,7 +185,7 @@ Over time, the Environment becomes more like its owner: it retains useful judgme
 
 ### Desktop preview
 
-[Download for Windows](https://github.com/qihangzhang-272/asl-harness/releases/download/app-v0.5.12/ASL-Workspace-0.5.12-Windows-x64.zip) · [Platform downloads and checksums](https://github.com/qihangzhang-272/asl-harness/releases/tag/app-v0.5.12) · [App with published Skills](https://github.com/qihangzhang-272/agent-skill-library/releases)
+[Download for Windows](https://github.com/qihangzhang-272/asl-harness/releases/download/app-v0.5.13/ASL-Workspace-0.5.13-Windows-x64.zip) · [Platform downloads and checksums](https://github.com/qihangzhang-272/asl-harness/releases/tag/app-v0.5.13) · [App with published Skills](https://github.com/qihangzhang-272/agent-skill-library/releases)
 
 No Python or Node.js installation is needed. Right-click the downloaded ZIP → **Extract All** → open the `ASL Workspace` folder → double-click **`ASL Workspace.exe`**. Keep the complete folder together. GitHub's automatically generated `Source code` archives are not the desktop App.
 

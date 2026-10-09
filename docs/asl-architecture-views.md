@@ -8,7 +8,7 @@
 
 > **2026-10-07 授权澄清：**以现有 CLI 作为 Agent 协作入口，默认维护 Mode 组织；不保留完整提示词编辑／复制主路径。修改 Skill 正文、说明、脚本、资料或资产前，当前 Host 必须说明具体文件和影响并取得用户明确同意。受控编辑能力保留，不把须确认解释成永久禁止；其他接入和培养设想仍为目标。
 
-> 更新：2026-10-08。专项视图分块维护；当前状态只看 View 9，旧交付进入历史。图使用原生 Mermaid，与 Agent 共编本地文本并通过实际渲染门控；鼠标交互范围见 View 2D。开发通过、候选包通过与正式发布分别记录。
+> 更新：2026-10-09。专项视图分块维护；当前状态只看 View 9，旧交付进入历史。图使用原生 Mermaid，与 Agent 共编本地文本并通过实际渲染门控；鼠标交互范围见 View 2D。开发通过、候选包通过与正式发布分别记录。
 
 ## 颜色约定
 
@@ -130,16 +130,18 @@
 
 <!-- ASL:PROJECT STATUS START -->
 
-### Windows 0.5.12 已交付、Mac 验收中 · 2026-10-08 · 仓库逐项组织与 CLI 共用指引
+### Windows 0.5.13 已交付、Mac 修复后待验收 · 2026-10-09 · 仓库逐项组织与 CLI 共用指引
 
 - **新增入口：**仓库预览直接选择新建或已有 Mode，复用原画板逐项阅读、拖入、连接和保存。仓库来源不被后台扫描替换，同名来源可读且加入时确认使用本地版本；不静默覆盖 Skill。采用与保存分别反馈，取消 Mode 不假称撤销已采用包。仅自动生成的无边集合改为可编辑 flowchart，不转换作者图。
 - **Agent：**`cli.describe.organization` 与 `environment.guide` 共用一份整理方法；当前 Host 依据用户目标与完整技能内容组织关系，CLI 提供读取、采用、写入与真实渲染门控。没有新建调度器、业务 Skill 或行业规则引擎，修改技能内容仍须具体授权。
-- **Windows 最终包：**App **0.5.12**／核心 **0.4.7**。核心 **347 通过、7 条平台条件跳过**；Node **236 通过**；最终原生包完整桌面 **43/43 通过**（约 219 秒）；26 张专项 Mermaid 图真实渲染通过。新增两条实机链覆盖首个 Mode／已有 Mode、阅读不写盘、取消、同名版本、完整脚本保留及保存后定位。已人工检查实际画板和阅读截图。日志见 `.local/validation/release-0.5.12-*`。
+- **Windows 最终包：**App **0.5.13**／核心 **0.4.8**。核心 **347 通过、7 条平台条件跳过**；Node **236 通过**；最终原生包完整桌面 **43/43 通过**（约 233 秒），隔离退出复验仍为 **43/43**（约 255 秒）；26 张专项 Mermaid 图真实渲染通过。新增实机链覆盖首个 Mode／已有 Mode、阅读不写盘、取消、同名版本、完整脚本保留及保存后定位。App 内外真实 CLI 图预检另通过，原文件不变。已人工检查实际画板和阅读截图。日志见 `.local/validation/release-0.5.13-*` 与 `windows-disposal-regression.log`。
 - **内容交付边界：**内容版与框架版共用同一程序；只取已公开提交 `8dc3e269f5fd933421558cb3c96a5010651418ed`，不读本地未确认业务变化。内容包解压后冻结 CLI 检查通过，派生视图当前且无告警；Skill／Mode 原字节不改。包不含个人 Git 历史，后续演进记录仍需本机 Git 与仓库／作者配置。
-- **Windows 交付：**[Harness](https://github.com/qihangzhang-272/asl-harness/releases/tag/app-v0.5.12) 与 [内容版](https://github.com/qihangzhang-272/agent-skill-library/releases/tag/app-v0.5.12)均已公开上传，GitHub 资产 SHA-256 与本地一致。框架 ZIP 为 `89c982a4bd7c17b9aef2b0f7757cc48a670733a808f165fe1229921cae8fb485`，内容 ZIP 为 `f781dc032b7e1155619267bb402f650ed382391fe29aaf845bfcff6f714fb062`。桌面入口已切换到 0.5.12 并启动，406 个安装文件与候选逐字节一致；保留旧版文件，未改真实 Skill、Mode、账号或投影。内容库只推送两个 README（`6a2ceab`），78 项既有业务变化未发布；协议 8 项仍保留。
-- **Mac 与依赖边界：**首次原生工作流 [37876645051](https://github.com/qihangzhang-272/asl-harness/actions/runs/37876645051)有运行额度，但被 `source-map-js` 高危公告拦截。仅将构建依赖从 1.2.1 升到 1.2.2，安全高危门控恢复，Node 236 项通过，105 个前端产物与已发 Windows 原字节一致。仍有 KaTeX／Mermaid 关联的两项低危报告，要求已有原型污染作为前置条件；不以强制降级 Mermaid 消警报，保留为兼容升级待办，不宣称零风险。Mac 尚未验收或发布，不是 Universal，未来包仅 ad-hoc 签名而非开发者签名／公证。过程及保留失败见[本轮计划](plans/2026-10-08-repository-mode-and-release.md)。
+- **Windows 交付：**[Harness](https://github.com/qihangzhang-272/asl-harness/releases/tag/app-v0.5.13) 与 [内容版](https://github.com/qihangzhang-272/agent-skill-library/releases/tag/app-v0.5.13)均已公开上传，GitHub 资产 SHA-256 与本地一致。框架 ZIP 为 `c58deab8d62797eeec720962ef5acc328b797d62c5532f6130feb0d96d93b781`，内容 ZIP 为 `79f81e4aa2fab023ba64690a4e34388d1f51a1e5ee784ddd8824df154abe7f81`。桌面入口已正常切换到 0.5.13 并启动，406 个安装文件与候选逐字节一致；保留旧版文件，未改真实 Skill、Mode、账号或投影。内容库只推送入口文档，78 项既有业务变化未发布；协议 8 项仍保留。
+- **Mac 与依赖边界：**已修正主程序名、plist、冻结渲染路径与内容包启动脚本；[37951383830](https://github.com/qihangzhang-272/asl-harness/actions/runs/37951383830)的原生构建、核心 **352 通过／2 跳过**、Node **234 通过／2 跳过**及 App 内外实际渲染预检 **1/1** 通过，但完整桌面 **41/43**，条件组拖动与目录滚动两项待核验，尚未发布 Mac。补充可见落点断言，Windows 定向 **2/2**，原生复核 [37953636667](https://github.com/qihangzhang-272/asl-harness/actions/runs/37953636667)进行中。Mac 包限 Apple Silicon，ad-hoc 签名，不是开发者签名／公证。构建期 `source-map-js` 高危已用兼容小版本升级修复；KaTeX／Mermaid 关联两项低危仍为兼容升级待办，不宣称零风险。完整证据见[本轮计划](plans/2026-10-08-repository-mode-and-release.md)。
 
-### 开发接入已验收、未交付 · 2026-10-08 · Mode 演进、归档与 Agent 体验
+### 历史验收记录 · 2026-10-08 · Mode 演进、归档与 Agent 体验
+
+以下保留交付前的验收事实和限制；当前交付版本以本区域最上方记录为准。
 
 - **范围与产品取舍：**按[本轮计划](plans/2026-10-08-history-archive-product.md)接入既有 Git、归档目录与 CLI，不新建日志引擎、事件总线、数据库或另一套 Harness。用户只看同一张架构画板、底部细演进轴与变化说明；没有历史缩略图墙或 Git 提交列表主界面。复用原生 Mermaid 与现有浅蓝样式，Ponytail 限制新增层次，Impeccable 用于简洁文案和连续操作收束。
 - **演进与回退：**Mode 保存自动为 `MODE.md`／`mode.yaml` 留下独立原生 Git 记录，不移动主分支或用户暂存区、不包含 Skill 正文。时间轴支持拖动回看、主动回放、图型切换、从旧结构继续编辑和明确恢复；恢复走现有指纹／协议／实际渲染门控并产生新记录。说明用 Git notes，当前 Agent 先读相关历史再补有依据的外显决定，不后台启动模型、不采集内部推理。缺失历史 Skill 时不借当前成员伪造旧结构，也不直接恢复。
