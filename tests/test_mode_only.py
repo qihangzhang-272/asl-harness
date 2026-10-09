@@ -926,6 +926,22 @@ def test_runtime_notes_in_source_are_not_missed(tmp_path: Path) -> None:
     assert "creator" in report["runtimeRequirementSkills"]
 
 
+def test_activation_guidance_matches_each_host_without_claiming_workbuddy_hooks(tmp_path: Path) -> None:
+    workspace = Workspace.open(_environment(tmp_path))
+    for host, integration, activation in [
+        ("codex-app", "asl-environment-host-plugin", "install-or-enable-in-host"),
+        ("claude-code", "asl-environment-host-plugin", "install-or-enable-in-host"),
+        ("deepseek-harness", "@deepseek-ai/dsh-hooks-codex", "included-by-deepseek-preset-export"),
+        ("workbuddy", None, "unsupported"),
+    ]:
+        report = adapters.activation_report(workspace, tmp_path / "project", "creator-studio", host_id=host)
+        assert report["hookIntegration"] == integration
+        assert report["hookActivation"] == activation
+        if host == "workbuddy":
+            assert "DeepSeek" not in " ".join(report["nextSteps"])
+            assert "manual" in " ".join(report["nextSteps"])
+
+
 def test_environment_sync_reports_and_refuses_local_conflict(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

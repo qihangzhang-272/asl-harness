@@ -84,5 +84,9 @@ def test_excluded_tree_pruning_keeps_external_link_guard(tmp_path):
         link.symlink_to(outside, target_is_directory=True)
     except OSError:
         pytest.skip('symlinks unavailable')
-    with pytest.raises(workspace.HarnessError, match='escapes'):
-        catalog(root)
+    report = catalog(root)
+    assert [item['id'] for item in report['skills']] == ['foundation']
+    assert report['modes'] == []
+    assert any(issue['id'] == 'creator' and issue['code'] == 'PATH_ESCAPE' for issue in report['issues'])
+    with pytest.raises(workspace.HarnessError):
+        skill_files(root, 'creator')

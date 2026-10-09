@@ -11,6 +11,76 @@ from asl_harness.workspace import HarnessError, Workspace
 from test_mode_only import _environment, _mode
 
 
+def test_first_mode_adopts_complete_skill_without_agent_or_placeholder(tmp_path):
+    source = tmp_path / 'ordinary-skill'
+    source.mkdir()
+    original = b'---\nname: reading\ndescription: Read material\n---\n# Reading\n'
+    (source / 'SKILL.md').write_bytes(original)
+    (source / 'scripts').mkdir()
+    (source / 'scripts/read.py').write_bytes(b'print("read")\n')
+    request = {'id': 'first', 'document': '# 我的工作\n', 'skills': ['reading'],
+               'architecture': {'shared': ['reading'], 'paradigms': []},
+               'sources': [{'id': 'reading', 'source': str(source)}]}
+    target = tmp_path / 'new-library'
+    preview = management.create_mode(target, request, check=True)
+    assert not target.exists()
+    assert preview['skills'] == ['reading']
+    result = management.create_mode(target, request, expected=preview['fingerprint'])
+    assert result['mode'] == 'first'
+    workspace = Workspace.open(target)
+    assert list(workspace.modes) == ['first']
+    assert list(workspace.skills) == ['reading']
+    assert (target / 'skills/reading/SKILL.md').read_bytes() == original
+    assert (target / 'skills/reading/scripts/read.py').read_bytes() == b'print("read")\n'
+    assert (source / 'SKILL.md').read_bytes() == original
+    assert not (source / 'SOURCE.md').exists()
+    from asl_harness.portable import export_pack, inspect_pack
+    bundle = tmp_path / 'first-mode.zip'
+    export_pack(target, 'first', bundle)
+    assert inspect_pack(bundle)['skills'] == ['reading']
+    with pytest.raises(HarnessError):
+        management.create_mode(target, request)
+
+
+def test_first_mode_rejects_stale_sources_and_missing_dependencies_before_write(tmp_path):
+    source = tmp_path / 'ordinary'
+    source.mkdir()
+    (source / 'SKILL.md').write_text('---\nname: reading\ndescription: Read\n---\n# Reading\n', encoding='utf-8')
+    request = {'id': 'first', 'document': '# Work\n', 'skills': ['reading'],
+               'architecture': {'shared': ['reading'], 'paradigms': []},
+               'sources': [{'id': 'reading', 'source': str(source)}]}
+    target = tmp_path / 'new'
+    preview = management.create_mode(target, request, check=True)
+    (source / 'SKILL.md').write_text('---\nname: reading\ndescription: Changed\n---\n# Reading\n', encoding='utf-8')
+    with pytest.raises(HarnessError) as error:
+        management.create_mode(target, request, expected=preview['fingerprint'])
+    assert error.value.code == 'PACK_PREVIEW_STALE'
+    assert not target.exists()
+    (source / 'SKILL.md').write_text('---\nname: reading\ndescription: Read\nmetadata:\n  asl:\n    requires: [missing]\n---\n# Reading\n', encoding='utf-8')
+    with pytest.raises(HarnessError):
+        management.create_mode(target, request, check=True)
+    assert not target.exists()
+
+
+@pytest.mark.parametrize('in_skill', [False, True])
+def test_first_mode_render_feedback_points_to_caller_draft(tmp_path, in_skill):
+    source = tmp_path / 'ordinary'
+    source.mkdir()
+    invalid = '```mermaid\nflowchart LR\n A -->[\n```\n'
+    (source / 'SKILL.md').write_text('---\nname: reading\ndescription: Read\n---\n# Reading\n' + (invalid if in_skill else ''), encoding='utf-8')
+    request = {'id': 'first', 'document': '# Work\n' + ('' if in_skill else invalid), 'skills': ['reading'],
+               'architecture': {'shared': ['reading'], 'paradigms': []},
+               'sources': [{'id': 'reading', 'source': str(source)}]}
+    target = tmp_path / 'new'
+    with pytest.raises(HarnessError) as error:
+        management.create_mode(target, request, check=True)
+    assert error.value.code == 'MERMAID_RENDER_FAILED'
+    expected = str(source / 'SKILL.md').replace('\\', '/') if in_skill else 'request.document'
+    assert error.value.details[0]['file'].replace('\\', '/') == expected
+    assert 'asl-first-mode-' not in str(error.value)
+    assert not target.exists()
+
+
 def test_complete_skill_file_read_edit_and_stale_protection(tmp_path):
     root = _environment(tmp_path)
     script = root / 'skills/creator/scripts/main.py'
@@ -30,6 +100,40 @@ def test_complete_skill_file_read_edit_and_stale_protection(tmp_path):
     for path in ('../SOURCE.md', '/etc/passwd', '.env', 'scripts/../../PROFILE.md'):
         with pytest.raises(HarnessError):
             management.skill_files(root, 'creator', path)
+
+
+def test_catalog_reuses_each_modes_membership_within_one_request(tmp_path, monkeypatch):
+    root = _environment(tmp_path)
+    workspace = Workspace.open(root)
+    expected = management.catalog(workspace)
+    calls = []
+    original = Workspace.mode_skill_ids
+
+    def counted(self, mode):
+        calls.append(mode)
+        return original(self, mode)
+
+    monkeypatch.setattr(Workspace, 'mode_skill_ids', counted)
+    assert management.catalog(workspace) == expected
+    assert len(calls) <= len(workspace.modes), '目录应复用 summary 已解析的成员，不逐 Skill 重算'
+
+
+def test_membership_deduplicates_without_quadratic_id_comparisons():
+    from types import SimpleNamespace
+    comparisons = []
+
+    class Identifier(str):
+        __hash__ = str.__hash__
+
+        def __eq__(self, other):
+            comparisons.append(1)
+            return super().__eq__(other)
+
+    ids = [Identifier(f'skill-{i}') for i in range(300)]
+    workspace = SimpleNamespace(modes={'m': SimpleNamespace(skill_roots=ids)},
+                                skills={sid: SimpleNamespace(requires=()) for sid in ids})
+    assert Workspace.mode_skill_ids(workspace, 'm') == tuple(ids)
+    assert len(comparisons) < 1000, '已访问检查不应遍历有序结果列表'
 
 
 def test_invalid_skill_file_edit_never_overwrites_original(tmp_path):
@@ -184,6 +288,8 @@ def test_mode_edit_previews_then_updates_without_changing_skills(tmp_path):
     assert preview["changedPaths"] == ["modes/analysis", "WORKSPACE.md"]
     result = management.edit(root, request)
     assert result["changed"]
+    assert result['catalog'] == management.catalog(root)
+    assert 'catalog' not in preview
     assert Workspace.open(root).modes["analysis"].skill_roots == ("foundation",)
     assert (root / "skills/creator/SKILL.md").read_bytes() == previous
 

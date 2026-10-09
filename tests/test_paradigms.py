@@ -130,3 +130,26 @@ def test_import_requires_placement_before_any_file_changes(tmp_path):
     management.edit(root, {**request, 'placement': 'shared'})
     assert Workspace.open(root).modes[mode['id']].architecture['shared'] == ['foundation', 'new-skill']
     assert (root / 'skills/new-skill/SKILL.md').read_bytes() == (source / 'SKILL.md').read_bytes()
+
+
+@pytest.mark.parametrize('fence,source', [('```', 'flowchart LR\n skill_creator --> skill_foundation'),
+                                          ('~~~~', 'sequenceDiagram\n participant skill_creator\n participant skill_foundation\n skill_creator->>skill_foundation: 当前关系')])
+def test_authored_mermaid_is_the_only_relationship_sent_to_host(tmp_path, fence, source):
+    from asl_harness.adapters import _mode_instructions
+    root = _environment(tmp_path)
+    package = root / 'modes/creator-studio'
+    data = yaml.safe_load((package / 'mode.yaml').read_text(encoding='utf-8'))
+    data['apiVersion'] = 'asl-wep/v0.4.0'
+    data['spec']['architecture'] = {'shared': [], 'paradigms': [
+        {'id': 'compose', 'title': '材料成稿', 'description': '成员归属保持可见',
+         'skills': ['creator', 'foundation'],
+         'edges': [{'from': 'foundation', 'to': 'creator', 'label': '过时关系不得重复输出'}]}]}
+    (package / 'mode.yaml').write_text(yaml.safe_dump(data), encoding='utf-8')
+    document = f'# 当前工作图\n\n{fence}mermaid\n{source}\n{fence}\n'
+    (package / 'MODE.md').write_text(document, encoding='utf-8')
+    text = _mode_instructions(Workspace.open(root), 'creator-studio')
+    assert document.strip() in text
+    assert '成员归属保持可见' in text
+    assert 'creator, foundation' in text
+    assert '过时关系不得重复输出' not in text
+    assert (package / 'MODE.md').read_text(encoding='utf-8') == document

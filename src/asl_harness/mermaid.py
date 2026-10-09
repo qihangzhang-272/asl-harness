@@ -12,11 +12,12 @@ from .workspace import HarnessError
 
 def renderer_command() -> list[str]:
     if getattr(sys, 'frozen', False):
-        executable = Path(sys.executable).resolve().parents[2] / 'ASL Workspace.exe'
+        executable = Path(sys.executable).resolve().parents[2] / ('MacOS/Electron' if sys.platform == 'darwin' else 'ASL Workspace.exe')
         return [str(executable), '--validate-mermaid']
     else:
         desktop = Path(__file__).resolve().parents[2] / 'desktop'
-        executable = desktop / 'node_modules/electron/dist' / ('electron.exe' if os.name == 'nt' else 'electron')
+        binary = 'Electron.app/Contents/MacOS/Electron' if sys.platform == 'darwin' else ('electron.exe' if sys.platform == 'win32' else 'electron')
+        executable = desktop / 'node_modules/electron/dist' / binary
         return [str(executable), str(desktop), '--validate-mermaid']
 
 

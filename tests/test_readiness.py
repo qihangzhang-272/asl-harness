@@ -47,3 +47,29 @@ def test_doctor_report_does_not_expose_free_text_or_mistake_warn_for_ok():
     assert result[0]["status"] == "ok"
     assert result[1]["status"] == "warn"
     assert "secret" not in json.dumps(result)
+
+
+def test_runtime_notes_declared_only_in_source_remain_visible(tmp_path):
+    root = _environment(tmp_path)
+    source = root / "skills" / "foundation" / "SOURCE.md"
+    _write(source, source.read_text(encoding="utf-8") + "\n- Runtime dependencies: opencli.\n")
+    report = readiness.inspect_mode(Workspace.open(root), "creator-studio", "codex-app", home=tmp_path / "home", env={})
+    assert {"skill": "foundation", "path": str(source)} in report["setupNotes"]
+    assert report["needsConfiguration"] is True
+
+
+def test_hook_readiness_reports_scope_and_command_without_claiming_activation(tmp_path, monkeypatch):
+    workspace = Workspace.open(_environment(tmp_path))
+    monkeypatch.setattr(readiness.shutil, "which", lambda name: "/tools/asl-harness-hook" if name == "asl-harness-hook" else None)
+    for host, scope, coverage in [
+        ("codex-app", "project", "project"), ("claude-code", "project", "project"),
+        ("deepseek-harness", "preset", "preset"), ("workbuddy", "project", "none"),
+        ("codex-app", "user", "none"), ("claude-code", "user", "none"),
+    ]:
+        report = readiness.inspect_mode(workspace, "creator-studio", host, scope=scope, home=tmp_path / "home", env={})
+        assert report["hooks"] == {"coverage": coverage, "command": "asl-harness-hook",
+                                   "commandFound": True, "commandPath": "/tools/asl-harness-hook", "verified": False}
+    monkeypatch.setattr(readiness.shutil, "which", lambda _name: None)
+    report = readiness.inspect_mode(workspace, "creator-studio", "codex-app", scope="project", home=tmp_path / "home", env={})
+    assert report["hooks"]["commandFound"] is False
+    assert report["hooks"]["verified"] is False

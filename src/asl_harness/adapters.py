@@ -35,6 +35,11 @@ RUNTIME_REQUIREMENTS = re.compile(
 )
 
 
+def runtime_requirement_files(skill_path: Path) -> list[Path]:
+    return [skill_path / name for name in ("SKILL.md", "SOURCE.md")
+            if RUNTIME_REQUIREMENTS.search((skill_path / name).read_text(encoding="utf-8"))]
+
+
 def _layout(host_id: str) -> dict[str, str]:
     layout = HOST_LAYOUTS.get(host_id)
     if layout is None:
@@ -193,9 +198,10 @@ def _mode_instructions(workspace: Workspace, mode_id: str) -> str:
     if MANAGED_START in mode.document or MANAGED_END in mode.document:
         raise HarnessError("HOST_INSTRUCTION_COLLISION", "MODE.md contains ASL markers")
     architecture = mode.architecture or {}
+    authored_diagram = re.search(r'(?im)^[ \t>]*(?:`{3,}|~{3,})[ \t]*mermaid\b', mode.document)
     patterns = []
     for item in architecture.get('paradigms', []):
-        relations = '\n'.join(f"- {edge['from']} → {edge['to']}：{edge['label']}" for edge in item['edges'])
+        relations = '' if authored_diagram else '\n'.join(f"- {edge['from']} → {edge['to']}：{edge['label']}" for edge in item['edges'])
         patterns.append(f"#### {item['title']}\n\n{item['description']}\n\n技能：{', '.join(item['skills'])}\n{relations}")
     architecture_text = ('### Work paradigms\n\n常用组合供当前任务选择，不强制依次执行。\n\n'
         + '\n\n'.join(patterns) + '\n\n通用能力（各范式按需使用）：' + ', '.join(architecture.get('shared', []))) if 'paradigms' in architecture else ''
@@ -223,6 +229,7 @@ Environment truth: `{workspace.root}`
 4. Keep task outputs in the user's chosen project or output location, following the relevant Skill's temporary-storage rules. No directory named Case is required. Do not automatically turn task materials into long-term Skills or Profile content.
 5. Record durable feedback only when the user clearly evaluates, corrects, or states a preference. Do not infer it from silence, timing, clicks, or other ambiguous behavior.
 6. Do not infer durable Environment changes from ordinary work. When the user explicitly asks to add or change a long-term capability, use the Harness system maintenance path from the current Mode, change the smallest fitting truth, run deterministic validation, and leave a reviewable Git diff.
+   Mode organization does not authorize changing Skill content. Before modifying Skill instructions, scripts, references or assets, explain the exact files, changes and impact and obtain explicit user confirmation in this Host. Then use the same CLI write gate.
 7. High-impact deletion, publication, payment, login, private-data access, messages, or external writes still require the current Host's native user-authorization boundary. Mode selection never grants that authority.
 
 The current Host is the only executor. ASL Harness validates and projects this Mode; it does not route Skills, run a graph, or maintain a second Agent loop.
@@ -504,9 +511,7 @@ def activation_report(
     layout = _layout(host_id)
     runtime_skills = []
     for skill_id in workspace.mode_skill_ids(mode_id):
-        text = "\n".join((workspace.skills[skill_id].path / name).read_text(encoding="utf-8")
-                         for name in ("SKILL.md", "SOURCE.md"))
-        if RUNTIME_REQUIREMENTS.search(text):
+        if runtime_requirement_files(workspace.skills[skill_id].path):
             runtime_skills.append(skill_id)
 
     next_steps = [f"Open {project} in {HOST_DISPLAY_NAMES[host_id]}."]
@@ -521,13 +526,17 @@ def activation_report(
             "Install or enable the asl-environment-host plugin for automatic checks; "
             "the Mode itself is already usable without Hooks."
         )
-    else:
+    elif host_id == "deepseek-harness":
         hook_integration = "@deepseek-ai/dsh-hooks-codex"
         hook_activation = "included-by-deepseek-preset-export"
         next_steps.append(
             "For automatic checks, export this Mode as a DeepSeek Agent Preset; "
             "the preset includes the official Cordis Hook bridge."
         )
+    else:
+        hook_integration = None
+        hook_activation = "unsupported"
+        next_steps.append("Automatic ASL Hooks are not integrated for this Host; use manual CLI checks when needed.")
 
     return {
         "hostId": host_id,

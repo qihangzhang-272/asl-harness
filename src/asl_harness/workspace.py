@@ -6,7 +6,7 @@ import re
 import subprocess
 import sys
 import stat
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import yaml
@@ -185,7 +185,8 @@ def _scan_authored_material(root: Path, scan_roots: list[Path] | None = None) ->
         root / directory for directory in LIFECYCLE_AREAS
     ]
     for scan_root in scan_roots:
-        for current, directories, files in os.walk(scan_root):
+        entries = [(scan_root.parent, [], [scan_root.name])] if scan_root.is_file() else os.walk(scan_root)
+        for current, directories, files in entries:
             current_path = Path(current)
             kept = []
             for directory in directories:
@@ -422,6 +423,57 @@ def _read_lifecycle_areas(root: Path) -> dict[str, tuple[str, ...]]:
     return areas
 
 
+def _read_issue(kind: str, path: Path, error: Exception) -> dict:
+    return {"kind": kind, "id": path.name, "path": str(path),
+            "code": error.code if isinstance(error, HarnessError) else "RESOURCE_INVALID",
+            "message": str(error) if isinstance(error, HarnessError) else "文件无法读取，请检查格式、编码或访问权限"}
+
+
+def _read_local_path(path: Path) -> None:
+    info = path.lstat()
+    if path.is_symlink() or getattr(info, 'st_file_attributes', 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT:
+        raise HarnessError('PATH_ESCAPE', f'只读目录不跟随链接，请先本地化：{path}')
+
+
+def _read_catalog_entries(root: Path):
+    skills, modes, cultivation, issues, generated = {}, {}, {}, [], set()
+    for area in ('skills', 'modes', *LIFECYCLE_AREAS):
+        directory = root / area
+        _read_local_path(directory)
+        if not directory.is_dir():
+            raise HarnessError('ENVIRONMENT_INVALID', f'Environment requires {area}/')
+        names = []
+        kind = {'skills': 'skill', 'modes': 'mode', 'candidates': 'candidate', 'trials': 'trial'}.get(area, area)
+        for package in sorted(directory.iterdir(), key=lambda item: item.name):
+            try:
+                _read_local_path(package)
+                for path in _package_paths(package):
+                    _read_local_path(path)
+                # Scan before opening authored text; secret-bearing packages never enter the view.
+                generated.update(_scan_authored_material(root, [package]))
+                if package.name.startswith('.') and area in LIFECYCLE_AREAS:
+                    continue
+                if area in ('skills', 'modes', 'candidates', 'trials') and not package.is_dir():
+                    raise HarnessError('RESOURCE_INVALID', '条目必须是完整的本地目录')
+                if area in ('skills', 'trials'):
+                    skill = _read_skill(package, _safe_id(package.name, 'Skill directory name'), root)
+                    if area == 'skills':
+                        skills[skill.id] = skill
+                elif area == 'modes':
+                    mode = _read_mode(package, _safe_id(package.name, 'Mode directory name'))
+                    modes[mode.id] = mode
+                elif area == 'candidates':
+                    _read_nonempty(package / 'SOURCE.md', f'Candidate {package.name}/SOURCE.md')
+                names.append(package.name)
+            except (HarnessError, OSError, UnicodeError, TypeError, ValueError, RecursionError) as error:
+                issues.append(_read_issue(kind, package, error))
+        if area in LIFECYCLE_AREAS:
+            cultivation[area] = tuple(names)
+    if (not skills or not modes) and not issues:
+        raise HarnessError('ENVIRONMENT_INVALID', 'Environment requires formal Skills and Modes')
+    return skills, modes, cultivation, tuple(sorted(generated)), issues
+
+
 @dataclass(frozen=True)
 class Workspace:
     root: Path
@@ -432,13 +484,14 @@ class Workspace:
     cultivation: dict[str, tuple[str, ...]]
     warnings: tuple[dict, ...]
     git_commit: str
+    issues: tuple[dict, ...] = ()
 
     @property
     def environment_id(self) -> str:
         return self.root.name
 
     @classmethod
-    def open(cls, root: str | Path, *, mode_id: str | None = None) -> "Workspace":
+    def open(cls, root: str | Path, *, mode_id: str | None = None, read_only: bool = False) -> "Workspace":
         resolved = Path(root).resolve()
         if not resolved.is_dir():
             raise HarnessError("ENVIRONMENT_INVALID", f"Environment is missing: {resolved}")
@@ -457,6 +510,12 @@ class Workspace:
                 "LEGACY_LAYOUT_PRESENT",
                 f"v0.3 Environment cannot contain legacy active surfaces: {names}",
             )
+        if read_only:
+            for name in ('WORKSPACE.md', 'PROFILE.md', 'skills', 'modes', *LIFECYCLE_AREAS):
+                try:
+                    _read_local_path(resolved / name)
+                except OSError as error:
+                    raise HarnessError('ENVIRONMENT_INVALID', f'Environment requires {name}') from error
         workspace_document = _read_nonempty(resolved / "WORKSPACE.md", "WORKSPACE.md")
         profile = _read_nonempty(resolved / "PROFILE.md", "PROFILE.md")
         skills_root = resolved / "skills"
@@ -467,7 +526,12 @@ class Workspace:
             )
         skills: dict[str, Skill] = {}
         modes: dict[str, Mode] = {}
-        if mode_id is None:
+        issues = []
+        if read_only:
+            if mode_id is not None:
+                raise HarnessError('ENVIRONMENT_INVALID', '只读目录不接受 Mode 选择；请选择严格的 Mode 读取')
+            skills, modes, cultivation, generated, issues = _read_catalog_entries(resolved)
+        elif mode_id is None:
             cultivation = _read_lifecycle_areas(resolved)
             generated = _scan_authored_material(resolved)
             for package in sorted(skills_root.iterdir(), key=lambda item: item.name):
@@ -514,8 +578,58 @@ class Workspace:
             ),
             git_commit=_git_commit(resolved),
         )
-        workspace._validate_graph()
-        return workspace
+        if read_only:
+            workspace._isolate_invalid_graph(issues)
+        else:
+            workspace._validate_graph()
+        return replace(workspace, issues=tuple(issues)) if issues else workspace
+
+    def _isolate_invalid_graph(self, issues: list[dict]) -> None:
+        # Each Skill is checked once; Modes reuse the surviving graph rather than reopening the library.
+        checked: dict[str, HarnessError | None] = {}
+        visiting: set[str] = set()
+
+        def visit(skill_id: str) -> None:
+            if skill_id in checked:
+                if checked[skill_id] is not None:
+                    raise checked[skill_id]
+                return
+            if skill_id in visiting:
+                raise HarnessError('SKILL_DEPENDENCY_CYCLE', f'Skill dependency cycle includes: {skill_id}')
+            skill = self.skills.get(skill_id)
+            if skill is None:
+                raise HarnessError('SKILL_DEPENDENCY_MISSING', f'Skill dependency is missing or invalid: {skill_id}')
+            visiting.add(skill_id)
+            try:
+                for required in skill.requires:
+                    visit(required)
+            except HarnessError as error:
+                checked[skill_id] = error
+                raise
+            else:
+                checked[skill_id] = None
+            finally:
+                visiting.remove(skill_id)
+
+        for skill in tuple(self.skills.values()):
+            try:
+                visit(skill.id)
+            except HarnessError as error:
+                issues.append(_read_issue('skill', skill.path, error))
+        for skill_id, error in checked.items():
+            if error is not None:
+                self.skills.pop(skill_id)
+        for mode in tuple(self.modes.values()):
+            try:
+                missing = [item for item in mode.skill_roots if item not in self.skills]
+                if missing:
+                    raise HarnessError('MODE_SKILL_MISSING', f'Mode {mode.id} references missing or invalid Skills: {", ".join(missing)}')
+                allowed = set(self.mode_skill_ids(mode.id))
+                validate_capabilities(list(mode.capabilities) if mode.capabilities is not None else None, allowed)
+                validate_architecture(mode.architecture, allowed)
+            except HarnessError as error:
+                issues.append(_read_issue('mode', mode.path, error))
+                self.modes.pop(mode.id)
 
     def _validate_graph(self) -> None:
         for skill in self.skills.values():
@@ -562,10 +676,12 @@ class Workspace:
         if mode is None:
             raise HarnessError("MODE_NOT_ACTIVE", f"Mode is not active: {mode_id}")
         ordered: list[str] = []
+        seen: set[str] = set()
 
         def append(skill_id: str) -> None:
-            if skill_id in ordered:
+            if skill_id in seen:
                 return
+            seen.add(skill_id)
             ordered.append(skill_id)
             for required in self.skills[skill_id].requires:
                 append(required)

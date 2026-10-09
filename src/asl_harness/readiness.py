@@ -11,7 +11,7 @@ from pathlib import Path
 
 import yaml
 
-from .adapters import RUNTIME_REQUIREMENTS
+from .adapters import runtime_requirement_files
 from .user_projection import locations
 from .workspace import Workspace
 from .native_mcp import inspect_mcp
@@ -36,7 +36,8 @@ def _mcp_names(host: str, home: Path, env: dict, project: Path | None) -> set[st
 
 
 def inspect_mode(workspace: Workspace, mode_id: str, host: str, *, project: Path | None = None,
-                 home: Path | None = None, env: dict | None = None, probe: bool = False) -> dict:
+                 home: Path | None = None, env: dict | None = None, probe: bool = False,
+                 scope: str = "project") -> dict:
     home, env = home or Path.home(), os.environ if env is None else env
     connections = _mcp_names(host, home, env, project)
     checks, notes = {}, []
@@ -59,8 +60,7 @@ def inspect_mode(workspace: Workspace, mode_id: str, host: str, *, project: Path
         skill = workspace.skills[skill_id]
         text = (skill.path / "SKILL.md").read_text(encoding="utf-8")
         meta = yaml.safe_load(text.split("---", 2)[1]) or {}
-        if RUNTIME_REQUIREMENTS.search(text):
-            notes.append({"skill": skill_id, "path": str(skill.path / "SKILL.md")})
+        notes.extend({"skill": skill_id, "path": str(file)} for file in runtime_requirement_files(skill.path))
         metadata = meta.get("metadata", {})
         if isinstance(metadata, dict):
             for provider in ("openclaw", "clawdbot"):
@@ -113,9 +113,13 @@ def inspect_mode(workspace: Workspace, mode_id: str, host: str, *, project: Path
                     doctor_error = "体检未返回可识别的渠道状态"
             except (OSError, ValueError, subprocess.TimeoutExpired):
                 doctor_error = "渠道体检未完成，可让配置助手检查或稍后重试"
+    hook_command = shutil.which("asl-harness-hook")
+    hook_coverage = scope if host in {"codex-app", "claude-code", "deepseek-harness"} and scope in {"project", "preset"} else "none"
     return {"host": host, "mode": mode_id, "userPaths": {k: str(v) for k, v in locations(host, home=home, env=env).items()} if host in {"codex-app", "claude-code"} else {},
             "machine": {"system": platform.system(), "architecture": platform.machine()},
             "checks": list(checks.values()), "setupNotes": notes,
+            "hooks": {"coverage": hook_coverage, "command": "asl-harness-hook", "commandFound": bool(hook_command),
+                      "commandPath": hook_command, "verified": False},
             "needsConfiguration": any(c["status"] in {"missing", "unknown"} for c in checks.values()) or bool(notes),
             "doctor": doctor, "doctorError": doctor_error,
             "notice": "工具或配置存在不等于已经登录、能成功工作；配置助手按实际任务复查。"}
