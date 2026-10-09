@@ -63,7 +63,17 @@ def test_first_mode_rejects_stale_sources_and_missing_dependencies_before_write(
 
 
 @pytest.mark.parametrize('in_skill', [False, True])
-def test_first_mode_render_feedback_points_to_caller_draft(tmp_path, in_skill):
+def test_first_mode_render_feedback_points_to_caller_draft(tmp_path, in_skill, monkeypatch):
+    from contextlib import contextmanager
+    temporary_directory = management.tempfile.TemporaryDirectory
+
+    @contextmanager
+    def aliased_temporary(**kwargs):
+        with temporary_directory(**kwargs) as temporary:
+            path = Path(temporary)
+            yield str(path / '..' / path.name) if kwargs.get('prefix') == 'asl-first-mode-' else temporary
+
+    monkeypatch.setattr(management.tempfile, 'TemporaryDirectory', aliased_temporary)
     source = tmp_path / 'ordinary'
     source.mkdir()
     invalid = '```mermaid\nflowchart LR\n A -->[\n```\n'
@@ -537,6 +547,9 @@ def test_changed_import_source_requires_another_preview(tmp_path):
 
 def test_linked_authored_file_is_not_edited_in_place(tmp_path):
     root = _environment(tmp_path)
+    skill = next(
+        s for s in management.catalog(root)["skills"] if s["id"] == "foundation"
+    )
     document = root / "skills/foundation/SKILL.md"
     origin = root / "skills/foundation/original.md"
     origin.write_bytes(document.read_bytes())
@@ -545,9 +558,9 @@ def test_linked_authored_file_is_not_edited_in_place(tmp_path):
         document.symlink_to(origin)
     except OSError:
         pytest.skip("symlinks unavailable")
-    skill = next(
-        s for s in management.catalog(root)["skills"] if s["id"] == "foundation"
-    )
+    report = management.catalog(root)
+    assert not any(s['id'] == 'foundation' for s in report['skills'])
+    assert any(issue['code'] == 'PATH_ESCAPE' for issue in report['issues'])
     with pytest.raises(HarnessError, match="链接"):
         management.edit(
             root,
@@ -558,3 +571,5 @@ def test_linked_authored_file_is_not_edited_in_place(tmp_path):
                 "expected": skill["fingerprint"],
             },
         )
+    assert document.is_symlink()
+    assert origin.read_bytes() == document.read_bytes()

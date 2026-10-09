@@ -97,13 +97,13 @@ def test_machine_discovery_reads_registered_projects_without_walking_disk(tmp_pa
     project, hidden = tmp_path / 'known', tmp_path / 'unregistered'
     project.mkdir(); hidden.mkdir()
     write(tmp_path / '.claude.json', json.dumps({'projects': {str(project): {}},
-        'mcpServers': {'global': {'command': 'node', 'env': {'KEY': 'private'}}}}))
+        'mcpServers': {'global': {'command': 'node', 'env': {'KEY': 'MCP_SECRET_SENTINEL'}}}}))
     write(project / '.mcp.json', '{"mcpServers":{"local":{"command":"node"}}}')
     write(hidden / '.mcp.json', '{"mcpServers":{"hidden":{"command":"node"}}}')
     report = discover_mcp([str(project), str(tmp_path / 'gone')], home=tmp_path, env={})
     assert report['projects'] == [str(project)]
     assert {server['name'] for row in report['sources'] for server in row['servers']} == {'global', 'local'}
-    assert 'private' not in json.dumps(report)
+    assert 'MCP_SECRET_SENTINEL' not in json.dumps(report)
     assert any(row['project'] == str(project) and row['scope'] == 'project' for row in report['sources'])
 
 

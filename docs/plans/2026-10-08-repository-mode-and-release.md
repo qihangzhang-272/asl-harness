@@ -48,3 +48,5 @@ CLI 内置的是整理指引，不是带固定行业结论的新业务 Skill。�
 - 框架 ZIP 首次使用标准 zipfile 命令遇到上游文件早于 1980 的时间戳，失败产物不发布；使用 stdlib 的 `strict_timestamps=False` 重新打包到独立验证目录，不修改 App 文件或源代码时间。
 - Windows 两仓 Release 上传完成，API 资产摘要与本地一致。Library Release 创建首次用了短 SHA 被 GitHub 拒绝；换完整 SHA 后成功，没有重复发行或混入其他文件。桌面 0.5.12 的 406 个文件与候选一致，入口和图标同步后启动；旧目录未删除。
 - Mac 首轮真实 runner 被安全门控阻断（不是额度问题）：[source-map-js 公告](https://github.com/advisories/GHSA-68fv-2mgg-jv7q)影响构建期 PostCSS 依赖。仅升级 1.2.1→1.2.2，未改 runtime；高危门控通过，Node 236 项重跑通过，105 个构建输出与 Windows 候选完全一致，不需替换已发布二进制。保留 npm 低危 KaTeX 关联报告：[上游说明](https://github.com/advisories/GHSA-238p-pmpm-9mq7)要求已有原型污染／选项污染，并建议独立消毒。当前 Mermaid strict、sandbox、contextIsolation 保留，但不将其等同漏洞已修复；兼容升级另评估，不执行会倒退到 Mermaid 10 的 `audit fix --force`。
+- Mac 第二轮 `37877204162` 已完成原生构建与冻结 CLI 图检查；源码测试 348 通过、2 跳过、4 失败。实际缺陷是 `/var`→`/private/var` 临时别名被错误替换，反馈变成 `/privaterequest.document`；只在创建导出包处统一绝对实路径。Windows 使用等价别名测试先红后绿。另两项为旧测试假设：无效链接本应从只读目录隔离，测试应先保留旧指纹再确认拒写；秘密哨兵不能使用会命中 Mac `/private` 路径的普通词。定向 39 通过、2 平台跳过。
+- 此诊断修补以 0.5.13／核心 0.4.8 继续双平台冻结验收；不替换已发布 0.5.12 的资产字节。低危复核确认当前 Mermaid 对 KaTeX 输出及最终 SVG 都使用 DOMPurify，配置入口过滤原型键，尚未证明可达利用链；受影响依赖版本仍保留明确待办，不写成已修复。

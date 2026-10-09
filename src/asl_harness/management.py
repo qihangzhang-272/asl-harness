@@ -369,7 +369,7 @@ def create_mode(target: str | Path, request: dict, *, check: bool = False, expec
         (mode / 'mode.yaml').write_text(yaml.safe_dump({'apiVersion': MODE_API_VERSION, 'kind': 'ModeProjection',
             'metadata': {'id': identifier}, 'spec': spec}, allow_unicode=True, sort_keys=False), encoding='utf-8')
         Workspace.open(staged).sync_workspace_view()
-        bundle = Path(temporary) / 'mode.zip'
+        bundle = (Path(temporary) / 'mode.zip').resolve()
         export_pack(staged, identifier, bundle)
         try:
             return import_pack(bundle, destination, check=check, expected=expected)
