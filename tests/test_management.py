@@ -547,9 +547,6 @@ def test_changed_import_source_requires_another_preview(tmp_path):
 
 def test_linked_authored_file_is_not_edited_in_place(tmp_path):
     root = _environment(tmp_path)
-    skill = next(
-        s for s in management.catalog(root)["skills"] if s["id"] == "foundation"
-    )
     document = root / "skills/foundation/SKILL.md"
     origin = root / "skills/foundation/original.md"
     origin.write_bytes(document.read_bytes())
@@ -568,7 +565,7 @@ def test_linked_authored_file_is_not_edited_in_place(tmp_path):
                 "operation": "skill.save",
                 "id": "foundation",
                 "document": origin.read_text(encoding="utf-8"),
-                "expected": skill["fingerprint"],
+                "expected": management.package_fingerprint(document.parent),
             },
         )
     assert document.is_symlink()
