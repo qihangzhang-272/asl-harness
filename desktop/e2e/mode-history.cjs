@@ -1,7 +1,7 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:os');
 const {execFileSync}=require('node:child_process');
-const {launch,packagedCore}=require('./fixture.cjs');
+const {launch,packagedCore,dispose}=require('./fixture.cjs');
 const root=path.resolve(__dirname,'../..');
 function git(library,...args){return execFileSync('git',['-C',library,...args],{encoding:'utf8',windowsHide:true}).trim();}
 function core(library,args,input){
@@ -9,7 +9,7 @@ function core(library,args,input){
   return JSON.parse(execFileSync(exe||process.env.ASL_PYTHON||'python',[...(exe?[]:['-m','asl_harness.commands']),...args,'--workspace',library],{input:input&&JSON.stringify(input),encoding:'utf8',windowsHide:true,env:{...process.env,PYTHONPATH:path.join(root,'src')}}));
 }
 test('Mode evolution scrubs one live canvas, replays, restores safely and continues editing',{timeout:180000},async()=>{
-  const output=await fs.mkdtemp(path.join(os.tmpdir(),'asl-evolution-')),library=path.join(output,'library');
+  const output=await fs.mkdtemp(path.join(process.env.ASL_E2E_OUTPUT||os.tmpdir(),'asl-evolution-')),library=path.join(output,'library');
   await fs.cp(path.join(root,'examples/personal-environment'),library,{recursive:true});
   git(library,'init');git(library,'config','core.autocrlf','false');git(library,'config','user.name','ASL 临时验收');git(library,'config','user.email','test@example.invalid');
   git(library,'add','.');git(library,'commit','-m','2026-10-08 12:00｜建立隔离验收样例');
@@ -69,6 +69,6 @@ test('Mode evolution scrubs one live canvas, replays, restores safely and contin
     const updated=core(library,['environment.history','--mode','creator-studio']);assert.equal(updated.entries.length,history.entries.length+1);
     await page.getByRole('button',{name:'从这里继续编辑',exact:true}).click();await page.locator('.mode-workspace-native').waitFor();
     assert.deepEqual(errors,[]);console.log('演进时间轴实机：'+run);
-  }catch(error){await page.screenshot({path:path.join(run,'evolution-failure.png')});console.error(run,errors,await page.locator('body').innerText());throw error;}
-  finally{await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().forEach(window=>window.destroy()));await app.close();}
+  }catch(error){console.error(run,errors,error.stack);await page.screenshot({path:path.join(run,'evolution-failure.png'),timeout:10000}).catch(capture=>console.error(capture.message));throw error;}
+  finally{await dispose(app);}
 });

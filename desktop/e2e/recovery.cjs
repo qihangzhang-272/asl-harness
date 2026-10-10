@@ -1,6 +1,6 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:os');
-const {launch,packagedCore}=require('./fixture.cjs');
+const {launch,packagedCore,dispose}=require('./fixture.cjs');
 // Match the existing core write deadline; latency is measured separately, not by this safety test.
 const ready=page=>page.waitForFunction(()=>!document.querySelector('.mermaid-viewport[inert],.mermaid-edit[aria-busy="true"]'),null,{timeout:120000});
 const center=async el=>{const r=await el.boundingBox();assert.ok(r);return {x:r.x+r.width/2,y:r.y+r.height/2};};
@@ -15,11 +15,6 @@ async function open(page,title='恢复流程'){
   await page.locator('.source-tree button').filter({hasText:'Creator Studio'}).first().click();
   await page.getByRole('tab',{name:title,exact:true}).click();await ready(page);
   await page.locator('.mermaid-drawing>svg').waitFor();
-}
-async function dispose(app){
-  // Never force-close a real user window; this is the fixture's isolated process.
-  if(app.process().exitCode===null&&app.windows().some(window=>!window.isClosed()))await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().forEach(window=>window.destroy()));
-  await app.close();
 }
 
 test('all drag types cancel on blur, Escape and pointercancel, then complete a normal gesture',{timeout:480000},async()=>{

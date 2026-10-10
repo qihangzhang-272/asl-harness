@@ -52,7 +52,7 @@ test('all navigation rails resize, retain preferences, cancel safely and leave r
     await page.waitForFunction(()=>document.querySelector('.package-document').getBoundingClientRect().width>=280);
     await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(w=>w.isVisible()).setSize(1400,950));
     await page.waitForFunction(width=>Number(document.querySelector('[aria-label="调整技能文件目录宽度"]').getAttribute('aria-valuenow'))===width,fileWidth);
-    await page.reload();await page.locator('.skill-library').waitFor();
+    await page.reload({waitUntil:'domcontentloaded'});await page.locator('.skill-library').waitFor();
     assert.equal(Number(await page.getByRole('separator',{name:'调整导航栏宽度'}).getAttribute('aria-valuenow')),nav);
     await page.locator('.skill-canvas-panel .package-rendered').waitFor();
     assert.equal(await page.locator('.skill-table-row').count(),0,'重开应恢复当前技能阅读，而不是退回列表');

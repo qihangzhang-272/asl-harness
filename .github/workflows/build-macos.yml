@@ -87,5 +87,7 @@ jobs:
         if: always()
         with:
           name: macOS-desktop-acceptance
-          path: ${{ runner.temp }}/asl-e2e-*/
+          path: |
+            ${{ runner.temp }}/asl-e2e-*/
+            ${{ runner.temp }}/asl-evolution-*/asl-e2e-*/
           retention-days: 7
