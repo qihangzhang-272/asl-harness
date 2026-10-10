@@ -103,6 +103,7 @@ test('a pending external Skill reread keeps the document and scrollable director
       });
     });
     await fs.appendFile(path.join(workspace,'skills/product-analysis/SKILL.md'),'\n外部更新后的阅读内容。\n');
+    await app.evaluate(async()=>{const deadline=Date.now()+10000;while(typeof globalThis.releaseReread!=='function'){if(Date.now()>deadline)throw Error('文件读取未到达受控边界');await new Promise(resolve=>setTimeout(resolve,20));}});
     await page.waitForFunction(()=>document.querySelector('[aria-label="重新读取文件"]')?.disabled);
     assert.equal(await page.locator('.package-tree button[title^="references/连续阅读-"]').count(),35,'同一文件更新时目录不能被清空');
     assert.equal(await page.locator('.package-rendered').innerText(),before,'后台读取期间保留最后有效内容');
