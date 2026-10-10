@@ -20,6 +20,10 @@ test('Mode evolution scrubs one live canvas, replays, restores safely and contin
   const history=core(library,['environment.history','--mode','creator-studio']);assert.ok(history.entries.length>=4);
   const older=history.entries.find(entry=>core(library,['environment.history','--mode','creator-studio','--revision',entry.revision]).snapshot.document.includes('初步分析'));
   const {app,page,run,errors}=await launch({library,output});
+  const waitDrawing=revision=>page.waitForFunction(revision=>{
+    const canvas=document.querySelector('.evolution-canvas');
+    return canvas?.dataset.revision===revision&&!!canvas.querySelector('.mermaid-viewport:not([inert]) svg');
+  },revision);
   try{
     await page.locator('.source-tree button').filter({hasText:'Creator Studio'}).first().click();
     await page.getByRole('button',{name:'演变记录',exact:true}).click();
@@ -34,21 +38,21 @@ test('Mode evolution scrubs one live canvas, replays, restores safely and contin
     await page.mouse.move(bounds.x+bounds.width*.25,bounds.y+bounds.height/2,{steps:8});
     await page.mouse.move(bounds.x+bounds.width*.6,bounds.y+bounds.height/2,{steps:8});await page.mouse.up();
     await page.waitForFunction(()=>!!document.querySelector('.evolution-canvas').dataset.revision);
-    await range.fill(String(max));await page.waitForFunction(()=>document.querySelector('.evolution-canvas').dataset.revision==='current');
+    await range.fill(String(max));await waitDrawing('current');
     const ordered=[...history.entries].reverse();await range.fill(String(ordered.findIndex(entry=>entry.revision===older.revision)));
-    await page.waitForFunction(revision=>document.querySelector('.evolution-canvas').dataset.revision===revision,older.revision);
+    await waitDrawing(older.revision);
     assert.match(await page.locator('.evolution-canvas').innerText(),/初步分析/);
     const timings=[];
     for(const value of [max,ordered.findIndex(entry=>entry.revision===older.revision),max,ordered.findIndex(entry=>entry.revision===older.revision)]){
       const started=Date.now();await range.fill(String(value));
-      await page.waitForFunction(revision=>document.querySelector('.evolution-canvas').dataset.revision===revision,value===max?'current':older.revision);
+      await waitDrawing(value===max?'current':older.revision);
       timings.push(Date.now()-started);
     }
     console.log('已读版本来回切换耗时(ms)：'+timings.join(','));
     for(const name of ['协作时序','能力结构','研究协作']){
       await page.getByRole('tab',{name,exact:true}).click();
       await page.waitForFunction(name=>document.querySelector('.evolution-graphs [aria-selected=true]')?.textContent===name,name);
-      await page.locator('.evolution-canvas svg').waitFor();
+      await waitDrawing(older.revision);
       await page.screenshot({path:path.join(run,`evolution-${name}.png`)});
     }
     await page.screenshot({path:path.join(run,'mode-evolution.png')});
