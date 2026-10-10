@@ -10,7 +10,7 @@ test('canvas templates and structure can be created and edited without source or
   const file=path.join(workspace,'modes/creator-studio/MODE.md');
   const original=await fs.readFile(file,'utf8');
   await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setSize(1024,720));
-  async function ready(){await page.locator('.mode-workspace-native .mermaid-drawing>svg').waitFor();await page.waitForFunction(()=>!document.querySelector('.mode-workspace-native [aria-busy="true"],.mode-workspace-native .mermaid-viewport[inert]'));}
+  async function ready(){await page.locator('.mode-workspace-native .mermaid-viewport').waitFor();await page.waitForFunction(()=>!document.querySelector('.mode-workspace-native [aria-busy="true"],.mode-workspace-native .mermaid-viewport[inert]'));}
   async function blank(button='left',selector='.mode-workspace-native .mermaid-edit'){
     const canvas=page.locator(selector);await canvas.scrollIntoViewIfNeeded();
     const point=await canvas.evaluate(element=>{

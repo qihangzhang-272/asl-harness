@@ -14,6 +14,7 @@ export default function SkillFiles({ item, Dialog, readFile, saveFile, onClose, 
   const rendered=useRef(null);
   const [document, setDocument] = useState(''), [editing, setEditing] = useState(false);
   const [error, setError] = useState(''), [query, setQuery] = useState(''), [busy, setBusy] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [retry, setRetry] = useState(0);
   const refreshRead=useRef(false);
   const readContext=useRef(null);
@@ -23,7 +24,7 @@ export default function SkillFiles({ item, Dialog, readFile, saveFile, onClose, 
     return()=>window.document.removeEventListener('asl:discard-drafts',discard);
   },[]);
   const dirty = data?.document != null && document.replaceAll('\r\n','\n') !== data.document.replaceAll('\r\n','\n');
-  const leave=useLeaveGuard(dirty,busy,embedded?'.skill-canvas-panel':'.editor-page');
+  const leave=useLeaveGuard(dirty,saving,embedded?'.skill-canvas-panel':'.editor-page');
   useScrollMemory(`${key}:${file}`,rendered,!!data&&!editing&&!busy);
   useEffect(() => {
     let active = true;
@@ -62,9 +63,9 @@ export default function SkillFiles({ item, Dialog, readFile, saveFile, onClose, 
     </div>
     {error && data && <p role="alert" className="error-text">{error}</p>}
     <div className="dialog-actions">{!embedded&&<span className="muted">{dirty ? '有未保存修改' : '直接对应本地文件'} · 保存不会执行脚本</span>}<button disabled={busy} onClick={()=>leave(onClose)}>关闭</button><button className="primary" disabled={!dirty || busy || readOnly} onClick={async()=>{
-      setBusy(true); setError('');
+      setBusy(true); setSaving(true); setError('');
       try { await saveFile({operation:'skill.file.save',id:item.id,file,document,expected:data.fingerprint}); const result=await readFile(file,true); setData(result); setDocument(result.document || ''); setEditing(false); }
-      catch(e){setError(e.message);} finally{setBusy(false);}
+      catch(e){setError(e.message);} finally{setBusy(false);setSaving(false);}
     }}><Save size={15}/>校验并保存</button></div>
   </Dialog>;
 }

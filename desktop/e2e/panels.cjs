@@ -108,7 +108,11 @@ test('a pending external Skill reread keeps the document and scrollable director
     assert.equal(await page.locator('.package-rendered').innerText(),before,'后台读取期间保留最后有效内容');
     await page.locator('.package-tree').hover({position:{x:32,y:80}});await page.mouse.wheel(0,1200);
     await page.waitForFunction(()=>document.querySelector('.package-tree').scrollTop>0);
+    await page.getByRole('button',{name:'工作模式',exact:true}).first().click();
+    await page.locator('.mode-library-overview').waitFor({timeout:1500});
     await app.evaluate(()=>globalThis.releaseReread());
+    await page.getByRole('button',{name:'全部技能',exact:true}).first().click();
+    await page.locator('.skill-table-row').filter({has:page.locator('[title="product-analysis"]')}).click();
     await page.getByText('外部更新后的阅读内容。',{exact:true}).waitFor();
     assert.deepEqual(errors,[]);console.log('连续阅读：'+run);
   }finally{await app.evaluate(()=>globalThis.releaseReread?.()).catch(()=>{});await dispose(app);}
