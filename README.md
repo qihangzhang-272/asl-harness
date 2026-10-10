@@ -185,7 +185,7 @@ Environment 是普通文件夹，也是本地 Git 真源。人可以直接阅读
 
 ### 桌面预览版
 
-[下载 Windows App](https://github.com/qihangzhang-272/asl-harness/releases/download/app-v0.5.13/ASL-Workspace-0.5.13-Windows-x64.zip) · [各平台下载与校验值](https://github.com/qihangzhang-272/asl-harness/releases/tag/app-v0.5.13) · [带公开技能的内容版](https://github.com/qihangzhang-272/agent-skill-library/releases)
+[下载 Windows App](https://github.com/qihangzhang-272/asl-harness/releases/download/app-v0.5.14/ASL-Workspace-0.5.14-Windows-x64.zip) · [下载 Mac App（Apple Silicon）](https://github.com/qihangzhang-272/asl-harness/releases/download/app-v0.5.14/ASL-Workspace-0.5.14-macOS-arm64.zip) · [各平台下载与校验值](https://github.com/qihangzhang-272/asl-harness/releases/tag/app-v0.5.14) · [带公开技能的内容版](https://github.com/qihangzhang-272/agent-skill-library/releases/tag/app-v0.5.14)
 
 无需安装 Python 或 Node.js。下载后右键 ZIP → **全部解压** → 打开 `ASL Workspace` 文件夹 → 双击 **`ASL Workspace.exe`**。保留整个文件夹，不要只拿走 EXE；GitHub 自动生成的 `Source code` 压缩包是源码，不是 App。
 
@@ -207,7 +207,7 @@ npm start --prefix desktop
 
 首次导入或保存首个 Mode 可建立本地工作环境；人和 Agent 经同一 CLI 校验写入，App 回读显示。内容仍是普通文件，不是 App 私有数据库。Mode 演变记录依赖本机 Git 与作者配置；没有时仍能保存，但不会伪造历史。
 
-macOS 包仅在原生构建和验收通过后列于发行页；按 CPU 架构标注，不宣称 Universal。当前包未做开发者签名或 Apple 公证，不要求关闭系统防护。Mac 随包 CLI 位于 `ASL Workspace.app/Contents/Resources/core/asl-harness`。
+Mac 完整解压后打开 `ASL Workspace.app`。当前包适用于 Apple Silicon（arm64），不是 Intel 或 Universal 版；未做开发者签名或 Apple 公证，不要求关闭系统防护。Mac 随包 CLI 位于 `ASL Workspace.app/Contents/Resources/core/asl-harness`。
 
 Windows 开发者可以构建自带核心的便携文件夹，接收方无需手动安装 Python。请保留整个输出文件夹，不要单独拷贝 exe；这是未签名预览版，不是安装包。以下命令在仓库根目录的 PowerShell 中执行，输出目录必须不存在：
 

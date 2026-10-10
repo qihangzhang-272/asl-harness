@@ -185,7 +185,7 @@ Over time, the Environment becomes more like its owner: it retains useful judgme
 
 ### Desktop preview
 
-[Download for Windows](https://github.com/qihangzhang-272/asl-harness/releases/download/app-v0.5.13/ASL-Workspace-0.5.13-Windows-x64.zip) · [Platform downloads and checksums](https://github.com/qihangzhang-272/asl-harness/releases/tag/app-v0.5.13) · [App with published Skills](https://github.com/qihangzhang-272/agent-skill-library/releases)
+[Download for Windows](https://github.com/qihangzhang-272/asl-harness/releases/download/app-v0.5.14/ASL-Workspace-0.5.14-Windows-x64.zip) · [Download for Mac (Apple Silicon)](https://github.com/qihangzhang-272/asl-harness/releases/download/app-v0.5.14/ASL-Workspace-0.5.14-macOS-arm64.zip) · [Platform downloads and checksums](https://github.com/qihangzhang-272/asl-harness/releases/tag/app-v0.5.14) · [App with published Skills](https://github.com/qihangzhang-272/agent-skill-library/releases/tag/app-v0.5.14)
 
 No Python or Node.js installation is needed. Right-click the downloaded ZIP → **Extract All** → open the `ASL Workspace` folder → double-click **`ASL Workspace.exe`**. Keep the complete folder together. GitHub's automatically generated `Source code` archives are not the desktop App.
 
@@ -207,7 +207,7 @@ npm start --prefix desktop
 
 The first import or first Mode save can create a local environment. Humans and Agents share the validated CLI write boundary, and the App reads the result. Content stays in ordinary files, not an App-private database. Evolution history requires local Git and author configuration; saving without them does not fabricate history.
 
-macOS packages are listed only after native build and acceptance. The CPU architecture is explicit, not Universal. They are not publisher-signed or Apple-notarized; disabling system protection is not required. The bundled CLI is `ASL Workspace.app/Contents/Resources/core/asl-harness`.
+On Mac, extract everything and open `ASL Workspace.app`. This package is for Apple Silicon (arm64), not Intel or Universal. It is not publisher-signed or Apple-notarized; disabling system protection is not required. The bundled CLI is `ASL Workspace.app/Contents/Resources/core/asl-harness`.
 
 Windows developers can build a portable folder with the Python core included. Keep the complete folder together; the exe alone is not portable. This is an unsigned preview, not an installer. Run these commands in PowerShell from the repository root, using a new output directory:
 
