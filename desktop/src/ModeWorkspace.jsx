@@ -222,7 +222,7 @@ export default function ModeWorkspace({
             if(scopes.length===1)onSelectScope(scopes[0].id);
           }}>{d.title}</button>)}</div>
             </nav>
-          <SkillCanvas selected={selected} onSelect={setSelected} readFile={catalog&&!selected?.sourcePreview?readFile:async skill=>({file:'SKILL.md',files:[{path:'SKILL.md',group:'技能内容',editable:false}],document:await api('sourceDocument',skill.source||skill.path)})} saveFile={saveFile} readOnly={!catalog||!!selected?.sourcePreview}>
+          <SkillCanvas selected={selected} onSelect={setSelected} readFile={catalog&&!selected?.sourcePreview?readFile:(skill,file)=>api('run','sourceFiles',{source:skill.source||skill.path,file})} saveFile={saveFile} readOnly={!catalog||!!selected?.sourcePreview}>
             <MermaidEdit key={index} source={diagram?.source}
               empty={!diagram||!members.length&&diagram.source.trim()==='flowchart LR'}
               nodes={skillNodes(available.filter(s=>members.includes(s.id)),map.nodes)}

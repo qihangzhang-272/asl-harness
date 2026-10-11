@@ -31,6 +31,6 @@ test('removing membership cannot leave a clickable orphan or discard complex sou
   assert.doesNotMatch(withoutSkillNodes(document,['a']),/skill_a/);
   assert.match(withoutSkillNodes(document,['a']),/skill_b/);
   const sequence='# M\n```mermaid\nsequenceDiagram\n participant skill_a as A\n```';
-  assert.throws(()=>withoutSkillNodes(sequence,['a']),/原文/);
+  assert.throws(()=>withoutSkillNodes(sequence,['a']),/至少保留一个参与者/);
   assert.equal(withoutSkillNodes(sequence,['b']),sequence);
 });

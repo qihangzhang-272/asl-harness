@@ -28,3 +28,23 @@ test('unauthored member collections become editable nodes, not a read-only block
   const document=modeDiagramDocument({document:'# Test',roots:['a'],architecture:{shared:[],paradigms:[{id:'work',title:'工作',skills:['a'],edges:[]}]}},[{id:'a',title:'A'}]);
   assert.match(editFlowchart(diagramsIn(document)[0].source,{kind:'add',id:'skill_b',label:'B'}),/skill_b/);
 });
+
+test('removing a Skill uses the existing sequence and mindmap lenses without rewriting other content',async()=>{
+  const {withoutSkillNodes}=await import('../src/mode-diagrams.mjs');
+  const document='# 模式\r\n\r\n保留说明。\r\n\r\n## 时序\r\n```mermaid\r\nsequenceDiagram\r\nparticipant skill_read as 阅读\r\nparticipant skill_write as 写作\r\nskill_read->>skill_write: 材料\r\nNote over skill_read: 原文\r\n```\r\n\r\n## 结构\r\n```mermaid\r\nmindmap\r\n root((协作))\r\n  skill_read[阅读]\r\n   detail[阅读细节]\r\n  skill_write[写作]\r\n```\r\n';
+  const next=withoutSkillNodes(document,['read']);
+  assert.doesNotMatch(next,/skill_read|detail\[/);
+  assert.match(next,/participant skill_write as 写作\r\n/);
+  assert.match(next,/  skill_write\[写作\]\r\n/);
+  assert.ok(next.startsWith('# 模式\r\n\r\n保留说明。'));
+  assert.equal((next.match(/```mermaid/g)||[]).length,2);
+});
+
+test('Skill removal refuses ambiguous or unsupported structures instead of dropping authored content',async()=>{
+  const {withoutSkillNodes}=await import('../src/mode-diagrams.mjs');
+  for(const source of ['mindmap\n skill_read((根节点))\n  other[内容]',
+    'sequenceDiagram\nparticipant skill_read\nparticipant other\nactivate skill_read\nskill_read->>other: 内容',
+    'stateDiagram-v2\nstate "阅读" as skill_read\nskill_read --> done']){
+    assert.throws(()=>withoutSkillNodes('# 模式\n```mermaid\n'+source+'\n```',['read']));
+  }
+});

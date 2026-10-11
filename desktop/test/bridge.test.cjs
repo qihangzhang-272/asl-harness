@@ -36,6 +36,15 @@ test('complete file preview and Agent guide use the same read-only core', async 
   assert.ok(guide.document.includes('spec.architecture'));
   await assert.rejects(() => runCore('files', {workspace, skill: data.skills[0].id, file: '../PROFILE.md'}, {root}));
 });
+test('source package reading reuses skill.files without adopting or permitting extra paths',async()=>{
+  const root=path.resolve(__dirname,'../..'),source=path.join(root,'examples/personal-environment/skills/source-research');
+  assert.deepEqual(commandArgs('sourceFiles',{source,file:'SKILL.md'}),['skill.files','--source',source,'--file','SKILL.md']);
+  const data=await runCore('sourceFiles',{source,file:'SKILL.md'},{root});
+  assert.ok(data.document.includes('description:'));assert.equal(data.fingerprint,null);
+  assert.ok(data.files.every(f=>!f.editable));
+  await assert.rejects(()=>runCore('sourceFiles',{source,file:'../PROFILE.md'},{root}));
+  assert.throws(()=>commandArgs('sourceFiles',{source,file:'SKILL.md',apply:true}));
+});
 test("WorkBuddy project apply and local scans are explicit actions", () => {
   assert.ok(commandArgs("project", { workspace: "库", mode: "creator", project: "项目", host: "workbuddy" }).includes("workbuddy"));
   assert.throws(() => commandArgs("userSync", { workspace: "库", mode: "creator", host: "workbuddy" }));

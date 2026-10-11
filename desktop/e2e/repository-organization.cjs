@@ -7,12 +7,14 @@ const {launch,dispose}=require('./fixture.cjs');
 for(const empty of [true,false])test(`repository Skills can be read and chosen one by one into ${empty?'a first':'an existing'} Mode`,{timeout:180000},async()=>{
   const {app,page,run,workspace,errors}=await launch({empty});
   const url='https://github.com/qa/reading-tools',snapshot=path.join(run,'repository');
-  const original='---\nname: reading\ndescription: 阅读材料\n---\n# 阅读材料\n\n保留完整的研究方法。\n';
+  const original='---\nname: reading\ndescription: 阅读材料\n---\n# 阅读材料\n\n保留完整的研究方法。\n\n[阅读指南](references/guide.md)\n';
   try{
     for(const id of ['reading','unused']){
       await fs.mkdir(path.join(snapshot,id,'scripts'),{recursive:true});
       await fs.writeFile(path.join(snapshot,id,'SKILL.md'),original.replaceAll('reading',id));
       await fs.writeFile(path.join(snapshot,id,'scripts/read.py'),'print("read")\n');
+      await fs.mkdir(path.join(snapshot,id,'references'));
+      await fs.writeFile(path.join(snapshot,id,'references/guide.md'),'# 阅读指南\n\n先核对来源，再提取证据。\n');
     }
     await app.evaluate(async({app,ipcMain,dialog},{url,snapshot})=>{
       const path=process.getBuiltinModule('node:path');
@@ -27,6 +29,8 @@ for(const empty of [true,false])test(`repository Skills can be read and chosen o
     await page.evaluate(()=>window.asl.choose('skillSearchRoot'));
     const discovered=await page.evaluate(source=>window.asl.localSkills(source),snapshot);
     assert.equal(discovered.ok,true,JSON.stringify(discovered));
+    const unselected=await page.evaluate(source=>window.asl.run('sourceFiles',{source,file:'SKILL.md'}),path.join(run,'not-selected'));
+    assert.equal(unselected.ok,false);assert.match(unselected.error,/选择/,'新阅读入口仍受已登记路径保护');
     await page.reload();
     await page.locator('.cloud-source>.source-heading').click();
     await page.getByRole('heading',{name:'阅读工具仓库',exact:true}).waitFor();
@@ -38,6 +42,12 @@ for(const empty of [true,false])test(`repository Skills can be read and chosen o
     await page.locator('.graph-pane-skills').getByRole('button',{name:'阅读材料',exact:true}).click();
     await page.locator('.package-rendered').filter({hasText:'保留完整的研究方法'}).waitFor();
     assert.equal(await page.locator('.skill-canvas-panel').getByRole('button',{name:'编辑',exact:true}).isDisabled(),true,'来源只读，先读不采用');
+    await page.getByRole('link',{name:'阅读指南',exact:true}).click();
+    await page.locator('.package-rendered').filter({hasText:'先核对来源，再提取证据'}).waitFor();
+    await page.locator('.package-tree').getByRole('button',{name:'read.py',exact:true}).click();
+    await page.locator('.package-preview').filter({hasText:'print("read")'}).waitFor();
+    await page.locator('.package-tree').getByRole('button',{name:'SKILL.md',exact:true}).click();
+    await page.locator('.package-rendered').filter({hasText:'保留完整的研究方法'}).waitFor();
     await page.screenshot({path:path.join(run,'repository-skill-reading.png')});
     const target=empty?path.join(run,'home/app/workspace'):workspace;
     await assert.rejects(fs.stat(path.join(target,'skills/reading')),/ENOENT/);

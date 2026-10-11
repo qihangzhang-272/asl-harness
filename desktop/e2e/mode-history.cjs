@@ -56,7 +56,27 @@ test('Mode evolution scrubs one live canvas, replays, restores safely and contin
       await page.screenshot({path:path.join(run,`evolution-${name}.png`)});
     }
     await page.screenshot({path:path.join(run,'mode-evolution.png')});
-    await page.getByRole('button',{name:'回放变化',exact:true}).click();await page.getByRole('button',{name:'暂停回放',exact:true}).click();
+    const unchanged=await fs.readFile(path.join(library,'modes/creator-studio/MODE.md'));
+    for(const name of ['研究协作','协作时序','能力结构']){
+      await page.getByRole('tab',{name,exact:true}).click();
+      await range.fill(String(ordered.findIndex(entry=>entry.revision===older.revision)));await waitDrawing(older.revision);
+      await page.getByRole('button',{name:'回放变化',exact:true}).click();
+      await page.waitForFunction(revision=>{
+        const canvas=document.querySelector('.evolution-canvas');
+        return canvas?.dataset.revision&&canvas.dataset.revision!==revision;
+      },older.revision,{timeout:15000});
+      await page.getByRole('button',{name:'暂停回放',exact:true}).click();
+      const paused=await range.inputValue();
+      await new Promise(resolve=>setTimeout(resolve,1300));
+      assert.equal(await range.inputValue(),paused,'暂停后时间轴不能继续跳版');
+      await page.getByRole('button',{name:'回放变化',exact:true}).click();
+      await waitDrawing('current');await page.getByRole('button',{name:'回放变化',exact:true}).waitFor();
+      assert.match(await page.locator('.evolution-canvas').innerText(),/形成判断/);
+      assert.equal(await page.locator('.evolution-canvas').count(),1);
+      await page.screenshot({path:path.join(run,`replay-${name}.png`)});
+    }
+    assert.deepEqual(await fs.readFile(path.join(library,'modes/creator-studio/MODE.md')),unchanged,'回放不写入当前 Mode');
+    await range.fill(String(ordered.findIndex(entry=>entry.revision===older.revision)));await waitDrawing(older.revision);
     await page.getByLabel('记录操作',{exact:true}).click();
     await app.evaluate(({dialog})=>{dialog.showMessageBox=async()=>({response:0});});
     const before=await fs.readFile(path.join(library,'modes/creator-studio/MODE.md'));

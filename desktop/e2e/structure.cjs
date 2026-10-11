@@ -90,3 +90,27 @@ test('native diagrams edit in place and persist semantic drag, context actions a
   }catch(error){console.error('结构编辑验收：'+run,errors);await page.screenshot({path:path.join(run,'structure-failure.png')});await fs.writeFile(path.join(run,'structure-failure.html'),await page.locator('body').innerHTML());throw error;}
   finally {await dispose(app);}
 });
+
+test('removing Mode membership updates sequence and mindmap references without touching Skill files',{timeout:90000},async()=>{
+  const fs=require('node:fs/promises'),os=require('node:os');
+  const output=await fs.mkdtemp(path.join(os.tmpdir(),'asl-membership-')),library=path.join(output,'library');
+  await fs.cp(path.join(__dirname,'../../examples/personal-environment'),library,{recursive:true});
+  const folder=path.join(library,'modes/creator-studio'),file=path.join(folder,'MODE.md');
+  await fs.writeFile(path.join(folder,'mode.yaml'),(await fs.readFile(path.join(folder,'mode.yaml'),'utf8')).replace('    - product-analysis','    - product-analysis\n    - source-research'));
+  await fs.writeFile(file,'# Creator Studio\r\n\r\n## 时序\r\n```mermaid\r\nsequenceDiagram\r\nparticipant skill_product_analysis as 产品分析\r\nparticipant skill_source_research as 资料检索\r\nskill_product_analysis->>skill_source_research: 核对\r\n```\r\n\r\n## 结构\r\n```mermaid\r\nmindmap\r\n root((协作))\r\n  skill_product_analysis[产品分析]\r\n   detail[细节]\r\n  skill_source_research[资料检索]\r\n```\r\n');
+  const original=await Promise.all(['product-analysis','source-research'].map(id=>fs.readFile(path.join(library,'skills',id,'SKILL.md'))));
+  const {app,page,run,errors}=await launch({library,output});
+  try{
+    await page.locator('.source-tree button').filter({hasText:'Creator Studio'}).first().click();
+    await page.getByRole('button',{name:'编辑模式',exact:true}).click();
+    await page.getByRole('button',{name:'移出 Product analysis',exact:true}).click();
+    await page.getByRole('button',{name:'保存',exact:true}).click();
+    await page.locator('.editor-page').waitFor({state:'detached',timeout:45000});
+    const saved=await fs.readFile(file,'utf8');assert.doesNotMatch(saved,/skill_product_analysis|detail\[/);
+    assert.match(saved,/sequenceDiagram/);assert.match(saved,/mindmap/);assert.match(saved,/skill_source_research/);
+    const yaml=await fs.readFile(path.join(folder,'mode.yaml'),'utf8');assert.doesNotMatch(yaml,/product-analysis/);assert.match(yaml,/source-research/);
+    for(const [i,id] of ['product-analysis','source-research'].entries())assert.deepEqual(await fs.readFile(path.join(library,'skills',id,'SKILL.md')),original[i]);
+    await page.screenshot({path:path.join(run,'membership-removed.png')});assert.deepEqual(errors,[]);console.log('多图移出技能：'+run);
+  }catch(error){console.error(run,error.stack);await page.screenshot({path:path.join(run,'membership-failure.png'),timeout:10000}).catch(()=>{});throw error;}
+  finally{await dispose(app);}
+});

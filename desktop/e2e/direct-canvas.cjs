@@ -7,7 +7,7 @@ test('flow nodes follow the pointer; ports snap, edges delete, and geometry roun
  const output=await fs.mkdtemp(path.join(os.tmpdir(),'asl-direct-canvas-')),library=path.join(output,'library');
  await fs.cp(path.join(__dirname,'../../examples/personal-environment'),library,{recursive:true});
  const file=path.join(library,'modes/creator-studio/MODE.md');
- await fs.appendFile(file,'\n## 直接操作验收\n\n```mermaid\nflowchart LR\n company[公司画像]\n pitch[投行推介材料]\n company -->|事实| pitch\n```\n');
+ await fs.appendFile(file,'\n## 直接操作验收\n\n```mermaid\nflowchart LR\n company[公司画像] -->|事实| pitch[投行推介材料]\n```\n');
  const {app,page,run,workspace,errors}=await launch({library,output});
  await app.evaluate(({ipcMain})=>{
   globalThis.canvasTimings=[];
@@ -93,5 +93,40 @@ test('flow nodes follow the pointer; ports snap, edges delete, and geometry roun
   assert.equal(await fs.readFile(file,'utf8'),before,'CLI 渲染门控拒绝坏布局，不污染原文');
   assert.deepEqual(errors,[]);console.log('直接操作验收：'+run);
  }catch(error){console.error(run,errors);await page.screenshot({path:path.join(run,'failure.png')});throw error;}
+ finally{await dispose(app);}
+});
+
+test('starting a drag cancels a pending Skill click instead of opening the reading panel',{timeout:90000},async()=>{
+ const output=await fs.mkdtemp(path.join(os.tmpdir(),'asl-click-drag-')),library=path.join(output,'library');
+ await fs.cp(path.join(__dirname,'../../examples/personal-environment'),library,{recursive:true});
+ await fs.appendFile(path.join(library,'modes/creator-studio/MODE.md'),'\n## 连续操作\n\n```mermaid\nflowchart LR\n skill_source_research[资料检索] --> skill_product_analysis[产品分析] --> result((结果))\n```\n');
+ const file=path.join(library,'modes/creator-studio/MODE.md');
+ await fs.writeFile(file,(await fs.readFile(file,'utf8')).replace(/\r?\n/g,'\r\n'));
+ const {app,page,run,errors}=await launch({library,output});
+ try{
+  await page.locator('.source-tree button').filter({hasText:'Creator Studio'}).first().click();
+  await page.getByRole('tab',{name:'连续操作',exact:true}).click();
+  const node=page.locator('g.node[data-canvas-node="skill_source_research"]');await node.waitFor();
+  await page.waitForFunction(()=>!document.querySelector('.mermaid-viewport[inert]'));
+  await node.scrollIntoViewIfNeeded();const rect=await node.boundingBox(),x=rect.x+rect.width/2,y=rect.y+rect.height/2;
+  await page.mouse.click(x,y);
+  await page.mouse.move(x,y);await page.mouse.down();await page.mouse.move(x+24,y+16,{steps:4});
+  // Hold past the single-click delay while a real mouse drag is active.
+  await page.waitForTimeout(300);await page.mouse.move(x+48,y+32,{steps:4});
+  assert.equal(await page.locator('.skill-canvas-panel').count(),0,'新拖拽不能被上一次延迟点击切成阅读视图');
+  const during=await node.boundingBox();assert.ok(Math.abs(during.x-rect.x-48)<1&&Math.abs(during.y-rect.y-32)<1,'连续拖动仍跟手');
+  await page.mouse.up();await page.waitForFunction(()=>!document.querySelector('.mermaid-viewport[inert],.mermaid-edit[aria-busy="true"]'));
+  await page.getByRole('button',{name:'全部技能',exact:true}).first().click();
+  await page.locator('.source-tree button').filter({hasText:'Creator Studio'}).first().click();
+  await page.getByRole('tab',{name:'连续操作',exact:true}).click();await node.waitFor();
+  await node.click();await page.locator('.skill-canvas-panel').waitFor();
+  await page.getByRole('button',{name:'技能逻辑架构',exact:true}).click();
+  await page.locator('.skill-canvas-graph').evaluate(el=>Promise.all(el.getAnimations().map(a=>a.finished.catch(()=>{}))));
+  await page.waitForFunction(()=>!document.querySelector('.mermaid-viewport[inert]'));
+  const reopened=await node.boundingBox();await page.mouse.move(reopened.x+reopened.width/2,reopened.y+reopened.height/2);await page.mouse.down();
+  await page.mouse.move(reopened.x+reopened.width/2+20,reopened.y+reopened.height/2+15,{steps:5});await page.mouse.up();
+  await page.waitForFunction(()=>!document.querySelector('.mermaid-viewport[inert],.mermaid-edit[aria-busy="true"]'));
+  assert.deepEqual(errors,[]);await page.screenshot({path:path.join(run,'click-drag-return.png')});console.log('连续点击拖动：'+run);
+ }catch(error){console.error(run,error.stack);await page.screenshot({path:path.join(run,'click-drag-failure.png'),timeout:10000}).catch(()=>{});throw error;}
  finally{await dispose(app);}
 });

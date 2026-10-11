@@ -27,10 +27,38 @@ test('removing a node removes incident edges, not unrelated statements or skill 
 });
 test('unsupported grammar is preserved and cannot be silently flattened',async()=>{
   const {flowchartItems,editFlowchart}=await api();
-  for(const source of ['sequenceDiagram\n A->>B: 消息','flowchart LR\n A --> B --> C','flowchart LR\n A[研究] --> B[写作]','flowchart TD\n subgraph 工作\n A --> B\n end']){
+  for(const source of ['sequenceDiagram\n A->>B: 消息','flowchart LR\n A--->B','flowchart TD\n subgraph 工作\n A --> B\n end']){
     assert.equal(flowchartItems(source).editable,false);
     assert.throws(()=>editFlowchart(source,{kind:'node',id:'A',label:'改名'}),/原文/);
   }
+});
+test('inline declarations and chains retain authored syntax during labels and dragging',async()=>{
+  const {flowchartItems,editFlowchart,readLayout}=await api();
+  const source='flowchart LR\r\n%% 原文\r\n  A["输入 --> 证据"]-->|"核对"|B{判断} -.-> C((结果))\r\n';
+  assert.equal(flowchartItems(source).editable,true);
+  assert.deepEqual(flowchartItems(source).edges.map(e=>[e.from,e.to]),[['A','B'],['B','C']]);
+  assert.equal(editFlowchart(source,{kind:'node',id:'B',label:'审核'}),source.replace('{判断}','{"审核"}'));
+  assert.equal(editFlowchart(source,{kind:'edge',index:0,label:'新备注'}),source.replace('|"核对"|','|"新备注"|'));
+  const dragged=editFlowchart(source,{kind:'layout',layout:{nodes:{B:{x:40,y:60}},edges:{L_A_B_0:{from:'top',to:'top'}}}});
+  assert.ok(dragged.startsWith(source));assert.equal(readLayout(dragged).nodes.B.x,40);
+});
+test('removing inline edges preserves nodes and other chain edges',async()=>{
+  const {flowchartItems,editFlowchart}=await api();
+  const source='flowchart LR\n A[研究] --> B{审核} --> C((产出))\n%% 保留\n';
+  const removed=editFlowchart(source,{kind:'edge',index:0,remove:true});
+  const model=flowchartItems(removed);
+  assert.equal(model.editable,true);assert.deepEqual(model.nodes.map(n=>n.id),['A','B','C']);
+  assert.deepEqual(model.edges.map(e=>[e.from,e.to]),[['B','C']]);
+  assert.match(removed,/A\[研究\]/);assert.match(removed,/C\(\(产出\)\)/);assert.ok(removed.endsWith('%% 保留\n'));
+  const withoutB=flowchartItems(editFlowchart(source,{kind:'node',id:'B',remove:true}));
+  assert.deepEqual(withoutB.nodes.map(n=>n.id),['A','C']);assert.equal(withoutB.edges.length,0);
+});
+test('deleting the only implicit connection never deletes its endpoint nodes',async()=>{
+  const {flowchartItems,editFlowchart}=await api();
+  const source='flowchart LR\n A-node-->B-node';
+  assert.equal(flowchartItems(source).editable,true);
+  const model=flowchartItems(editFlowchart(source,{kind:'edge',index:0,remove:true}));
+  assert.deepEqual(model.nodes.map(n=>n.id),['A-node','B-node']);assert.equal(model.edges.length,0);
 });
 test('diagram replacement targets the chosen fence and retains surrounding Markdown',async()=>{
   const {replaceDiagram}=await api();

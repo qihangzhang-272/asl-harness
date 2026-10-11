@@ -11,6 +11,7 @@ const definitions = {
   history: ['environment.history', ['workspace']],
   restoreHistory: ['mode.history.restore', ['workspace','mode','revision','expected']],
   files: ['skill.files', ['workspace', 'skill', 'file']],
+  sourceFiles: ['skill.files', ['source', 'file']],
   guide: ['environment.guide', ['workspace']],
   edit: ["environment.edit", ["workspace"]],
   create: ['mode.create', ['target']],

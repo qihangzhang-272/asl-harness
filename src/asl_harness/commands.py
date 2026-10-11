@@ -20,7 +20,7 @@ from .deepseek import export_preset, verify_preset
 from .sync import sync_environment
 from .portable import export_pack, inspect_pack, import_pack
 from .workspace import HarnessError, Workspace, MODE_API_VERSION
-from .management import catalog, edit, create_mode, skill_files, mode_files, editing_guide, EDIT_FIELDS, CREATE_FIELDS, CREATE_SOURCE_FIELDS, AUTHORING_POLICY, ORGANIZATION_GUIDE
+from .management import catalog, edit, create_mode, skill_files, source_files, mode_files, editing_guide, EDIT_FIELDS, CREATE_FIELDS, CREATE_SOURCE_FIELDS, AUTHORING_POLICY, ORGANIZATION_GUIDE
 from .discovery import scan_skills, unpack_skills
 from .user_projection import sync_user
 from .readiness import inspect_mode, setup_brief
@@ -90,8 +90,10 @@ def _parser() -> argparse.ArgumentParser:
     restore_command.add_argument('--expected', required=True)
     restore_command.add_argument('--check', action='store_true')
     files_command = commands.add_parser('skill.files')
-    files_command.add_argument('--workspace', required=True)
-    files_command.add_argument('--skill', required=True)
+    files_location = files_command.add_mutually_exclusive_group(required=True)
+    files_location.add_argument('--workspace')
+    files_location.add_argument('--source', help='Read an unadopted Skill folder without importing or changing it')
+    files_command.add_argument('--skill')
     files_command.add_argument('--file', default='SKILL.md')
     mode_files_command = commands.add_parser('mode.files')
     mode_files_command.add_argument('--workspace', required=True)
@@ -216,7 +218,9 @@ def _describe_cli() -> dict:
                               'repeatable': isinstance(action, argparse._AppendAction),
                               'default': action.default,
                               **({'choices': list(action.choices)} if action.choices is not None else {})})
-        descriptions.append({'name': name, 'arguments': arguments})
+        descriptions.append({'name': name, 'arguments': arguments, **({'exclusiveArguments': [
+            {'required': group.required, 'flags': [flag for action in group._group_actions for flag in action.option_strings]}
+            for group in parser._mutually_exclusive_groups]} if parser._mutually_exclusive_groups else {})})
     command = renderer_command()
     return {'version': current_version, 'protocol': MODE_API_VERSION, 'commands': descriptions,
             'organization': {'entry': 'environment.guide', 'instructions': ORGANIZATION_GUIDE},
@@ -283,6 +287,12 @@ def _execute(args: argparse.Namespace) -> dict:
     if args.command == 'mode.history.restore':
         return {'ok': True, **restore_mode(args.workspace, args.mode, args.revision, expected=args.expected, check=args.check)}
     if args.command == 'skill.files':
+        if args.source:
+            if args.skill:
+                raise HarnessError('EDIT_INVALID', '来源阅读不需要 --skill，请使用 --source 和 --file')
+            return {'ok': True, **source_files(args.source, args.file)}
+        if not args.skill:
+            raise HarnessError('EDIT_INVALID', '请选择要读取的技能：--skill')
         return {'ok': True, **skill_files(args.workspace, args.skill, args.file)}
     if args.command == 'mode.files':
         return {'ok': True, **mode_files(args.workspace, args.mode, args.file)}

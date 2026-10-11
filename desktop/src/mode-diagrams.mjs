@@ -1,17 +1,21 @@
 import {diagramsIn,diagramLabel,replaceDiagram,editFlowchart} from './mermaid-document.mjs';
+import {structureItems,editStructure} from './mermaid-structure.mjs';
 import {diagramForMode} from './presentation.mjs';
 import {normalizeArchitecture,memberIds,rootIds} from './graph-model.mjs';
 
 export const skillAlias=id=>/^[a-z0-9][a-z0-9-]*$/.test(id)?`skill_${id.replaceAll('-','_')}`:`legacy_${Array.from(id,c=>c.codePointAt(0).toString(16)).join('_')}`;
 export const skillNodes=(skills,labels=[])=>skills.map(skill=>({alias:skillAlias(skill.id),data:{skill,title:labels.find(node=>node.skill===skill.id)?.title||skill.title}}));
-// Only remove syntax the existing lossless lens understands. Never rewrite a
-// sequence/state/mindmap to make a membership edit appear to succeed.
+// Reuse each diagram's lossless lens; unknown structures must never be rewritten.
 export function withoutSkillNodes(document,ids) {
   for(const id of ids){
     const alias=skillAlias(id);
     for(const [index,diagram] of diagramsIn(document).entries()){
       if(!new RegExp(`\\b${alias}\\b`).test(diagram.source))continue;
-      document=replaceDiagram(document,index,editFlowchart(diagram.source,{kind:'node',id:alias,remove:true}));
+      const structure=structureItems(diagram.source);
+      const matches=structure.items.filter(item=>item.id===alias);
+      if(structure.type&&matches.length!==1)throw new Error('无法安全定位这个技能节点，请先调整图中引用');
+      const source=structure.type?editStructure(diagram.source,{...matches[0],remove:true}):editFlowchart(diagram.source,{kind:'node',id:alias,remove:true});
+      document=replaceDiagram(document,index,source);
     }
   }
   return document;

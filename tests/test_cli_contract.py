@@ -48,6 +48,21 @@ def test_describe_reports_actual_renderer_presence_without_starting_it(capsys):
     assert renderer['requiredFor'] == 'Mermaid real-render validation'
 
 
+def test_source_read_contract_is_discoverable_and_rejects_ambiguous_location(tmp_path, capsys):
+    _, report, _ = _json_command(['cli.describe'], capsys)
+    command = next(item for item in report['commands'] if item['name'] == 'skill.files')
+    assert command['exclusiveArguments'] == [{'required': True, 'flags': ['--workspace', '--source']}]
+    source = tmp_path / 'source'
+    source.mkdir()
+    (source / 'SKILL.md').write_bytes(b'# Original\n')
+    code, result, _ = _json_command(['skill.files', '--source', str(source)], capsys)
+    assert code == 0 and result['document'] == '# Original\n'
+    for arguments in [[], ['--workspace', str(source)], ['--source', str(source), '--skill', 'a'],
+                      ['--source', str(source), '--workspace', str(source)]]:
+        code, result, _ = _json_command(['skill.files', *arguments], capsys)
+        assert code == 2 and not result['ok']
+
+
 def test_cli_declares_host_confirmation_for_skill_changes_without_fake_approval_fields(tmp_path, capsys):
     _, report, _ = _json_command(['cli.describe'], capsys)
     policy = report['writeBoundary']['authorization']

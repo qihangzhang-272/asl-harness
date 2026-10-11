@@ -11,6 +11,48 @@ from asl_harness.workspace import HarnessError, Workspace
 from test_mode_only import _environment, _mode
 
 
+def test_source_files_reads_unadopted_package_without_writing(tmp_path):
+    source = tmp_path / 'source'
+    (source / 'references').mkdir(parents=True)
+    (source / 'SKILL.md').write_text('# Read\n[Guide](references/guide.md)\n', encoding='utf-8')
+    (source / 'references/guide.md').write_text('Guide\n', encoding='utf-8')
+    (source / 'image.bin').write_bytes(b'\0\xff')
+    (source / 'large.txt').write_bytes(b'x' * (1024 * 1024 + 1))
+    (source / '.env').write_text('PRIVATE=value', encoding='utf-8')
+    (source / 'node_modules').mkdir()
+    (source / 'node_modules/ignore.txt').write_text('ignored', encoding='utf-8')
+    before = {p.relative_to(source): p.read_bytes() for p in source.rglob('*') if p.is_file()}
+    data = management.source_files(source, 'references/guide.md')
+    assert data['document'] == before[Path('references/guide.md')].decode('utf-8')
+    assert {f['path'] for f in data['files']} == {'SKILL.md', 'references/guide.md', 'image.bin', 'large.txt'}
+    assert all(not f['editable'] for f in data['files'])
+    assert management.source_files(source, 'image.bin')['document'] is None
+    assert management.source_files(source, 'large.txt')['document'] is None
+    for file in ['../outside.md', str(source / 'SKILL.md'), '.env', 'node_modules/ignore.txt']:
+        with pytest.raises(HarnessError):
+            management.source_files(source, file)
+    assert before == {p.relative_to(source): p.read_bytes() for p in source.rglob('*') if p.is_file()}
+
+
+def test_source_files_excludes_links_before_reading(tmp_path):
+    source = tmp_path / 'source'
+    source.mkdir()
+    (source / 'SKILL.md').write_text('# Read\n', encoding='utf-8')
+    outside = tmp_path / 'outside'
+    outside.mkdir()
+    (outside / 'private.md').write_text('private', encoding='utf-8')
+    try:
+        (source / 'linked').symlink_to(outside, target_is_directory=True)
+    except OSError:
+        if os.name != 'nt':
+            raise
+        subprocess.run(['cmd', '/c', 'mklink', '/J', str(source / 'linked'), str(outside)], check=True, capture_output=True)
+    assert [f['path'] for f in management.source_files(source)['files']] == ['SKILL.md']
+    for file in ['linked/private.md']:
+        with pytest.raises(HarnessError):
+            management.source_files(source, file)
+
+
 def test_first_mode_adopts_complete_skill_without_agent_or_placeholder(tmp_path):
     source = tmp_path / 'ordinary-skill'
     source.mkdir()

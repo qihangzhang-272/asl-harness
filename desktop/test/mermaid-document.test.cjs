@@ -7,6 +7,19 @@ test('Mermaid documents preserve every native diagram type and its heading',asyn
   assert.match(diagrams[0].source,/^sequenceDiagram/);
   assert.equal(diagramsIn('```text\nmermaid is not a diagram\n```').length,0);
 });
+
+test('native diagram edits locate repeated fenced blocks with Windows or mixed line endings',async()=>{
+  const {diagramsIn,replaceDiagram}=await import('../src/mermaid-document.mjs');
+  const block='```mermaid\nflowchart LR\n a[内容]\n```\n';
+  const first=block.replaceAll('\n','\r\n'),document='# 说明\r\n\r\n'+first+'\r\n## 另一张图\n'+block;
+  const diagrams=diagramsIn(document);
+  assert.equal(diagrams[0].raw,first.trimEnd());
+  assert.equal(diagrams[1].raw,block);
+  assert.equal(diagrams[0].line,3);assert.equal(diagrams[1].line,9);
+  const edited=replaceDiagram(document,1,'flowchart LR\n a[修改]');
+  assert.equal(edited,'# 说明\r\n\r\n'+first+'\r\n## 另一张图\n```mermaid\nflowchart LR\n a[修改]\n```\n');
+  assert.equal(replaceDiagram(document,0,'flowchart LR\n a[修改]'),'# 说明\r\n\r\n'+first.replace('内容','修改')+'\r\n## 另一张图\n'+block);
+});
 test('heading outline is a literal document structure, not invented Skill reasoning',async()=>{
   const {outlineFor}=await import('../src/mermaid-document.mjs');
   const graph=outlineFor('# 公司画像\n\n## 关键问题\n问题\n### 商业模式\n\n## 输出\n\n```js\n## 不是标题\n```');

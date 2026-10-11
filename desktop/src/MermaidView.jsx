@@ -97,6 +97,8 @@ export default memo(function MermaidView({source,onNode,nodes=[],onError,items,s
       });
     }
     const svgElement=box.current.querySelector('svg');
+    const cancelPendingClicks=()=>{clickTimers.current.forEach(clearTimeout);clickTimers.current.clear();};
+    svgElement?.addEventListener('pointerdown',cancelPendingClicks,true);
     const canvas=svgElement&&items?.editable&&onElement?flowCanvas(svgElement,items,readLayout(source),false):null;
     const detach=svgElement?attachHandles(svgElement,handles,onConnect,canvas):()=>{};
     let detachStructure=()=>{};
@@ -119,7 +121,7 @@ export default memo(function MermaidView({source,onNode,nodes=[],onError,items,s
       }
       detachStructure=attachStructureDrag(svgElement,entries,structure,change=>onElement(change,'commit'));
     }
-    return ()=>{detach();detachStructure();};
+    return ()=>{svgElement?.removeEventListener('pointerdown',cancelPendingClicks,true);detach();detachStructure();};
   },[svg,bindingKey,items,structure,compact,selectedId]);
   return <section ref={section} className={`mermaid-view ${compact?'is-compact':''}`} aria-label="Mermaid 架构图">
     {error?<div role="alert" className="mermaid-error"><strong>这张图需要修正</strong><details><summary>详细错误</summary><pre>{error}</pre></details></div>:null}
