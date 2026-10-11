@@ -185,7 +185,7 @@ Environment 是普通文件夹，也是本地 Git 真源。人可以直接阅读
 
 ### 桌面预览版
 
-[下载 Windows App](https://github.com/qihangzhang-272/asl-harness/releases/download/app-v0.5.14/ASL-Workspace-0.5.14-Windows-x64.zip) · [下载 Mac App（Apple Silicon）](https://github.com/qihangzhang-272/asl-harness/releases/download/app-v0.5.14/ASL-Workspace-0.5.14-macOS-arm64.zip) · [各平台下载与校验值](https://github.com/qihangzhang-272/asl-harness/releases/tag/app-v0.5.14) · [带公开技能的内容版](https://github.com/qihangzhang-272/agent-skill-library/releases/tag/app-v0.5.14)
+[下载 Windows App](https://github.com/qihangzhang-272/asl-harness/releases/download/app-v0.5.15/ASL-Workspace-0.5.15-Windows-x64.zip) · [下载 Mac App（Apple Silicon）](https://github.com/qihangzhang-272/asl-harness/releases/download/app-v0.5.15/ASL-Workspace-0.5.15-macOS-arm64.zip) · [各平台下载与校验值](https://github.com/qihangzhang-272/asl-harness/releases/tag/app-v0.5.15) · [带公开技能的内容版](https://github.com/qihangzhang-272/agent-skill-library/releases/tag/app-v0.5.15)
 
 无需安装 Python 或 Node.js。下载后右键 ZIP → **全部解压** → 打开 `ASL Workspace` 文件夹 → 双击 **`ASL Workspace.exe`**。保留整个文件夹，不要只拿走 EXE；GitHub 自动生成的 `Source code` 压缩包是源码，不是 App。
 

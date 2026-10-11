@@ -120,3 +120,22 @@ U3 的“已采用包保留、取消只放弃 Mode 草稿”继续保持。复�
 - GitHub Windows 源码 CI 历史失败包含 checkout 自动换行造成的内容差异；新增仓库级 `.gitattributes`，仅固定源码检出为 LF，运行时用户原文保护不变。
 - Windows 框架 ZIP SHA-256：`bb6fc3576eeb40734ead1857f6b010252af8bc4914bbf5774ef61737ef924ed8`；内容 ZIP：`c22b72f102d586ce8d1c27d9bc9c9be987f0ed6fe321f974a5a3a9dba820a7b0`。解压内容版冻结 CLI 0.4.9、真实渲染器、37 Skills／4 Modes、结构及生成导航均有效，无告警；476 个 Skill／Mode 文件与公开提交原始字节相同。独立核对最初受 `git archive` 本机换行设置影响，改用与打包相同的显式原始字节规则后通过，不重写包内容。
 - 本地真实 Skill／Mode 基线 6979 文件，SHA-256 `9ECF41F22E3CC000CEC6F34752FC938C3B780FE8B77E4FBFBAFC4478C724F532`；本地 79 项、协议 8 项修改仍不纳入发布。Mac、GitHub 新发行及桌面切换尚待完成。
+
+### 桌面切换与存储处理
+
+- Windows 安装首次遇到 C 盘空间不足，快捷方式当时仍指向旧版。保留失败事实，将本轮生成的两个验收副本和未完成安装原样移到 `E:/ASL-builds/0.5.15/`，约释放 C 盘 1.09 GB；没有删除旧版本、用户文件或缓存。
+- 新版安装到 `E:/Programs/ASL Workspace/0.5.15/`，403 个文件逐字节匹配已验收包；App 0.5.15／CLI 0.4.9 与真实渲染器核对通过。桌面 `ASL Workspace.lnk` 已更新，旧快捷方式保存在上述本轮目录，原版本目录不动。
+- 已正常打开新版；实际进程路径为 E 盘新版本，窗口标题 ASL Workspace、响应正常。真实本地目录只读加载为 60 Skills／4 Modes、无 issues；切换前后 6979 文件摘要完全一致。Mac 原生 CI `38125129147` 及 GitHub 双平台发行仍在完成中。
+
+### Mac 原生候选与下载验收
+
+- [原生 CI 38125129147](https://github.com/qihangzhang-272/asl-harness/actions/runs/38125129147) 在 `0799f97fafcc56d1c25abd83269aa62ac8f42177` 成功完成：核心 355 通过／2 平台跳过；Node 241 通过／2 平台跳过；完整原生桌面 47／47（约 366 秒）、App→随包 CLI 实际渲染 1／1。内容版解压后的签名完整性、启动脚本语法、CLI 校验及 App 实际门控再次通过。Mac 证据来自原生 runner，不冒充 Windows 本机运行结果。
+- 原生 CI artifact 摘要为 `e26119edb6e381722210ba6e0e24a28052f79aa9585ab8d42b31fb5c65aa8d0f`，下载后匹配。原下载通道迟迟无结果，停止本轮自己的下载进程；代理下载过慢后，以单次进程的直连选项断点续传，47 秒完成剩余部分。没有改变系统代理、账号、App 或内容文件。
+- Mac 框架 ZIP SHA-256：`1c1f6912660bc0a55b3e29184f2b205f34212be645b4972e7578a4ce1cde0909`；内容 ZIP：`a47a3f1d4cc6134d431265e19e951ea0b2c3c47ee25648e73bebbd99756acae5`。CRC、版本、内容提交、600 项程序文件及 476 个 Skill／Mode 原字节独立核对通过。核对脚本首轮错把平台标记预期为 Darwin，而构建规则使用 macOS；修正核对后全部通过，未重写或放松产品包。
+- 四个 Mac 交付文件已复制到 `deliverables/`，摘要一致；正在上传两仓草稿发行。GitHub 公开及入口文档提交仍待本节最终收口。限制：Apple Silicon（arm64）、ad-hoc 签名，未开发者签名或 Apple 公证，无 Intel／Universal 包。
+
+### GitHub 公开与最终收口
+
+- [Harness 0.5.15](https://github.com/qihangzhang-272/asl-harness/releases/tag/app-v0.5.15) 与 [内容版 0.5.15](https://github.com/qihangzhang-272/agent-skill-library/releases/tag/app-v0.5.15) 已从草稿转为公开预览发行，两仓各 4 项资产，8 项 GitHub 摘要与本地逐一匹配。未覆盖旧发行资产。
+- 程序修复已提交并推送：开发提交 `fa3608f`，机械发布提交 `0799f97fafcc56d1c25abd83269aa62ac8f42177`；最终状态、计划及两仓下载入口继续以文档提交收口。内容仓仅提交 README 中的下载链接，79 项业务变化保留不上传；协议 8 项保留。根 WORKSPACE 只更新四个实际交付包入口。
+- 本轮新包原生验收已完成，桌面已打开。另行 Windows 源码 CI `38125125589` 的核心／Node 成功、桌面步骤仍在运行；获取其进行中日志的临时下载返回 404，未用此结果掩盖失败或宣称通过。真实网络采用、大库、冷启动、大量历史、未知复杂语法仍为未验收边界，不为发布扩大功能声明。
