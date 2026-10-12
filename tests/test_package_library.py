@@ -98,6 +98,19 @@ def test_content_edition_rejects_unpublished_commit_and_existing_destination(tmp
     assert output.read_bytes() == b'KEEP'
 
 
+def test_content_edition_includes_published_feedback_only_when_explicitly_requested(tmp_path):
+    module = package_module()
+    app, library, revision = fixture(tmp_path)
+    (library / 'feedback/unpublished.md').write_text('PRIVATE WORKTREE', encoding='utf-8')
+    output = tmp_path / 'reviewed-records.zip'
+    module.package(app, library, revision, output, include_published_feedback=True)
+    with zipfile.ZipFile(output) as archive:
+        assert archive.read('Agent Skill Library/feedback/private.md') == b'not a delivery'
+        assert 'Agent Skill Library/feedback/unpublished.md' not in archive.namelist()
+        assert 'Agent Skill Library/archive/private.md' not in archive.namelist()
+        assert json.loads(archive.read('RELEASE.json'))['publishedFeedbackIncluded'] is True
+
+
 def test_content_edition_reuses_secret_literal_gate_before_creating_zip(tmp_path):
     module = package_module()
     app, library, revision = fixture(tmp_path, secret='{"api_key":"not-a-placeholder"}')

@@ -69,7 +69,7 @@ jobs:
           mkdir "$RUNNER_TEMP/asl-package"
           ditto -c -k --sequesterRsrc --keepParent "$RUNNER_TEMP/asl-build/ASL Workspace.app" "$RUNNER_TEMP/asl-package/$archive"
           library_archive="Agent-Skill-Library-${version}-macOS-${architecture}.zip"
-          python scripts/package_library.py --app "$RUNNER_TEMP/asl-build/ASL Workspace.app" --repository .local/release-content --revision "$ASL_LIBRARY_REVISION" --output "$RUNNER_TEMP/asl-package/$library_archive"
+          python scripts/package_library.py --app "$RUNNER_TEMP/asl-build/ASL Workspace.app" --repository .local/release-content --revision "$ASL_LIBRARY_REVISION" --output "$RUNNER_TEMP/asl-package/$library_archive" --include-published-feedback
           ditto -x -k "$RUNNER_TEMP/asl-package/$library_archive" "$RUNNER_TEMP/library-unpack"
           codesign --verify --deep --strict "$RUNNER_TEMP/library-unpack/ASL Workspace.app"
           sh -n "$RUNNER_TEMP/library-unpack/Start.command"
