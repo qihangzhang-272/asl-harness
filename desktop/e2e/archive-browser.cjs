@@ -44,12 +44,13 @@ test('archive browsing, restore, conflicts and canceled cleanup preserve content
     assert.equal((await app.evaluate(()=>globalThis.archiveCleanupCalls)).length,1);
     assert.deepEqual(await fs.readFile(path.join(workspace,'archive',mode,'mode.yaml')),original,'取消清理不删除归档');
     assert.equal(await screen.getByText('已移到回收站',{exact:true}).count(),0);
-    await app.evaluate(({BrowserWindow},workspace)=>BrowserWindow.getAllWindows().find(window=>window.isVisible()).webContents.send('asl:environment-changed',{workspace}),workspace);
+    await fs.appendFile(path.join(workspace,'archive',mode,'MODE.md'),'\n外部归档修改\n');
     await screen.getByText('归档有新变化，请重新读取。',{exact:true}).waitFor();
     assert.equal(await screen.getByRole('button',{name:'恢复到工作库',exact:true}).isDisabled(),true);
     await screen.getByRole('button',{name:'重新读取',exact:true}).click();
     await page.waitForFunction(()=>!document.querySelector('.archive-browser .package-rendered [role=status]'));
     assert.equal(await screen.getByRole('button',{name:'恢复到工作库',exact:true}).isEnabled(),true);
+    await screen.getByText('外部归档修改',{exact:true}).waitFor();
     await page.screenshot({path:path.join(run,'archive-browser.png')});
     assert.deepEqual(errors,[]);console.log('归档浏览验收：'+run);
   }catch(error){await page.screenshot({path:path.join(run,'archive-browser-failure.png')});console.error(run);throw error;}

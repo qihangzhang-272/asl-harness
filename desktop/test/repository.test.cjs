@@ -23,18 +23,27 @@ test('local watcher coalesces content edits, ignores cache files and stops clean
   const stop = watchEnvironment(root, event => events.push(event));
   t.after(async () => { stop(); await fs.rm(root, { recursive: true, force: true }); });
   const pause = () => new Promise(resolve => setTimeout(resolve, 800));
+  const observed=async count=>{const deadline=Date.now()+5000;while(events.length<count&&Date.now()<deadline)await new Promise(resolve=>setTimeout(resolve,50));};
   await fs.writeFile(path.join(root, 'skills/sample/__pycache__/ignored.pyc'), 'cache');
   await fs.writeFile(path.join(root, 'README.md'), 'navigation');
   await pause();
   assert.equal(events.length, 0);
   await fs.writeFile(path.join(root, 'skills/sample/SKILL.md'), 'first');
   await fs.writeFile(path.join(root, 'skills/sample/SKILL.md'), 'second');
-  await pause();
-  assert.deepEqual(events, [{ workspace: root }]);
+  await observed(1);
+  assert.equal(events.length,1);
+  assert.equal(events[0].workspace,root);
+  assert.deepEqual(events[0].files,['skills/sample/SKILL.md']);
+  assert.ok(Number.isInteger(events[0].changedAt));
+  await fs.mkdir(path.join(root,'archive','sample'),{recursive:true});
+  await fs.writeFile(path.join(root,'archive/sample/record.md'),'archive update');
+  await observed(2);
+  assert.equal(events.length,2);
+  assert.deepEqual(events[1].files,['archive/sample/record.md']);
   stop();
   await fs.writeFile(path.join(root, 'skills/sample/SKILL.md'), 'after close');
   await pause();
-  assert.equal(events.length, 1);
+  assert.equal(events.length, 2);
 });
 
 test('cloud binding keeps upstream notices and replaces only its own block', () => {

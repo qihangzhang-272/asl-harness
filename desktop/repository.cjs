@@ -26,15 +26,17 @@ async function checkUpstreams(modes, fetch) {
 }
 function watchEnvironment(root, notify) {
   const fs = require('node:fs');
-  let timer;
+  let timer, changedAt;
+  const files=new Set();
   // libuv can abort on Windows 8.3 aliases; subscribe with the native long path.
   const watcher = fs.watch(fs.realpathSync.native(root), { recursive: true, persistent: false }, (_event, file) => {
     const parts = String(file || '').split(/[\\/]/);
-    if (!['skills', 'modes', 'feedback', 'PROFILE.md'].includes(parts[0]) || parts.some(p => ['.git', '__pycache__', 'node_modules', '.pytest_cache'].includes(p))) return;
+    if (!['skills', 'modes', 'feedback', 'archive', 'PROFILE.md'].includes(parts[0]) || parts.some(p => ['.git', '__pycache__', 'node_modules', '.pytest_cache'].includes(p))) return;
     // Windows also reports parent-directory metadata for ignored cache writes.
     if (fs.statSync(path.join(root, ...parts), { throwIfNoEntry: false })?.isDirectory()) return;
+    files.add(parts.join('/'));changedAt=Date.now();
     clearTimeout(timer);
-    timer = setTimeout(() => notify({ workspace: root }), 500);
+    timer = setTimeout(() => {const event={workspace:root,files:[...files],changedAt};files.clear();notify(event);}, 500);
   });
   watcher.on('error', error => notify({ workspace: root, error: error.message }));
   return () => { clearTimeout(timer); watcher.close(); };

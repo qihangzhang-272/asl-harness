@@ -9,14 +9,14 @@ export default function ArchiveBrowser({workspace,api,readOnly,onClose,onSaved})
   const [catalog,setCatalog]=useState(null),[entry,setEntry]=useState(''),[data,setData]=useState(null);
   const [query,setQuery]=useState(''),[loading,setLoading]=useState(false),[busy,setBusy]=useState(false);
   const [error,setError]=useState(null),[notice,setNotice]=useState(''),[external,setExternal]=useState(false);
-  const live=useRef(true),generation=useRef(0);
+  const live=useRef(true),generation=useRef(0),snapshotReadAt=useRef(0);
   const leave=useLeaveGuard(false,busy);
   useEffect(()=>{live.current=true;load('',null,true);return()=>{live.current=false;generation.current++;};},[workspace]);
   useEffect(()=>window.asl.onEnvironmentChanged(event=>{
-    if(event.workspace===workspace&&!event.error){if(!busy){generation.current++;setLoading(false);}setExternal(true);}
+    if(event.workspace===workspace&&!event.error&&(!event.files||event.files.some(file=>file.split(/[\\/]/)[0]==='archive'))&&(!event.changedAt||event.changedAt>snapshotReadAt.current)){if(!busy){generation.current++;setLoading(false);}setExternal(true);}
   }),[workspace,busy]);
   async function load(preferred=entry,file=null,refresh=false){
-    const token=++generation.current;
+    const token=++generation.current,started=Date.now();
     setLoading(true);setError(null);setData(null);setNotice('');
     try{
       const next=refresh?await api('run','archives',{workspace}):catalog;
@@ -29,7 +29,7 @@ export default function ArchiveBrowser({workspace,api,readOnly,onClose,onSaved})
         if(!live.current||generation.current!==token)return;
         setData(detail);
       }
-      setExternal(false);
+      snapshotReadAt.current=started;setExternal(false);
     }catch(failure){if(live.current&&generation.current===token)setError({message:'未能读取归档，请重试。',failure});}
     finally{if(live.current&&generation.current===token)setLoading(false);}
   }
