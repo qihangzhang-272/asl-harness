@@ -8,13 +8,13 @@ export async function renderDiagram(source) {
   library ||= import('mermaid').then(({default:mermaid})=>{
     mermaid.initialize({startOnLoad:false,securityLevel:'strict',suppressErrorRendering:true,maxTextSize:50000,maxEdges:500,
       secure:['securityLevel','startOnLoad','suppressErrorRendering','maxTextSize','maxEdges','themeCSS','htmlLabels'],
-      htmlLabels:false,theme:'base',look:'classic',fontFamily:'Segoe UI, Microsoft YaHei, sans-serif',
-      themeVariables:{primaryColor:'#f2f7ff',primaryBorderColor:'#8ba9d9',primaryTextColor:'#233957',lineColor:'#7c96bd',secondaryColor:'#eaf2ff',tertiaryColor:'#f8faff',fontSize:'15px',
-        actorBkg:'#f2f7ff',actorBorder:'#8ba9d9',actorTextColor:'#233957',signalColor:'#7c96bd',signalTextColor:'#233957',
-        noteBkgColor:'#eaf2ff',noteBorderColor:'#8ba9d9',noteTextColor:'#233957',
-        ...Object.fromEntries(Array.from({length:12},(_,i)=>[[`cScale${i}`,['#f2f7ff','#eaf2ff','#f8faff'][i%3]],[`cScaleLabel${i}`,'#233957'],[`cScaleInv${i}`,'#8ba9d9']]).flat()),
+      htmlLabels:false,theme:'base',look:'classic',fontFamily:'-apple-system, BlinkMacSystemFont, Segoe UI, Microsoft YaHei, sans-serif',
+      themeVariables:{primaryColor:'#ffffff',primaryBorderColor:'#7c828c',primaryTextColor:'#1d1d1f',lineColor:'#747a84',secondaryColor:'#f0f1f3',tertiaryColor:'#f5f5f7',fontSize:'15px',
+        actorBkg:'#ffffff',actorBorder:'#7c828c',actorTextColor:'#1d1d1f',signalColor:'#747a84',signalTextColor:'#1d1d1f',
+        noteBkgColor:'#f0f1f3',noteBorderColor:'#7c828c',noteTextColor:'#1d1d1f',
+        ...Object.fromEntries(Array.from({length:12},(_,i)=>[[`cScale${i}`,['#ffffff','#f0f1f3','#f5f5f7'][i%3]],[`cScaleLabel${i}`,'#1d1d1f'],[`cScaleInv${i}`,'#7c828c']]).flat()),
       },
-      themeCSS:'.mindmap-node .label text { text-anchor: middle; } .mindmap-node .node-bkg ~ .label text { text-anchor: start; } .mindmap-node .label-container { stroke: #8ba9d9; stroke-width: 1px; } [class*="section-edge-"] { stroke: #7c96bd; stroke-width: 1.5px; }',
+      themeCSS:'.mindmap-node .label text { text-anchor: middle; } .mindmap-node .node-bkg ~ .label text { text-anchor: start; } .mindmap-node .label-container { stroke: #7c828c; stroke-width: 1px; } [class*="section-edge-"] { stroke: #747a84; stroke-width: 1.5px; }',
       flowchart:{htmlLabels:false,curve:'basis',nodeSpacing:38,rankSpacing:58,padding:18},
     });return mermaid;
   });
