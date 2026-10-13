@@ -10,12 +10,12 @@ import './mermaid.css';
 import {captureDiagram,animateDiagram} from './diagram-evolution.mjs';
 
 export default memo(function MermaidView({source,onNode,nodes=[],onError,items,structure,onElement,onConnect,compact=false,selectedId,onExpand,expanded=false,disabled=false,evolve=false,renderedDiagram}) {
-  const [svg,setSvg]=useState(''),[error,setError]=useState(''),[scale,setScale]=useState(null);
+  const [svg,setSvg]=useState(''),[error,setError]=useState(''),[scale,setScale]=useState('fit');
   const markup=useMemo(()=>({__html:svg}),[svg]);
   const [renderedSource,setRenderedSource]=useState('');
   const [naturalWidth,setNaturalWidth]=useState(0),[naturalHeight,setNaturalHeight]=useState(0),[availableWidth,setAvailableWidth]=useState(0),[availableHeight,setAvailableHeight]=useState(0);
-  const fit=Math.min(1,(availableWidth-32)/naturalWidth||1,compact?(availableHeight||150)/naturalHeight:Infinity);
-  const zoom=compact?Math.max(.05,fit):scale==='fit'?Math.max(.15,fit):(scale??1);
+  const fit=Math.min(1,naturalWidth&&availableWidth?Math.max(1,availableWidth-32)/naturalWidth:1,naturalHeight&&availableHeight?availableHeight/naturalHeight:1);
+  const zoom=compact?Math.max(.05,fit):scale==='fit'?fit:scale;
   const box=useRef(null),section=useRef(null),[visible,setVisible]=useState(false);
   const camera=useRef(null),[frame,setFrame]=useState(0);
   const previousDiagram=useRef(new Map());
@@ -42,7 +42,11 @@ export default memo(function MermaidView({source,onNode,nodes=[],onError,items,s
   useLayoutEffect(()=>{if(evolve)animateDiagram(box.current,previousDiagram.current);},[svg,evolve]);
   useEffect(()=>{
     if(!box.current)return;
-    const observer=new ResizeObserver(entries=>{setAvailableWidth(entries[0].contentRect.width);setAvailableHeight(entries[0].contentRect.height);});
+    const observer=new ResizeObserver(entries=>{
+      const style=getComputedStyle(box.current),limit=parseFloat(style.maxHeight);
+      setAvailableWidth(entries[0].contentRect.width);
+      setAvailableHeight(Number.isFinite(limit)?Math.max(1,limit-parseFloat(style.paddingTop)-parseFloat(style.paddingBottom)):entries[0].contentRect.height);
+    });
     observer.observe(box.current);return()=>observer.disconnect();
   },[svg]);
   useLayoutEffect(()=>{const drawing=box.current?.querySelector('svg');return()=>drawing?.dispatchEvent(new Event('asl:release-inline'));},[svg]);
@@ -127,6 +131,6 @@ export default memo(function MermaidView({source,onNode,nodes=[],onError,items,s
     {error?<div role="alert" className="mermaid-error"><strong>这张图需要修正</strong><details><summary>详细错误</summary><pre>{error}</pre></details></div>:null}
     {!svg&&!error&&<div role="status" className="mermaid-pending">正在绘图…</div>}
     {svg&&<><div className="mermaid-viewport" ref={box} inert={disabled||renderedSource!==source}><div className="mermaid-drawing" style={{width:`${naturalWidth*zoom}px`}} dangerouslySetInnerHTML={markup}/></div>
-      {!compact&&<div className="mermaid-tools"><button aria-label="缩小图" disabled={zoom<=.15} onClick={()=>setScale(Math.max(.15,zoom-.2))}><Minus size={15}/></button><button aria-label="适应宽度" onClick={()=>{camera.current=null;setRenderedSource('');setFrame(n=>n+1);setScale('fit');}}><Scan size={15}/></button><button aria-label="放大图" disabled={zoom>=3} onClick={()=>setScale(Math.min(3,zoom+.2))}><Plus size={15}/></button>{onExpand&&<button aria-label={expanded?'退出全屏画板':'全屏编辑画板'} onClick={onExpand}>{expanded?<Minimize2 size={15}/>:<Maximize2 size={15}/>}</button>}</div>}</>}
+      {!compact&&<>{zoom<.65&&<p className="mermaid-reading-hint">全图概览 · 点击百分比以 100% 阅读文字</p>}<div className="mermaid-tools" role="toolbar" aria-label="画板视角"><button aria-label="缩小图" disabled={zoom<=.15} onClick={()=>setScale(Math.max(.15,zoom-.2))}><Minus size={15}/></button><button className="mermaid-scale" aria-label="按原始大小阅读" title="按原始大小阅读（100%）" onClick={()=>{setScale(1);box.current?.scrollTo({left:0,top:0});}}>{Math.round(zoom*100)}%</button><button aria-label="放大图" disabled={zoom>=3} onClick={()=>setScale(Math.min(3,zoom+.2))}><Plus size={15}/></button><button aria-label="全图概览并复位" title="全图概览并复位" onClick={()=>{camera.current=null;setRenderedSource('');setFrame(n=>n+1);setScale('fit');box.current?.scrollTo({left:0,top:0});}}><Scan size={15}/><span>全图</span></button>{onExpand&&<button aria-label={expanded?'退出全屏画板':'全屏编辑画板'} onClick={onExpand}>{expanded?<Minimize2 size={15}/>:<Maximize2 size={15}/>}</button>}</div></>}</>}
   </section>;
 });

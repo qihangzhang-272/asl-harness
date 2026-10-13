@@ -103,7 +103,9 @@ export function ConnectDialog({
   const currentHost=native?.hosts.find(h=>h.id===host);
   const skillsDir=customSkillsDir ?? (currentHost?.userMode?.skillsDir && currentHost.userMode.skillsDir!==currentHost.skillRoot ? currentHost.userMode.skillsDir : "");
   const [preview, setPreview] = useState(null);
+  const previewHeading=useRef(null);
   useEffect(() => setPreview(null), [scope, host, modeId, project, preset, skillsDir]);
+  useEffect(()=>{if(preview){previewHeading.current?.focus({preventScroll:true});previewHeading.current?.scrollIntoView({block:'start'});}},[preview]);
   useEffect(()=>{
     if(!native||preset)return;
     const choices=native.presets.filter(p=>!p.managed);
@@ -117,6 +119,8 @@ export function ConnectDialog({
     return ()=>{active=false;};
   }, []);
   const selected = (native?.hosts || AGENT_CHOICES).find((h) => h.id === host);
+  function chooseProject(){task(async()=>{const folder=await api('choose','project');if(folder){setProject(folder);setScope('project');}});}
+  function chooseSkillsDirectory(){task(async()=>{const folder=await api('choose','userSkills');if(folder)setSkillsDir(folder);});}
   return (
     <EditorPage title={selected ? `在 ${selected.name} 使用` : '选择 Agent'} onClose={onClose}>
       <Field label="工作模式">
@@ -157,7 +161,7 @@ export function ConnectDialog({
           </div>
           <button type="button" className={`scope-option ${scope === "project" ? "selected" : ""}`} onClick={() => {
             if(host==="deepseek-harness"||(project&&scope!=="project"))setScope("project");
-            else task(async()=>{const folder=await api("choose","project");if(folder){setProject(folder);setScope("project");}});
+            else chooseProject();
           }} aria-pressed={scope === "project"}>
             {scope === "project" ? <Check size={17} /> : <Circle size={17} />}
             <div>
@@ -200,15 +204,15 @@ export function ConnectDialog({
               </button>
             </Field></details>
           ) : scope === "project" ? (project && <p className="path-line">{project}</p>)
-          : <details className="user-location"><summary>保存位置</summary><p className="path-line">{skillsDir || selected?.skillRoot || '正在读取位置…'}</p><button onClick={() => task(async () => { const folder = await api("choose", "userSkills"); if (folder) setSkillsDir(folder); })}><FolderOpen size={15} />更换技能目录</button>{skillsDir && <button onClick={() => setSkillsDir("")}>恢复标准目录</button>}</details>}
+          : <details className="user-location"><summary>保存位置</summary><p className="path-line">{skillsDir || selected?.skillRoot || '正在读取位置…'}</p><button onClick={chooseSkillsDirectory}><FolderOpen size={15} />更换技能目录</button>{skillsDir && <button onClick={() => setSkillsDir("")}>恢复标准目录</button>}</details>}
           {preview && <div className="sync-preview">
-            <h3>将要更改</h3>
+            <h3 ref={previewHeading} tabIndex={-1}>将要更改</h3>
+            {!!preview.conflicts.length&&<div className="conflict-recovery" aria-label="配置冲突恢复"><p role="alert">有 {preview.conflicts.length} 项同名冲突，当前配置已暂停。</p><p>选择独立项目或其他技能目录后，会重新核对目标位置。</p><div className="heading-actions"><button onClick={chooseProject}><FolderOpen size={15}/>改用独立项目</button><button aria-label="为冲突选择其他技能目录" onClick={chooseSkillsDirectory}><FolderOpen size={15}/>换一个技能目录</button></div><details><summary>冲突详情</summary>{preview.conflicts.map(text=><p className="error-text" key={text}>{text}</p>)}</details></div>}
             {preview.previousMode && <small>原默认模式：{preview.previousMode}</small>}
             {preview.items.filter(item => item.action !== "unchanged").map(item => <div className="sync-item" key={item.skill}>
               <span>{item.skill}</span><Tag tone={item.action === "conflict" ? "warning" : ""}>{({add:"加入",update:"更新",remove:"移出",conflict:"需处理同名内容"})[item.action]}</Tag>
             </div>)}
-            {!preview.needsSync && <p>内容已是最新。</p>}
-            {preview.conflicts.map(text => <p className="error-text" key={text}>{text}</p>)}
+            {!preview.needsSync && !preview.conflicts.length && <p>内容已是最新。</p>}
             <small>只更新此 Agent 的副本，原技能库保留。</small>
           </div>}
           <div className="dialog-actions">

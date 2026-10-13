@@ -49,6 +49,12 @@
 .connection-details summary { cursor: pointer; }
 .connection-next-step { margin: 16px 0 0; color: var(--muted); font-size: 13px; line-height: 1.65; overflow-wrap: anywhere; }
 .connection-next-step small { display: block; margin-top: 6px; color: var(--faint); font-size: 12px; }
+.conflict-recovery { margin:16px 0;padding:14px;background:var(--warn-bg);border-radius:var(--radius);color:var(--warn-ink); }
+.sync-preview:has(.conflict-recovery) { max-height:none;overflow:visible; }
+.conflict-recovery p { margin:0 0 12px;line-height:1.65; }
+.conflict-recovery .heading-actions { justify-content:flex-start;flex-wrap:wrap; }
+.conflict-recovery details { margin-top:12px; }
+.conflict-recovery summary { cursor:pointer; }
 .connection-notice { display: flex; align-items: center; gap: 8px; color: #378259; font-size: 13px; }
 .agent-empty { border: 1px dashed var(--line, #dbe4f2); border-radius: var(--radius-lg, 14px); display: grid; place-items: center; padding: 46px 20px; color: var(--faint, #7b8dab); }
 .agent-empty h3 { font-weight: 500; color: var(--muted, #5b7191); }

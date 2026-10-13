@@ -10,7 +10,7 @@
     "start": "npm run build && electron .",
     "build": "vite build",
     "test": "node --test test/*.test.cjs",
-    "test:e2e": "npm run build && node --test --test-concurrency=1 e2e/workspace.cjs e2e/structure.cjs e2e/canvas.cjs e2e/direct-canvas.cjs e2e/continuity.cjs e2e/panels.cjs e2e/consistency.cjs e2e/recovery.cjs e2e/environment-documents.cjs e2e/agent-results.cjs e2e/archive-browser.cjs e2e/mode-history.cjs e2e/repository-organization.cjs e2e/product-entry.cjs",
+    "test:e2e": "npm run build && node --test --test-concurrency=1 e2e/workspace.cjs e2e/structure.cjs e2e/canvas.cjs e2e/direct-canvas.cjs e2e/continuity.cjs e2e/panels.cjs e2e/consistency.cjs e2e/recovery.cjs e2e/environment-documents.cjs e2e/agent-results.cjs e2e/archive-browser.cjs e2e/mode-history.cjs e2e/repository-organization.cjs e2e/product-entry.cjs e2e/reading-recovery.cjs",
     "test:performance": "node e2e/performance.cjs"
   },
   "devDependencies": {

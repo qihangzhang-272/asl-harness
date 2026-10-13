@@ -4,8 +4,10 @@ test('re-rendering the same source suspends old SVG interaction until the new dr
   const source=fs.readFileSync(require.resolve('../src/MermaidView.jsx'),'utf8');
   const body=source.match(/onClick=\{\(\)=>\{(camera\.current=null;.*?)\}\}/)[1];
   let renderedSource='flowchart LR; a-->b';
-  const fit=vm.runInNewContext(`(function(){${body}})`,{camera:{current:'old'},setRenderedSource:value=>renderedSource=value,setFrame(){assert.equal(renderedSource,'','发起同源重绘时即暂停旧图交互，不等副作用开始');},setScale(){}});
+  let scroll;
+  const fit=vm.runInNewContext(`(function(){${body}})`,{camera:{current:'old'},box:{current:{scrollTo:value=>scroll=value}},setRenderedSource:value=>renderedSource=value,setFrame(){assert.equal(renderedSource,'','发起同源重绘时即暂停旧图交互，不等副作用开始');},setScale(){}});
   fit();
+  assert.equal(scroll.left,0);assert.equal(scroll.top,0,'全图复位也恢复滚动位置');
 });
 test('evolution matches authored identities across renders, never matching nodes by their labels',async()=>{
   const {evolutionKey}=await import('../src/diagram-evolution.mjs');

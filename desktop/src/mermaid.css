@@ -1,4 +1,4 @@
-.mermaid-view{position:relative;margin:18px 0;overflow:hidden;min-height:100px}
+.mermaid-view{position:relative;margin:18px 0;overflow:hidden;min-height:120px}
 .mermaid-viewport{overflow:auto;max-height:72vh;padding:32px 24px 48px;scrollbar-width:thin}
 .mermaid-drawing{min-width:260px;margin:auto}
 .mermaid-drawing>svg{display:block;width:100%;height:auto;max-width:none!important;margin:auto;overflow:visible}
@@ -6,6 +6,9 @@
 .mermaid-drawing [role=button]:is(:hover,:focus-visible) rect{stroke:#3479dc;stroke-width:2px}
 .mermaid-tools{position:absolute;right:12px;bottom:10px;display:flex;gap:2px;padding:3px;border-radius:10px;background:#fffffff0;border:1px solid #dce7f6}
 .mermaid-tools button{padding:6px;border:0;background:transparent;box-shadow:none}
+.mermaid-tools .mermaid-scale{min-width:52px;font-variant-numeric:tabular-nums;font-size:12px;color:var(--ink)}
+.mermaid-tools button:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+.mermaid-reading-hint{position:absolute;left:24px;top:0;margin:0;color:var(--muted);font-size:12px;line-height:1.6;pointer-events:none}
 .mermaid-pending,.mermaid-error{padding:20px;color:#566f93}
 .mermaid-error pre{white-space:pre-wrap;font:12px/1.5 Consolas,monospace;color:#963e3e;max-height:150px;overflow:auto}
 .mermaid-placeholder{white-space:normal!important;background:none!important;padding:0!important;font:inherit!important}
@@ -50,7 +53,7 @@
 .mermaid-drawing [data-drop=inside] rect{stroke:#3479dc!important;stroke-width:3px!important}
 .mermaid-drawing text[data-asl-edit]:hover{fill:#2568d2!important}
 .mermaid-drawing g.node.is-selected rect{stroke:#2d6cd5!important;stroke-width:2px!important;fill:#e3eeff!important}
-.mermaid-tools{left:16px;right:auto;bottom:14px;gap:4px;padding:5px;background:#f8fbffdf;backdrop-filter:blur(18px);border-radius:12px;box-shadow:0 4px 16px #315b8c12}
-.architecture-section.is-expanded{inset:12px;background:#f6f9ff;z-index:60}
+.mermaid-tools{left:16px;right:auto;bottom:14px;gap:4px;padding:5px;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:none}
+.architecture-section.is-expanded{inset:12px;background:var(--canvas);z-index:60}
 .architecture-section.is-expanded .mermaid-edit,.architecture-section.is-expanded .mermaid-view{flex:1;min-height:0;display:flex;flex-direction:column}
 .architecture-section.is-expanded .mermaid-viewport{flex:1;max-height:none;align-items:center}

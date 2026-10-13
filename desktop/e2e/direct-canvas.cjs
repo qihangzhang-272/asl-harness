@@ -60,7 +60,7 @@ test('flow nodes follow the pointer; ports snap, edges delete, and geometry roun
   const connected=await connect('top','top');
   const pathSelector=`.architecture-section path.flowchart-link[data-id="${connected}"]`;
   // Fit exposes the complete arch before targeting its actual rendered stroke.
-  await page.getByRole('button',{name:'适应宽度',exact:true}).click();await ready();
+  await page.getByRole('button',{name:'全图概览并复位',exact:true}).click();await ready();
   const line=page.locator(pathSelector);await line.waitFor();
   const point=await line.evaluate(p=>{const at=p.getPointAtLength(p.getTotalLength()/2).matrixTransform(p.getScreenCTM());return {x:at.x,y:at.y};});
   await page.mouse.click(point.x,point.y+4,{button:'right'});
