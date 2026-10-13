@@ -40,7 +40,50 @@ test("discovery returns installed executables, not model credentials", async (t)
 });
 
 test("unsupported platforms do not claim native handoff", async () => {
-  await assert.rejects(launchAssistant({ id: "claude-code" }, { platform: "darwin" }), /Windows/);
+  await assert.rejects(launchAssistant({ id: "claude-code" }, { platform: "linux" }), /Windows.*macOS/);
+});
+
+test("macOS discovers executable CLIs and explains unavailable entries", { skip: process.platform === "win32" }, async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "asl-mac-find-"));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  await fs.mkdir(path.join(root, ".local/bin"), { recursive: true });
+  await fs.writeFile(path.join(root, ".local/bin/codex"), "#!/bin/sh\n", { mode: 0o700 });
+  await fs.writeFile(path.join(root, "claude"), "not executable");
+  const inventory = await assistantInventory({ platform: "darwin", home: root, env: { PATH: root } });
+  assert.equal(inventory.find(item => item.id === "codex-app").available, true);
+  assert.match(inventory.find(item => item.id === "claude-code").unavailableReason, /执行权限/);
+  const unsupported = await assistantInventory({ platform: "linux", home: root, env: { PATH: root } });
+  assert.equal(unsupported.find(item => item.id === "codex-app").available, false);
+  assert.match(unsupported.find(item => item.id === "codex-app").unavailableReason, /平台/);
+});
+
+test("macOS handoff preserves literal arguments and records success and failure", { skip: process.platform !== "darwin" }, async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "asl-mac-terminal-"));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const project = path.join(root, "中文 ' 项目 $(touch INJECTED)");
+  await fs.mkdir(project);
+  const executable = path.join(root, "native ' agent");
+  await fs.writeFile(executable, '#!/bin/zsh\n/usr/bin/printf "%s\\n" "$@" > arguments.txt\nexit "${ASL_FIXTURE_EXIT:-0}"\n', { mode: 0o700 });
+  const brief = '原文 `touch INJECTED` $(touch INJECTED) "quoted" \'single\'\n下一行';
+  for (const [assistant, exitCode] of [["codex-app", 0], ["claude-code", 7]]) {
+    const result = await launchAssistant({ id: assistant, executable, brief, workspace: project, project }, {
+      root: path.join(root, "sessions"), platform: "darwin",
+      launch: async (program, args) => {
+        assert.equal(program, "/usr/bin/open");
+        assert.deepEqual(args.slice(0, 2), ["-a", "Terminal"]);
+        assert.equal((await fs.stat(args[2])).mode & 0o777, 0o700);
+        await promisify(execFile)("/bin/zsh", [args[2]], { env: { ...process.env, ASL_FIXTURE_EXIT: String(exitCode) } }).catch(error => {
+          assert.equal(error.code, exitCode);
+        });
+      },
+    });
+    const job = JSON.parse(await fs.readFile(result.job, "utf8"));
+    assert.equal(await fs.readFile(path.join(project, "arguments.txt"), "utf8"), [...job.args, brief].join("\n") + "\n");
+    const status = await sessionStatus(path.join(root, "sessions"), result.id);
+    assert.equal(status.exitCode, exitCode);
+    assert.equal(status.status, exitCode === 0 ? "ended" : "failed");
+    await assert.rejects(fs.access(path.join(project, "INJECTED")), { code: "ENOENT" });
+  }
 });
 
 test("Windows actually executes the fixed handoff and writes a native receipt", { skip: process.platform !== "win32" }, async (t) => {

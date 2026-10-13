@@ -2,13 +2,14 @@ const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
-const { spawn } = require("node:child_process");
+const { spawn, execFile } = require("node:child_process");
+const { promisify } = require("node:util");
 
 async function assistantInventory(options = {}) {
   const platform = options.platform || process.platform;
   const env = options.env || process.env;
   const home = options.home || os.homedir();
-  const folders = [...(env.PATH || env.Path || "").split(platform === "win32" ? ";" : ":"), path.join(home, ".local", "bin"), path.join(home, "AppData", "Roaming", "npm")].filter(Boolean);
+  const folders = [...(env.PATH || env.Path || "").split(platform === "win32" ? ";" : ":"), path.join(home, ".local", "bin"), path.join(home, "AppData", "Roaming", "npm"), ...(platform === "darwin" ? ["/opt/homebrew/bin", "/usr/local/bin"] : [])].filter(Boolean);
   const result = [];
   for (const [id, name, command] of [["claude-code", "Claude Code", "claude"], ["codex-app", "Codex CLI", "codex"]]) {
     let executable = null;
@@ -19,7 +20,14 @@ async function assistantInventory(options = {}) {
       }
       if (executable) break;
     }
-    result.push({ id, name, available: platform === "win32" && !!executable, executable });
+    let unavailableReason = null;
+    if (!["win32", "darwin"].includes(platform)) unavailableReason = "当前平台尚不支持从 App 打开原生会话，可在已有 Agent 中使用 ASL CLI。";
+    else if (!executable) unavailableReason = `未找到 ${name}，请安装命令行工具后重新检查。`;
+    else if (platform === "darwin") {
+      try { await fs.access(executable, fs.constants.X_OK); }
+      catch { unavailableReason = `已找到 ${name}，但文件没有执行权限，请修复安装后重新检查。`; }
+    }
+    result.push({ id, name, available: !unavailableReason, executable, unavailableReason });
   }
   return result;
 }
@@ -48,7 +56,8 @@ function openTerminal(program, args, options) {
 }
 
 async function launchAssistant(request, options = {}) {
-  if ((options.platform || process.platform) !== "win32") throw new Error("原生配置助手目前支持 Windows；其他平台尚未验收。");
+  const platform = options.platform || process.platform;
+  if (!["win32", "darwin"].includes(platform)) throw new Error("原生配置助手目前支持 Windows 和 macOS；其他平台尚未验收。");
   if (!["codex-app", "claude-code"].includes(request.id) || !path.isAbsolute(request.executable || "")) throw new Error("请选择已安装的配置助手");
   if (typeof request.brief !== "string" || !request.brief.trim()) throw new Error("缺少原始配置材料");
   const id = randomUUID();
@@ -63,10 +72,28 @@ async function launchAssistant(request, options = {}) {
   await fs.writeFile(briefFile, request.brief, "utf8");
   const job = path.join(directory, "job.json");
   const prompt = request.brief.length < 500 ? request.brief : `请完整读取本地任务文件 ${JSON.stringify(briefFile)}，按里面的目标完成任务。先阅读再行动。沿用当前模型、账号和原生权限，完成后请给出真实验证结果。`;
-  await fs.writeFile(job, JSON.stringify({ command: request.executable, cwd, args, prompt, receipt: path.join(directory, "receipt.json") }), "utf8");
-  await (options.launch || openTerminal)(path.join(process.env.SystemRoot || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe"),
-    ["-NoProfile", "-NoExit", "-EncodedCommand", Buffer.from(runner, "utf16le").toString("base64")],
-    { cwd, env: { ...process.env, ASL_SETUP_JOB: job } });
+  const receipt = path.join(directory, "receipt.json");
+  await fs.writeFile(job, JSON.stringify({ command: request.executable, cwd, args, prompt, receipt }), "utf8");
+  if (platform === "darwin") {
+    // Single-quoted literals preserve paths and prompts without shell expansion.
+    const quote = value => `'${value.replace(/'/g, "'\\''")}'`;
+    const command = path.join(directory, "ASL.command");
+    await fs.writeFile(command, `#!/bin/zsh
+code=1
+if cd -- ${quote(cwd)}; then
+  ${[request.executable, ...args, prompt].map(quote).join(" ")}
+  code=$?
+fi
+/usr/bin/printf '{"exitCode":%d,"finishedAt":"%s"}\\n' "$code" "$(/bin/date -u +%Y-%m-%dT%H:%M:%SZ)" > ${quote(receipt)}
+/usr/bin/printf '%s\\n' 'ASL: native session ended. Return to ASL Workspace and check the result.'
+exit "$code"
+`, { mode: 0o700 });
+    await (options.launch || promisify(execFile))("/usr/bin/open", ["-a", "Terminal", command], { cwd, env: process.env });
+  } else {
+    await (options.launch || openTerminal)(path.join(process.env.SystemRoot || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe"),
+      ["-NoProfile", "-NoExit", "-EncodedCommand", Buffer.from(runner, "utf16le").toString("base64")],
+      { cwd, env: { ...process.env, ASL_SETUP_JOB: job } });
+  }
   return { id, job, assistant: request.id, status: "opened" };
 }
 
