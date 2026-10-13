@@ -18,7 +18,7 @@ export function structureElements(svg,model) {
     }
     const messages=model.items.filter(i=>i.kind==='message'),paths=[...svg.querySelectorAll('[data-et="message"]')],labels=[...svg.querySelectorAll('text.messageText')];
     if(messages.length===paths.length&&labels.length===paths.length&&paths.every((p,i)=>p.dataset.from===messages[i].from&&p.dataset.to===messages[i].to)){
-      paths.forEach((p,i)=>{add(p,messages[i],labels[i]);add(edgeHit(p),messages[i],labels[i]);add(labels[i],messages[i]);});
+      paths.forEach((p,i)=>{const hit=edgeHit(p);p.parentNode.prepend(hit);add(p,messages[i],labels[i]);add(hit,messages[i],labels[i]);add(labels[i],messages[i]);});
     }
     const notes=model.items.filter(i=>i.kind==='note'),renderedNotes=[...svg.querySelectorAll('g[data-et="note"]')];
     if(notes.length===renderedNotes.length)renderedNotes.forEach((el,i)=>add(el,notes[i],el.querySelector('text.noteText')));

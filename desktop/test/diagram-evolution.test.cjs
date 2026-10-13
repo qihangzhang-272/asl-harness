@@ -17,3 +17,10 @@ test('evolution matches authored identities across renders, never matching nodes
   assert.equal(evolutionKey(element('node_12',{aslNode:'research'})),'node:research');
   assert.equal(evolutionKey(element('unknown')),null);
 });
+test('a queued viewport resize after leaving the diagram cannot access a cleared ref',()=>{
+  const fs=require('node:fs'),vm=require('node:vm');
+  const source=fs.readFileSync(require.resolve('../src/MermaidView.jsx'),'utf8');
+  const body=source.match(/new ResizeObserver\(entries=>\{([\s\S]*?)\}\);/)[1];
+  const callback=vm.runInNewContext(`(entries)=>{${body}}`,{viewport:{isConnected:false},box:{current:null},getComputedStyle(){assert.fail('离页后的观察器不能读取样式');},setAvailableWidth(){assert.fail('离页后不能改视角');},setAvailableHeight(){assert.fail('离页后不能改视角');}});
+  assert.doesNotThrow(()=>callback([{contentRect:{width:800,height:500}}]));
+});

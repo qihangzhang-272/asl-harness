@@ -51,6 +51,7 @@ test('canvas templates and structure can be created and edited without source or
     await ready();
     await page.getByRole('button',{name:'缩小图',exact:true}).click();
     await page.getByRole('button',{name:'缩小图',exact:true}).click();
+    assert.equal(await page.locator('text.messageText').filter({hasText:'复核资料'}).evaluate(el=>{const r=el.getBoundingClientRect(),hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return hit===el||el.contains(hit);}),true,'缩小后消息文字不能被连线点击区遮挡');
     await drag(page.locator('text.loopText').filter({hasText:'条件成立'}),page.locator('text.messageText').filter({hasText:'复核资料'}),.5,.1);
     await ready();
     await page.locator('text.loopText').filter({hasText:'条件成立'}).click({button:'right'});

@@ -41,13 +41,14 @@ export default memo(function MermaidView({source,onNode,nodes=[],onError,items,s
   },[source,visible,frame,renderedDiagram,evolve]);
   useLayoutEffect(()=>{if(evolve)animateDiagram(box.current,previousDiagram.current);},[svg,evolve]);
   useEffect(()=>{
-    if(!box.current)return;
+    const viewport=box.current;if(!viewport)return;
     const observer=new ResizeObserver(entries=>{
-      const style=getComputedStyle(box.current),limit=parseFloat(style.maxHeight);
+      if(!viewport.isConnected)return;
+      const style=getComputedStyle(viewport),limit=parseFloat(style.maxHeight);
       setAvailableWidth(entries[0].contentRect.width);
       setAvailableHeight(Number.isFinite(limit)?Math.max(1,limit-parseFloat(style.paddingTop)-parseFloat(style.paddingBottom)):entries[0].contentRect.height);
     });
-    observer.observe(box.current);return()=>observer.disconnect();
+    observer.observe(viewport);return()=>observer.disconnect();
   },[svg]);
   useLayoutEffect(()=>{const drawing=box.current?.querySelector('svg');return()=>drawing?.dispatchEvent(new Event('asl:release-inline'));},[svg]);
   useLayoutEffect(()=>{

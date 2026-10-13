@@ -1,5 +1,5 @@
-.mermaid-view{position:relative;margin:18px 0;overflow:hidden;min-height:120px}
-.mermaid-viewport{overflow:auto;max-height:72vh;padding:32px 24px 48px;scrollbar-width:thin}
+.mermaid-view{position:relative;margin:18px 0;overflow:hidden;min-height:120px;display:flex;flex-direction:column}
+.mermaid-viewport{overflow:auto;max-height:72vh;padding:32px 24px 48px;scrollbar-width:thin;flex:1;min-height:0}
 .mermaid-drawing{min-width:260px;margin:auto}
 .mermaid-drawing>svg{display:block;width:100%;height:auto;max-width:none!important;margin:auto;overflow:visible}
 .mermaid-drawing [role=button]{cursor:pointer;outline:none}
@@ -53,7 +53,7 @@
 .mermaid-drawing [data-drop=inside] rect{stroke:#3479dc!important;stroke-width:3px!important}
 .mermaid-drawing text[data-asl-edit]:hover{fill:#2568d2!important}
 .mermaid-drawing g.node.is-selected rect{stroke:#2d6cd5!important;stroke-width:2px!important;fill:#e3eeff!important}
-.mermaid-tools{left:16px;right:auto;bottom:14px;gap:4px;padding:5px;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:none}
+.mermaid-tools{position:static;align-self:flex-start;margin:0 16px 14px;gap:4px;padding:5px;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:none}
 .architecture-section.is-expanded{inset:12px;background:var(--canvas);z-index:60}
 .architecture-section.is-expanded .mermaid-edit,.architecture-section.is-expanded .mermaid-view{flex:1;min-height:0;display:flex;flex-direction:column}
 .architecture-section.is-expanded .mermaid-viewport{flex:1;max-height:none;align-items:center}
