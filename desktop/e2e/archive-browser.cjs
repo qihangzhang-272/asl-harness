@@ -2,19 +2,24 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs/promises');
 const path=require('node:path');
+const os=require('node:os');
 const {launch,dispose}=require('./fixture.cjs');
 
-test('archive browsing, restore, conflicts and canceled cleanup preserve content',{timeout:120000},async()=>{
-  const {app,page,workspace,run,errors}=await launch();
+test('archive browsing, restore, conflicts and canceled cleanup preserve content',{timeout:120000},async t=>{
+  const workspace=await fs.mkdtemp(path.join(os.tmpdir(),'asl-archive-baseline-'));
+  t.after(()=>fs.rm(workspace,{recursive:true,force:true}));
+  await fs.cp(path.join(__dirname,'../../examples/personal-environment'),workspace,{recursive:true});
   const feedback='feedback-'+'a'.repeat(32),mode='mode-creator-studio-20261008T120000-aabbcc';
+  await fs.mkdir(path.join(workspace,'archive',feedback),{recursive:true});
+  await fs.writeFile(path.join(workspace,'archive',feedback,'review.md'),'# 保留记录\n\n已确认的修改理由。\n');
+  await fs.mkdir(path.join(workspace,'archive','old-assets'),{recursive:true});
+  await fs.writeFile(path.join(workspace,'archive','old-assets','notes.md'),'# 历史资料\n\n原有内容。');
+  await fs.writeFile(path.join(workspace,'archive','old-assets','asset.bin'),Buffer.from([0,255,1]));
+  const original=await fs.readFile(path.join(workspace,'modes/creator-studio/mode.yaml'));
+  await fs.cp(path.join(workspace,'modes/creator-studio'),path.join(workspace,'archive',mode),{recursive:true});
+  // Baseline files precede the watcher; the later edit below remains a real external change.
+  const {app,page,run,errors}=await launch({library:workspace});
   try{
-    await fs.mkdir(path.join(workspace,'archive',feedback),{recursive:true});
-    await fs.writeFile(path.join(workspace,'archive',feedback,'review.md'),'# 保留记录\n\n已确认的修改理由。\n');
-    await fs.mkdir(path.join(workspace,'archive','old-assets'),{recursive:true});
-    await fs.writeFile(path.join(workspace,'archive','old-assets','notes.md'),'# 历史资料\n\n原有内容。');
-    await fs.writeFile(path.join(workspace,'archive','old-assets','asset.bin'),Buffer.from([0,255,1]));
-    const original=await fs.readFile(path.join(workspace,'modes/creator-studio/mode.yaml'));
-    await fs.cp(path.join(workspace,'modes/creator-studio'),path.join(workspace,'archive',mode),{recursive:true});
     await app.evaluate(({ipcMain,dialog})=>{
       globalThis.archiveCleanupCalls=[];
       dialog.showMessageBox=async()=>({response:1});
