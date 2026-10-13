@@ -185,7 +185,9 @@ Environment 是普通文件夹，也是本地 Git 真源。人可以直接阅读
 
 ### 桌面预览版
 
-[下载 Windows App](https://github.com/qihangzhang-272/asl-harness/releases/download/app-v0.5.15/ASL-Workspace-0.5.15-Windows-x64.zip) · [下载 Mac App（Apple Silicon）](https://github.com/qihangzhang-272/asl-harness/releases/download/app-v0.5.15/ASL-Workspace-0.5.15-macOS-arm64.zip) · [各平台下载与校验值](https://github.com/qihangzhang-272/asl-harness/releases/tag/app-v0.5.15) · [带公开技能的内容版](https://github.com/qihangzhang-272/agent-skill-library/releases/tag/app-v0.5.15)
+[Windows App 0.5.15](https://github.com/qihangzhang-272/asl-harness/releases/download/app-v0.5.15/ASL-Workspace-0.5.15-Windows-x64.zip) · [Mac App 0.5.16（Apple Silicon）](https://github.com/qihangzhang-272/asl-harness/releases/download/app-v0.5.16/ASL-Workspace-0.5.16-macOS-arm64.zip) · [Mac 公开技能内容包](https://github.com/qihangzhang-272/asl-harness/releases/download/app-v0.5.16/Agent-Skill-Library-0.5.16-macOS-arm64.zip) · [Mac 下载、校验值与发行说明](https://github.com/qihangzhang-272/asl-harness/releases/tag/app-v0.5.16)
+
+Mac 0.5.16 是本机打包的 Apple Silicon 预览版，首次打开与内容包使用方法见 [Mac 使用说明](docs/mac-preview.md)。Windows 当前下载仍为已验证的 0.5.15；本轮没有 Windows 0.5.16 安装包。
 
 无需安装 Python 或 Node.js。下载后右键 ZIP → **全部解压** → 打开 `ASL Workspace` 文件夹 → 双击 **`ASL Workspace.exe`**。保留整个文件夹，不要只拿走 EXE；GitHub 自动生成的 `Source code` 压缩包是源码，不是 App。
 

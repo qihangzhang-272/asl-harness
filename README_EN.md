@@ -185,7 +185,9 @@ Over time, the Environment becomes more like its owner: it retains useful judgme
 
 ### Desktop preview
 
-[Download for Windows](https://github.com/qihangzhang-272/asl-harness/releases/download/app-v0.5.14/ASL-Workspace-0.5.14-Windows-x64.zip) · [Download for Mac (Apple Silicon)](https://github.com/qihangzhang-272/asl-harness/releases/download/app-v0.5.14/ASL-Workspace-0.5.14-macOS-arm64.zip) · [Platform downloads and checksums](https://github.com/qihangzhang-272/asl-harness/releases/tag/app-v0.5.14) · [App with published Skills](https://github.com/qihangzhang-272/agent-skill-library/releases/tag/app-v0.5.14)
+[Windows App 0.5.15](https://github.com/qihangzhang-272/asl-harness/releases/download/app-v0.5.15/ASL-Workspace-0.5.15-Windows-x64.zip) · [Mac App 0.5.16 (Apple Silicon)](https://github.com/qihangzhang-272/asl-harness/releases/download/app-v0.5.16/ASL-Workspace-0.5.16-macOS-arm64.zip) · [Mac App with published Skills](https://github.com/qihangzhang-272/asl-harness/releases/download/app-v0.5.16/Agent-Skill-Library-0.5.16-macOS-arm64.zip) · [Mac downloads, checksums and release notes](https://github.com/qihangzhang-272/asl-harness/releases/tag/app-v0.5.16)
+
+Mac 0.5.16 is a locally built Apple Silicon preview; see the [Mac guide](docs/mac-preview.md) for first launch and the content package. The current Windows download remains the verified 0.5.15 build; this release does not include a Windows 0.5.16 package.
 
 No Python or Node.js installation is needed. Right-click the downloaded ZIP → **Extract All** → open the `ASL Workspace` folder → double-click **`ASL Workspace.exe`**. Keep the complete folder together. GitHub's automatically generated `Source code` archives are not the desktop App.
 
