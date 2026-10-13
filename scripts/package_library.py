@@ -21,7 +21,7 @@ from asl_harness.workspace import LIFECYCLE_AREAS, Workspace
 CONTENT = {'PROFILE.md', 'WORKSPACE.md', 'README.md', 'README_EN.md', 'LICENSE', 'LICENSES', 'docs', 'skills', 'modes'}
 
 
-def published_content(repository: Path, revision: str) -> tuple[list, dict]:
+def published_content(repository: Path, revision: str, *, include_published_feedback: bool = False) -> tuple[list, dict]:
     if not re.fullmatch(r'[0-9a-f]{40}|[0-9a-f]{64}', revision):
         raise ValueError('Use the full published commit hash, not a branch or working directory')
     command = ['git', '-c', 'core.autocrlf=false', '-c', 'core.eol=lf', '-C', str(repository.resolve())]
@@ -32,12 +32,13 @@ def published_content(repository: Path, revision: str) -> tuple[list, dict]:
         raise ValueError('Commit is not in the fetched published origin/main history; fetch and review it first')
     raw = subprocess.check_output([*command, 'archive', '--format=zip', revision], env=environment, timeout=60)
     entries, files = [], {}
+    allowed = CONTENT | {'feedback'} if include_published_feedback else CONTENT
     with zipfile.ZipFile(io.BytesIO(raw)) as archive:
         for entry in archive.infolist():
             if entry.is_dir():
                 continue
             path = _safe_path(entry.filename)
-            if path.parts[0] not in CONTENT or any(part in OMIT for part in path.parts):
+            if path.parts[0] not in allowed or any(part in OMIT for part in path.parts):
                 continue
             if stat.S_ISLNK(entry.external_attr >> 16):
                 raise ValueError(f'Content symlinks are not a complete local Skill: {entry.filename}')
@@ -57,12 +58,12 @@ def published_content(repository: Path, revision: str) -> tuple[list, dict]:
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(data)
         for area in LIFECYCLE_AREAS:
-            (root / area).mkdir()
+            (root / area).mkdir(exist_ok=True)
         files['WORKSPACE.md'] = Workspace.open(root).sync_workspace_view().read_bytes()
     return entries, files
 
 
-def package(app: Path, repository: Path, revision: str, output: Path) -> dict:
+def package(app: Path, repository: Path, revision: str, output: Path, *, include_published_feedback: bool = False) -> dict:
     app, output = app.resolve(), output.resolve()
     checksum = output.with_suffix(output.suffix + '.sha256')
     if output.exists() or checksum.exists():
@@ -79,7 +80,7 @@ def package(app: Path, repository: Path, revision: str, output: Path) -> dict:
     if not executable.is_file() or not core.is_file():
         raise ValueError('The native App and its frozen CLI are required')
     version = json.loads((resources / 'app/package.json').read_text(encoding='utf-8'))['version']
-    entries, files = published_content(repository, revision)
+    entries, files = published_content(repository, revision, include_published_feedback=include_published_feedback)
     app_files = sorted(path for path in app.rglob('*') if path.is_file() or path.is_symlink())
     for path in app_files:
         if path.is_symlink() and not path.resolve(strict=True).is_relative_to(app):
@@ -89,7 +90,9 @@ def package(app: Path, repository: Path, revision: str, output: Path) -> dict:
                 '@echo off\r\nstart "" "%~dp0ASL Workspace\\ASL Workspace.exe" --workspace "%~dp0Agent Skill Library"\r\n')
     manifest = {'appVersion': version, 'libraryRevision': revision, 'platform': 'macOS' if mac else 'Windows',
                 'generatedViews': ['WORKSPACE.md'],
-                'content': 'Published files only; local changes, feedback, archives and Git metadata are excluded.'}
+                'publishedFeedbackIncluded': include_published_feedback,
+                'content': 'Published files only; local changes, archives and Git metadata are excluded. '
+                           'Published feedback is included only when explicitly requested after review.'}
     with zipfile.ZipFile(output, 'x', zipfile.ZIP_DEFLATED, compresslevel=6, strict_timestamps=False) as archive:
         for path in app_files:
             name = f'{app.name}/{path.relative_to(app).as_posix()}'
@@ -133,5 +136,7 @@ if __name__ == '__main__':
     parser.add_argument('--repository', type=Path, required=True)
     parser.add_argument('--revision', required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--include-published-feedback', action='store_true', help='仅在公开记录已审查后，将该公开提交中的反馈一起打包；默认排除')
     args = parser.parse_args()
-    print(json.dumps(package(args.app, args.repository, args.revision, args.output), ensure_ascii=False))
+    print(json.dumps(package(args.app, args.repository, args.revision, args.output,
+                             include_published_feedback=args.include_published_feedback), ensure_ascii=False))
