@@ -39,8 +39,10 @@ test('native diagrams edit in place and persist semantic drag, context actions a
     await page.locator('.source-tree button').filter({hasText:'Creator Studio'}).first().click();
     await source('sequenceDiagram\n participant skill_product_analysis as 分析\n participant skill_source_research as 检索\n alt 有材料\n skill_product_analysis->>skill_source_research: 核对\n Note over skill_product_analysis,skill_source_research: 事实\n skill_source_research-->>skill_product_analysis: 返回\n else 材料不足\n skill_product_analysis->>skill_source_research: 补充\n end');
     await page.getByRole('button',{name:'放大图',exact:true}).click();
+    const zoom=()=>page.locator('.mermaid-drawing').evaluate(el=>parseFloat(el.style.width)/el.querySelector('svg').viewBox.baseVal.width);
+    const selectedZoom=await zoom();
     await edit(page.locator('g[data-et="participant"][data-id="skill_product_analysis"]').first(),'产品分析');
-    assert.ok(await page.locator('.mermaid-drawing').evaluate(el=>parseFloat(el.style.width)/el.querySelector('svg').viewBox.baseVal.width>1.1),'编辑后保留缩放');
+    assert.ok(Math.abs(await zoom()-selectedZoom)<.001,'编辑后保留用户选择的缩放，基准可以小于 100%');
     await edit(page.locator('text.messageText').filter({hasText:'核对'}),'核对来源');
     await edit(page.locator('text.noteText'),'事实与证据');
     await edit(page.locator('text.loopText').filter({hasText:'有材料'}),'证据齐备');

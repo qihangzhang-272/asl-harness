@@ -26,7 +26,7 @@ test('large diagrams open as an overview and restore readable size without chang
     await viewport.evaluate(el=>el.scrollLeft=el.scrollWidth);
     await page.getByRole('button',{name:'全图概览并复位',exact:true}).click();
     await page.waitForFunction(()=>{const el=document.querySelector('.architecture-section .mermaid-viewport');return el&&!el.inert&&el.scrollLeft===0&&el.scrollWidth<=el.clientWidth+2;});
-    await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setSize(920,740));
+    await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setContentSize(920,740));
     await page.waitForFunction(()=>{const el=document.querySelector('.architecture-section .mermaid-viewport');return innerWidth===920&&el.scrollWidth<=el.clientWidth+2;});
     assert.deepEqual(await fs.readFile(file),before);
     assert.deepEqual(errors,[]);
@@ -39,7 +39,7 @@ test('conflict recovery changes scope or directory without overwriting an unmana
   await fs.mkdir(path.dirname(existing),{recursive:true});await fs.writeFile(existing,'UNMANAGED ORIGINAL');
   const custom=path.join(run,'custom-skills'),project=path.join(run,'separate-project');await fs.mkdir(custom);await fs.mkdir(project);
   try{
-    await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setSize(920,740));
+    await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setContentSize(920,740));
     await app.evaluate(({dialog},{custom,project})=>{
       globalThis.recoveryFolders=[custom,project];
       dialog.showOpenDialog=async()=>({canceled:false,filePaths:[globalThis.recoveryFolders.shift()]});
