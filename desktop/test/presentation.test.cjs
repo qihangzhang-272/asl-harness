@@ -1,6 +1,32 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 
+test('Mode summaries reuse authored introductions without showing diagrams or headings',async()=>{
+  const {modeSummary}=await import('../src/presentation.mjs');
+  assert.equal(modeSummary({document:'# 研究\n\n```mermaid\nflowchart LR\n```\n\n用于**来源核查**与研究。\n\n下一段。'}),'用于来源核查与研究。');
+  assert.equal(modeSummary({document:'# 未写说明\n'}),'');
+});
+
+test('skill labels reuse unambiguous Mode wording and preserve raw skill content',async()=>{
+  const {skillPresentation}=await import('../src/presentation.mjs');
+  const skill={id:'search',title:'Search',description:'MUST USE for search'};
+  const catalog={modes:[{id:'research',architecture:{nodes:[{skill:'search',title:'网络检索',note:'核查公开来源。'}]}},{id:'writing',architecture:{nodes:[{skill:'search',title:'网络检索',note:'核查公开来源。'}]}}]};
+  assert.deepEqual(skillPresentation(catalog,skill),{title:'网络检索',description:'核查公开来源。'});
+  catalog.modes[1].architecture.nodes[0].note='寻找写作素材。';
+  assert.equal(skillPresentation(catalog,skill).description,skill.description,'多种用途不能任意选择一种');
+  assert.equal(skillPresentation(catalog,skill,'writing').description,'寻找写作素材。');
+  assert.equal(skillPresentation({modes:[]},skill).title,'Search');
+  assert.equal(skill.description,'MUST USE for search');
+});
+
+test('next steps identify the native Agent and the configured scope',async()=>{
+  const {agentNextStep}=await import('../src/presentation.mjs');
+  assert.match(agentNextStep('Codex','project','/工作/研究项目'),/Codex.*研究项目.*新会话.*任务/);
+  assert.match(agentNextStep('Claude Code','user'),/Claude Code.*新会话/);
+  assert.match(agentNextStep('Codex','user',null),/Codex.*新会话/);
+  assert.match(agentNextStep('DeepSeek Harness','preset'),/DeepSeek Harness.*选择此模式/);
+});
+
 test('configuration copy names the outcome rather than exposing preset jargon',async()=>{
   const {errorText,scopeLabel}=await import('../src/presentation.mjs');
   assert.doesNotMatch(scopeLabel('preset','Writing'),/预设/);

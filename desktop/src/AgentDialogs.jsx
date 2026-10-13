@@ -1,6 +1,7 @@
 import React,{useEffect,useRef,useState} from 'react';
 import {SlidersHorizontal,FolderOpen,LoaderCircle,AlertCircle,Check,RotateCw,Copy,ArrowUpRight,Circle} from 'lucide-react';
 import EditorPage from './EditorPage.jsx';
+import {agentNextStep} from './presentation.mjs';
 const baseName = (value) => (value || "").split(/[\\/]/).filter(Boolean).pop();
 const AGENT_CHOICES = [
   {id:'codex-app',name:'Codex',scopes:['project','user']},
@@ -46,7 +47,7 @@ export function SetupDialog({ api, Dialog, Tag, values, title, onClose, task, re
   return <Dialog title="运行检查" onClose={onClose}>
     {resultMessage && <p role="status" className="inline-note">{resultMessage}</p>}
     <div className="apply-summary"><SlidersHorizontal size={19} /><span>{title}<small>{hostName} · {values.scope === "user" ? "当前用户" : values.scope === "preset" ? "工作模式" : "所选项目"}</small></span></div>
-    {resultMessage && <p>下一步：{values.scope === 'preset' ? '在 DeepSeek 新会话中选择此模式。' : values.scope === 'user' ? `在 ${hostName} 中开始新会话。` : `在 ${hostName} 中打开此项目并开始新会话。`}</p>}
+    <p>下一步：{agentNextStep(hostName,values.scope,values.project||activation?.openProject)}</p>
     {(values.project || activation?.openProject || report?.userPaths) && <details className="setup-notes"><summary>配置位置</summary>
       {(values.project || activation?.openProject) && <p className="path-line">{values.project || activation.openProject}{activation?.instructionFile && <small> · {activation.instructionFile}</small>}</p>}
       {values.scope === 'user' && <p className="path-line">{values.skillsDir || report?.userPaths?.skills}<br/>{report?.userPaths?.instructions}</p>}
@@ -54,6 +55,7 @@ export function SetupDialog({ api, Dialog, Tag, values, title, onClose, task, re
     {checkError && <><p className="error-text" role="alert">检查未完成，请重试。</p><details className="setup-notes"><summary>查看详情</summary><pre>{checkError}</pre></details></>}
     {report ? <>
       <p role="status">{attention ? `${attention} 项需要处理` : report.setupNotes.length ? '请核对技能中的运行说明。' : '已核对安装项，仍需实际试用。'}</p>
+      <p className="muted">这些检查核对配置和依赖；模型账号与登录状态请在 {hostName} 中确认，实际任务仍需试用。</p>
       {report.nativeDiscoveryUnverified && <div className="inline-note"><FolderOpen size={18} /><span>所选目录还需与 {hostName} 关联。</span></div>}
       {report.hooks && <details className="setup-notes">
         <summary>自动检查 · {report.hooks.coverage === 'none' ? '未覆盖' : report.hooks.commandFound ? '尚未实测' : '待配置'}</summary>

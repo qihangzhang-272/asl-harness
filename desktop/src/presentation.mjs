@@ -1,3 +1,5 @@
+import {marked} from 'marked';
+
 // Categories come only from Mode content, never keyword inference in the renderer.
 export const repositorySkillKey = skill => skill.repositoryPath || skill.id;
 
@@ -14,6 +16,24 @@ export function capabilityGroups(skills, authored = null) {
 export function shortText(text, limit = 90) {
   const plain = (text || "").replace(/[#*`]/g, "").replace(/\s+/g, " ").trim();
   return plain.length > limit ? `${plain.slice(0, limit)}…` : plain;
+}
+export function modeSummary(mode) {
+  return shortText(marked.lexer(mode?.document||'').find(token=>token.type==='paragraph')?.text,110);
+}
+export function skillPresentation(catalog, skill, modeId='') {
+  const nodes=catalog.modes.filter(mode=>!modeId||mode.id===modeId)
+    .flatMap(mode=>mode.architecture?.nodes||[]).filter(node=>node.skill===skill.id);
+  const authored=field=>{
+    const values=[...new Set(nodes.map(node=>node[field]?.trim()).filter(Boolean))];
+    return values.length===1?values[0]:'';
+  };
+  return {title:authored('title')||skill.title,description:authored('note')||skill.description};
+}
+export function agentNextStep(host, scope, project='') {
+  const location=(project||'').split(/[\\/]/).filter(Boolean).pop();
+  return scope==='preset'?`在 ${host} 新会话中选择此模式，并说明要完成的任务。`
+    :scope==='user'?`在 ${host} 中开始新会话，并说明要完成的任务。`
+    :`在 ${host} 中打开${location?`项目「${location}」`:'此项目'}，开始新会话并说明要完成的任务。`;
 }
 export function adoptionRequest(form, catalog) {
   const mode = catalog.modes.find(m => m.id === form.mode);

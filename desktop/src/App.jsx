@@ -25,7 +25,6 @@ import AgentPage from './AgentPage.jsx';
 import {useViewState,useScrollMemory} from './useViewState.jsx';
 import {ReadCache} from './read-cache.mjs';
 import {diagramsIn} from './mermaid-document.mjs';
-import {marked} from 'marked';
 import {createHistory,commitHistory,undoHistory,redoHistory} from './graph-model.mjs';
 import SourceLibrary, {SourceTree} from './SourceLibrary.jsx';
 import {navigate} from './motion.js';
@@ -67,6 +66,7 @@ import {
   errorText,
   coreError,
   shortText,
+  modeSummary,
   restoreView,
   matchLocalModes,
   libraryGroups,
@@ -506,7 +506,7 @@ export default function App() {
     await openLibrary(item.workspace, item.id);
   };
   const mode = catalog?.modes.find((m) => m.id === modeId);
-  const modeIntro = useMemo(()=>marked.lexer(mode?.document||'').find(token=>token.type==='paragraph')?.text||'',[mode?.document]);
+  const modeIntro = useMemo(()=>modeSummary(mode),[mode?.document]);
   const modeInstallations=(native?.connections||[]).filter(item=>item.workspace===workspace&&item.mode===modeId);
   const readOnly = workspace === initial?.example || /[\\/]resources[\\/]example-environment[\\/]*$/i.test(workspace || '');
   const modeSkills = useMemo(
@@ -1000,10 +1000,12 @@ export default function App() {
                   </section>}
                   {page === 'modes' && catalog && !mode && <section className="mode-library-overview">
                     <div className="page-heading"><h1>工作模式</h1><div className="heading-actions"><button onClick={()=>setModal({kind:'environment-documents'})}>偏好与记录</button><button onClick={()=>setModal({kind:'archive-browser'})}><Archive size={16}/>归档</button><button className="primary" disabled={readOnly} onClick={()=>setModal({kind:'mode-workspace'})}><Plus size={16}/>新建模式</button></div></div>
+                    <p className="muted">选择适合当前任务的模式，查看技能分工，再配置到 Agent 开始新会话。</p>
                     {!!catalog.issues?.length&&<details className="scan-issues"><summary>{catalog.issues.length} 处内容需要检查</summary>{catalog.issues.map((issue,index)=><p className="path-line" key={index}>{issue.path}：{issue.message}</p>)}</details>}
                     <h2 className="library-section-title" title={workspace}><FolderOpen size={18}/>{baseName(workspace)}</h2>
                     <div className="source-mode-grid">{catalog.modes.map(item=><button className="source-mode-card" key={item.id} onClick={()=>showMode(item.id)}>
                       <span className="source-mode-icon"><Layers3 size={24}/></span><h2>{item.title}</h2>
+                      <p>{modeSummary(item)||'打开模式，查看技能分工与使用说明。'}</p>
                       <footer><span>{item.skills.length} 个技能</span><ChevronRight size={17}/></footer>
                     </button>)}</div>
                   </section>}
@@ -1012,7 +1014,7 @@ export default function App() {
                       <div className="page-heading">
                         <div>
                           <h1>{mode.title}</h1>
-                          {modeIntro&&<p>{shortText(modeIntro,110)}</p>}
+                          {modeIntro&&<p>{modeIntro}</p>}
                         </div>
                         <div className="heading-actions">
                           {!mode.upstream && (

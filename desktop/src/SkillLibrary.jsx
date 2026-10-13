@@ -1,6 +1,6 @@
 import React, {useEffect,useRef,useState} from 'react';
 import {Layers3, Puzzle, ChevronRight, FileText} from 'lucide-react';
-import {allSkillSection, skillSections, shortText} from './presentation.mjs';
+import {allSkillSection, skillSections, skillPresentation, shortText} from './presentation.mjs';
 import {ArchitectureMap} from './Architecture.jsx';
 import SkillCanvas from './SkillCanvas.jsx';
 import PanelResize from './PanelResize.jsx';
@@ -16,11 +16,9 @@ export default function SkillLibrary({catalog,query,selected:focusedSkill,onSele
   const sections=skillSections(catalog);
   const selected=sections.find(s=>s.id===sectionId);
   const groups=(selected?[selected]:[allSkillSection(catalog)]).map(g=>{
-    const nodes=catalog.modes.find(m=>m.id===g.mode)?.architecture?.nodes||[];
-    return {...g,items:g.skills.map(id=>catalog.skills.find(s=>s.id===id)).filter(s=>{
-      const display=nodes.find(n=>n.skill===s?.id);
-      return s&&`${s.title} ${s.description} ${s.id} ${display?.title||''} ${display?.note||''}`.toLowerCase().includes(query.toLowerCase());
-    })};
+    const items=g.skills.map(id=>catalog.skills.find(s=>s.id===id)).filter(Boolean)
+      .map(skill=>({...skill,display:skillPresentation(catalog,skill,g.mode)}));
+    return {...g,items:items.filter(skill=>`${skill.title} ${skill.description} ${skill.id} ${skill.display.title} ${skill.display.description}`.toLowerCase().includes(query.toLowerCase()))};
   });
   return <div className="skill-library">
     <aside className="skill-library-rail"><nav className="skill-library-tree" aria-label="技能分类目录">
@@ -33,12 +31,12 @@ export default function SkillLibrary({catalog,query,selected:focusedSkill,onSele
     <div className="skill-library-content">{groups.filter(g=>g.items.length).map(group=><section key={group.id} className="skill-table-section">
       <header><div><small>{group.modeTitle}</small><h2>{group.title}</h2></div></header>
       <SkillCanvas selected={focused} onSelect={setFocused} readFile={readFile} saveFile={saveFile} readOnly={readOnly} hasGraph={!!group.mode}>
-      {group.mode&&(!query||focused)?<ArchitectureMap key={group.id} mode={catalog.modes.find(m=>m.id===group.mode)} skills={catalog.skills} initialScope={group.id.slice(group.mode.length+1)} compact={!!focused} selectedId={focused?.id} onSkill={setFocused} onEdit={onEditMode?title=>onEditMode(group.mode,title):null} onSaveDocument={onSaveDocument} historyFor={historyFor}/>:<div className="skill-table" role="table" aria-label={`${group.modeTitle||''} ${group.title}`}>
-        <div className="skill-table-head" role="row"><span>技能</span><span>用途</span><span>内容</span><span/></div>
-        {group.items.map(skill=><button role="row" className="skill-table-row" key={skill.id} onClick={()=>setFocused(skill)}>
-          <span title={skill.id}><Puzzle size={15}/><span className="skill-table-name">{catalog.modes.find(m=>m.id===group.mode)?.architecture?.nodes?.find(n=>n.skill===skill.id)?.title||skill.title}</span></span>
-          <span title={skill.description}>{shortText(catalog.modes.find(m=>m.id===group.mode)?.architecture?.nodes?.find(n=>n.skill===skill.id)?.note||skill.description,110)}</span><span><FileText size={13}/>{skill.fileCount}</span><ChevronRight size={15}/>
-        </button>)}
+      {group.mode&&(!query||focused)?<ArchitectureMap key={group.id} mode={catalog.modes.find(m=>m.id===group.mode)} skills={catalog.skills} initialScope={group.id.slice(group.mode.length+1)} compact={!!focused} selectedId={focused?.id} onSkill={setFocused} onEdit={onEditMode?title=>onEditMode(group.mode,title):null} onSaveDocument={onSaveDocument} historyFor={historyFor}/>:<div className="skill-table" role="list" aria-label={`${group.modeTitle||''} ${group.title}`}>
+        <div className="skill-table-head" aria-hidden="true"><span>技能</span><span>用途</span><span>文件数</span><span/></div>
+        {group.items.map(skill=><div role="listitem" key={skill.id}><button className="skill-table-row" aria-label={`查看技能：${skill.display.title}`} onClick={()=>setFocused(catalog.skills.find(item=>item.id===skill.id))}>
+          <span title={skill.id}><Puzzle size={15}/><span className="skill-table-name">{skill.display.title}</span></span>
+          <span title={skill.display.description}>{shortText(skill.display.description,110)}</span><span aria-label={`${skill.fileCount} 个文件`}><FileText size={13}/>{skill.fileCount}</span><ChevronRight size={15}/>
+        </button></div>)}
       </div>}
       </SkillCanvas>
     </section>)}{!groups.some(g=>g.items.length)&&<p className="muted">没有匹配的技能。</p>}</div>

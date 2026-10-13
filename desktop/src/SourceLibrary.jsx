@@ -3,7 +3,7 @@ import {Cloud, FolderOpen, ChevronRight, Layers3, ArrowLeft, Plus, RotateCw, Dow
 import {ArchitectureMap} from './Architecture.jsx';
 import Markdown from './Markdown.jsx';
 import RepositoryMarkdown from './RepositoryMarkdown.jsx';
-import {shortText,repositoryKey,repositorySkillKey} from './presentation.mjs';
+import {shortText,modeSummary,repositoryKey,repositorySkillKey} from './presentation.mjs';
 import {useViewState} from './useViewState.jsx';
 
 const name = value => value.split(/[\\/]/).filter(Boolean).pop();
@@ -63,7 +63,7 @@ export default function SourceLibrary({source, onNavigate, onUse, onSave, onRefr
     {report&&<>{skill?<><button onClick={showSkills}><ArrowLeft size={16}/>返回技能</button>{error?<div role="alert"><p>{error}</p><button onClick={()=>setRetry(n=>n+1)}>重新读取</button></div>:reading?<p role="status">正在读取技能…</p>:<RepositoryMarkdown key={skill.source} document={{text:document,url:`${skill.origin?.replace('/tree/','/blob/')||source.url}/SKILL.md`}} report={report}/>}</>:<>
       <div className="tabs repository-tabs"><button className={source.view!=='skills'?'active':''} onClick={()=>onNavigate({view:'overview',skill:null})}>{mode?'逻辑架构':'仓库介绍'}</button><button className={source.view==='skills'?'active':''} onClick={showSkills}>查看 {skills.length} 个技能</button></div>
       {source.view==='skills'?<><div className="search large"><Search size={17}/><input aria-label="搜索仓库技能" placeholder="搜索技能" value={query} onChange={e=>{setQuery(e.target.value);setLimit(24);}}/></div><div className="repository-skill-grid">{visible.slice(0,limit).map(s=><button className="repository-skill-card" key={repositorySkillKey(s)} onClick={()=>onNavigate({skill:repositorySkillKey(s)})}><span className="source-mode-icon"><Puzzle size={23}/></span><div><h2>{s.title||s.id}</h2><p>{shortText(s.description,130)}</p></div><ChevronRight size={18}/></button>)}</div>{!visible.length&&<p className="muted">没有匹配的技能</p>}{visible.length>limit&&<button onClick={()=>setLimit(limit+24)}>显示更多</button>}</>:mode?<><ArchitectureMap key={`${source.url}:${mode.id}`} mode={mode} skills={skills} onSkill={s=>onNavigate({view:'skills',skill:s.id})}/><details className="mode-method" key={mode.id}><summary>模式说明</summary><Markdown text={mode.document}/></details></>:<>
-        {!!report.modes.length&&<div className="source-mode-grid">{report.modes.map(m=><button className="source-mode-card" key={m.id} onClick={()=>onNavigate({mode:m.id,view:'overview',skill:null})}><span className="source-mode-icon"><Layers3 size={24}/></span><h2>{m.title}</h2><footer><span>{m.skills.length} 个技能</span><ChevronRight size={17}/></footer></button>)}</div>}
+        {!!report.modes.length&&<div className="source-mode-grid">{report.modes.map(m=><button className="source-mode-card" key={m.id} onClick={()=>onNavigate({mode:m.id,view:'overview',skill:null})}><span className="source-mode-icon"><Layers3 size={24}/></span><h2>{m.title}</h2><p>{modeSummary(m)||'打开模式，查看技能分工与使用说明。'}</p><footer><span>{m.skills.length} 个技能</span><ChevronRight size={17}/></footer></button>)}</div>}
         {report.readme?<div className="repository-readme"><RepositoryMarkdown key={`${source.url}:${report.commit}`} document={report.readme} report={report}/></div>:<div className="empty-state"><p>仓库未提供 README</p><button onClick={()=>window.asl.external(source.url)}>打开 GitHub<ArrowUpRight size={15}/></button></div>}
       </>}
     </>}</>}

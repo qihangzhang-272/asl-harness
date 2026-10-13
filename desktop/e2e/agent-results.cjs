@@ -1,10 +1,12 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const path=require('node:path');
+const fs=require('node:fs/promises');
 const {launch,dispose}=require('./fixture.cjs');
 
 test('Agent results preserve drift, Hook scope, runtime sources and conflict protection',{timeout:120000},async()=>{
   const {app,page,workspace,run,errors}=await launch();
+  const canonicalWorkspace=await fs.realpath(workspace);
   try{
     await app.evaluate(({ipcMain},workspace)=>{
       const path=process.getBuiltinModule('node:path');
@@ -35,7 +37,7 @@ test('Agent results preserve drift, Hook scope, runtime sources and conflict pro
           hooks:{coverage:values.host==='workbuddy'||values.scope==='user'?'none':values.scope,command:'asl-harness-hook',commandFound:values.host==='deepseek-harness',commandPath:null,verified:false},brief:'隔离验收材料'}};
       });
       ipcMain.removeHandler('asl:setup');ipcMain.handle('asl:setup',()=>{globalThis.agentResultsProbe.starts++;throw Error('测试禁止启动真实模型');});
-    },workspace);
+    },canonicalWorkspace);
     await page.reload();await page.locator('.mode-library-overview').waitFor();
     await page.getByRole('button',{name:'Agent 配置',exact:true}).first().click();
     await page.getByText('配置详情',{exact:true}).click();
@@ -89,7 +91,7 @@ test('Agent results preserve drift, Hook scope, runtime sources and conflict pro
     await page.getByRole('button',{name:'选择项目文件夹',exact:true}).click();
     await page.getByRole('button',{name:'配置到 WorkBuddy',exact:true}).click();
     await dialog.getByText('自动检查 · 未覆盖',{exact:true}).waitFor();
-    await dialog.getByText(/下一步：在 WorkBuddy 中打开此项目并开始新会话/).waitFor();
+    await dialog.getByText(`下一步：在 WorkBuddy 中打开项目「${path.basename(workspace)}」，开始新会话并说明要完成的任务。`,{exact:true}).waitFor();
     assert.equal(await dialog.getByText(workspace,{exact:false}).first().isVisible(),false,'配置文件路径不占据主界面');
     await dialog.getByText('配置位置',{exact:true}).click();
     await dialog.getByText(workspace,{exact:false}).first().waitFor();
