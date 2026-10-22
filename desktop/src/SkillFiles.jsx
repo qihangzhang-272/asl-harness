@@ -1,12 +1,19 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { FileText, FolderOpen, Code, Save, Search, Puzzle, RotateCw } from 'lucide-react';
+import React, { useContext, useEffect, useRef, useState } from 'react';
+import { FileText, FolderOpen, Code, Save, Search, Puzzle, RotateCw,History } from 'lucide-react';
 import Markdown from './Markdown.jsx';
 import MermaidView from './MermaidView.jsx';
 import PanelResize from './PanelResize.jsx';
 import {diagramsIn,outlineFor} from './mermaid-document.mjs';
 import {useLeaveGuard} from './EditorPage.jsx';
 import {useViewState,useScrollMemory} from './useViewState.jsx';
+import SkillRelationships,{LibraryContext,ChangeImpact} from './SkillRelationships.jsx';
+import FileHistory from './FileHistory.jsx';
 export default function SkillFiles({ item, Dialog, readFile, saveFile, onClose, readOnly, embedded=false, initialFile }) {
+  const context=useContext(LibraryContext);
+  const [preview,setPreview]=useState(null);
+  const [savedImpact,setSavedImpact]=useState(null);
+  const [historyNotice,setHistoryNotice]=useState('');
+  const [showHistory,setShowHistory]=useState(false);
   const [data, setData] = useState(null);
   const key=`file:${item.path||item.source||''}:${item.id}`;
   const [file, setFile] = useViewState(key,'SKILL.md');
@@ -40,6 +47,9 @@ export default function SkillFiles({ item, Dialog, readFile, saveFile, onClose, 
   function edit(){if(!readOnly&&!busy&&data?.document!=null)setEditing(true);}
   const groups = [...new Set((data?.files || []).map(f => f.group))];
   return <Dialog title={item.title} onClose={() => leave(onClose)} wide>
+    <div className="skill-context-bar"><SkillRelationships item={item} leave={leave}/>
+    {context&&Array.isArray(item.usedBy)&&<div className="skill-context-actions"><button aria-expanded={showHistory} onClick={()=>setShowHistory(value=>!value)}><History size={14}/>改过什么</button>{item.source&&<button onClick={()=>leave(()=>setFile('SOURCE.md'))}>来源记录</button>}{!readOnly&&<button onClick={()=>leave(()=>context.onUpdate(item))}>比较来源版本</button>}</div>}</div>
+    {showHistory&&context&&<FileHistory key={file} workspace={context.workspace} api={context.api} file={`skills/${item.id}/${file}`} onClose={()=>setShowHistory(false)}/>}
     {!embedded&&<div className="package-summary"><Puzzle size={18}/><span>{data?.files.length ?? item.fileCount} 个文件 · 完整技能包</span><small>{item.requires.length ? `依赖 ${item.requires.join('、')}` : '未声明其他技能依赖'}</small></div>}
     <div className="file-workbench">
       <aside className="package-sidebar"><nav className="package-tree" aria-label="技能文件架构">
@@ -52,7 +62,7 @@ export default function SkillFiles({ item, Dialog, readFile, saveFile, onClose, 
       <section className="package-document" onDoubleClick={event=>{if(!event.target.closest('button,a,input,textarea,.mermaid-viewport'))edit();}}>
         <header><span title={file}>{file}</span><div className="tabs"><button aria-label="重新读取文件" title="重新读取文件" disabled={busy} onClick={()=>leave(()=>{refreshRead.current=true;setRetry(n=>n+1);})}><RotateCw size={14}/></button><button disabled={busy} className={!editing?'active':''} onClick={()=>setEditing(false)}>预览</button><button disabled={readOnly || data?.document == null || busy} className={editing?'active':''} onClick={()=>setEditing(true)}><Code size={14}/>编辑</button></div></header>
         {!data&&!error ? <p className="muted">正在读取文件…</p> : !data ? <div role="alert"><p className="error-text">{error}</p><button onClick={()=>setRetry(value=>value+1)}>重新读取</button></div> : data.document == null ? <p className="inline-note">此文件为二进制或超过 1 MB，保留在完整技能包中；请使用本地编辑器处理。</p> : editing ?
-          <textarea aria-label="文件内容" className="package-code" spellCheck={false} value={document} onChange={e=>setDocument(e.target.value)}/> :
+          <textarea aria-label="文件内容" className="package-code" spellCheck={false} readOnly={saving} value={document} onChange={e=>{setDocument(e.target.value);setPreview(null);}}/> :
           /\.md$/i.test(file) ? <div ref={rendered} className="package-rendered">{file==='SKILL.md'&&!diagramsIn(document).length&&outlineFor(document)&&<details className="diagram-outline"><summary>文档结构</summary><MermaidView source={outlineFor(document)}/></details>}<Markdown text={document} onFile={relative=>{
             const parts=file.split('/').slice(0,-1);
             for(const part of relative.split('/')){if(part==='..')parts.pop();else if(part!=='.'&&part)parts.push(part);}
@@ -62,9 +72,18 @@ export default function SkillFiles({ item, Dialog, readFile, saveFile, onClose, 
       </section>
     </div>
     {error && data && <p role="alert" className="error-text">{error}</p>}
+    {preview&&<section className="file-save-preview" aria-label="保存影响预览"><h3>保存前，确认影响</h3><p>将修改 {file}，所有使用这份能力的模式都会读到新内容。</p><ChangeImpact modes={preview.report.affectedModes}/><div className="heading-actions"><button disabled={saving} onClick={()=>setPreview(null)}>继续编辑</button><button className="primary" disabled={saving} onClick={async()=>{
+      setBusy(true);setSaving(true);setError('');
+      try{const saved=await saveFile(preview.request);setSavedImpact(preview.report.affectedModes);setHistoryNotice(['recorded','unchanged'].includes(saved?.history?.status)?'这次正文修改已留下版本记录。':'内容已保存，本次未能留下正文版本记录。');setPreview(null);const result=await readFile(file,true);setData(result);setDocument(result.document||'');setEditing(false);}
+      catch(error){setError(error.message);}finally{setBusy(false);setSaving(false);}
+    }}>确认保存更改</button></div></section>}
+    {savedImpact&&<section className="file-save-preview" role="status"><h3>能力已保存</h3><p>{historyNotice}</p><ChangeImpact modes={savedImpact} onNavigate={leave}/></section>}
     <div className="dialog-actions">{!embedded&&<span className="muted">{dirty ? '有未保存修改' : '直接对应本地文件'} · 保存不会执行脚本</span>}<button disabled={busy} onClick={()=>leave(onClose)}>关闭</button><button className="primary" disabled={!dirty || busy || readOnly} onClick={async()=>{
       setBusy(true); setSaving(true); setError('');
-      try { await saveFile({operation:'skill.file.save',id:item.id,file,document,expected:data.fingerprint}); const result=await readFile(file,true); setData(result); setDocument(result.document || ''); setEditing(false); }
+      try { const request={operation:'skill.file.save',id:item.id,file,document,expected:data.fingerprint};
+        if(context&&Array.isArray(item.usedBy))setPreview({request,report:await context.api('run','edit',{workspace:context.workspace,request})});
+        else{await saveFile(request);const result=await readFile(file,true);setData(result);setDocument(result.document||'');setEditing(false);}
+      }
       catch(e){setError(e.message);} finally{setBusy(false);setSaving(false);}
     }}><Save size={15}/>校验并保存</button></div>
   </Dialog>;

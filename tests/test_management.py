@@ -456,6 +456,9 @@ def test_local_skill_import_preserves_source_and_assets(tmp_path):
     }
     preview = management.edit(root, request, check=True)
     assert preview["affectedModes"] == ["creator-studio"]
+    assert any(item['path'] == 'manual.txt' and item['change'] == 'added' and '+complete package' in item['diff']
+               for item in preview['comparison']['files'])
+    assert not (root / 'skills/foundation/manual.txt').exists()
     management.edit(root, request)
     assert (root / "skills/foundation/manual.txt").read_text() == "complete package"
 

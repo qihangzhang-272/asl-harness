@@ -12,6 +12,7 @@ const definitions = {
   historyNote: ['environment.history.note', ['workspace','revision']],
   restoreHistory: ['mode.history.restore', ['workspace','mode','revision','expected']],
   files: ['skill.files', ['workspace', 'skill', 'file']],
+  modeFiles: ['mode.files', ['workspace', 'mode', 'file']],
   sourceFiles: ['skill.files', ['source', 'file']],
   guide: ['environment.guide', ['workspace']],
   edit: ["environment.edit", ["workspace"]],

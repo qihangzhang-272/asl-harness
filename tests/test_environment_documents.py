@@ -34,6 +34,45 @@ def test_profile_and_feedback_round_trip_preserves_skills(tmp_path):
     assert all(path.read_bytes() == value for path, value in original.items())
 
 
+def test_feedback_scope_round_trip_uses_the_same_markdown_file(tmp_path):
+    from asl_harness.environment_documents import documents
+    root = _environment(tmp_path / 'library')
+    record = {'scope': 'skill', 'target': 'creator', 'revision': '', 'file': '', 'followUp': ''}
+    request = {'operation': 'environment.file.save', 'file': 'feedback/record.md',
+               'document': '# 核对来源\n\n需要保留原始链接。', 'feedback': record}
+    report = management.edit(root, request, check=True)
+    assert not (root / request['file']).exists()
+    management.edit(root, request)
+    data = documents(root, request['file'])
+    assert data['feedback'] == record
+    assert data['body'] == request['document']
+    assert '# 核对来源' in (root / request['file']).read_text(encoding='utf-8')
+    assert report['affectedModes'] == []
+    before = (root / request['file']).read_bytes()
+    for invalid in ({**record, 'target': 'missing'}, {**record, 'scope': 'automatic'},
+                    {**record, 'revision': 'HEAD'}, {**record, 'file': '../PROFILE.md'},
+                    {**record, 'followUp': 3}, {**record, 'revision': 'f' * 40, 'file': 'skills/creator/SKILL.md'}):
+        with pytest.raises(HarnessError):
+            management.edit(root, {**request, 'expected': data['fingerprint'], 'feedback': invalid})
+        assert (root / request['file']).read_bytes() == before
+
+
+def test_feedback_link_requires_a_real_change_to_the_responsible_object(tmp_path):
+    from test_history import repository, git
+    from asl_harness.environment_documents import documents
+    root = repository(tmp_path)
+    (root / 'PROFILE.md').write_text('# 偏好变更', encoding='utf-8')
+    git(root, 'add', 'PROFILE.md')
+    git(root, 'commit', '-m', '修改偏好')
+    revision = git(root, 'rev-parse', 'HEAD')
+    record = {'scope': 'profile', 'target': '', 'revision': revision, 'file': 'PROFILE.md', 'followUp': '打开新会话后已人工核对。'}
+    request = {'operation': 'environment.file.save', 'file': 'feedback/profile.md', 'document': '# 反馈', 'feedback': record}
+    management.edit(root, request)
+    assert documents(root, request['file'])['feedback']['revision'] == revision
+    with pytest.raises(HarnessError):
+        management.edit(root, {**request, 'file': 'feedback/wrong.md', 'feedback': {**record, 'scope': 'skill', 'target': 'creator'}})
+
+
 @pytest.mark.parametrize('file', ['../outside.md', 'skills/a/SKILL.md', 'feedback/../PROFILE.md',
                                  'feedback/x/y.md', 'feedback/.env', 'feedback/x.md:secret', '/PROFILE.md'])
 def test_environment_document_path_boundary(tmp_path, file):

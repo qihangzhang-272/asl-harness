@@ -17,7 +17,11 @@ import EnvironmentGuide from './EnvironmentGuide.jsx';
 import EnvironmentDocuments from './EnvironmentDocuments.jsx';
 import ArchiveBrowser from './ArchiveBrowser.jsx';
 import ModeHistory from './ModeHistory.jsx';
+import ModeFiles from './ModeFiles.jsx';
+import SkillUpdate from './SkillUpdate.jsx';
 import SkillLibrary from './SkillLibrary.jsx';
+import {LibraryContext,ChangeImpact} from './SkillRelationships.jsx';
+import {affectedLocations} from './skill-relations.mjs';
 import Markdown from './Markdown.jsx';
 import {Placement} from './ParadigmEditor.jsx';
 import ModeWorkspace from './ModeWorkspace.jsx';
@@ -507,7 +511,7 @@ export default function App() {
   };
   const mode = catalog?.modes.find((m) => m.id === modeId);
   const modeIntro = useMemo(()=>modeSummary(mode),[mode?.document]);
-  const modeInstallations=(native?.connections||[]).filter(item=>item.workspace===workspace&&item.mode===modeId);
+  const modeInstallations=affectedLocations(native?.connections,catalog?.environment||workspace,[modeId]);
   const readOnly = workspace === initial?.example || /[\\/]resources[\\/]example-environment[\\/]*$/i.test(workspace || '');
   const modeSkills = useMemo(
     () =>
@@ -627,6 +631,7 @@ export default function App() {
     if(result.canceled)throw new Error('未保存更改');
     fileReads.current.clear();
     if(refresh)await load(workspace);
+    return result;
   }
   async function applyEdit() {
     const result = await api("run", "edit", {
@@ -816,11 +821,19 @@ export default function App() {
     const report = await api("run", "import", { source: modal.source, target });
     setModal({ kind: "import-review", source: modal.source, target, report, replace: false });
   }
-  const editorOpen=['mode-workspace','library-create','skill-editor','skill-files','discovered-detail','import-review','connect','agent-guide','environment-documents','archive-browser','mode-history'].includes(modal?.kind);
+  const editorOpen=['mode-workspace','library-create','skill-editor','skill-files','discovered-detail','import-review','connect','agent-guide','environment-documents','archive-browser','mode-history','mode-files','skill-update'].includes(modal?.kind);
   const activePage=cloud?'modes':page;
 
   return (
     <NoticeContext.Provider value={{ ...message, busy, reads }}>
+    <LibraryContext.Provider value={{catalog,workspace,modeId:page==='modes'?modeId:null,readOnly,api,
+      connections:native?.connections||[],hostName:id=>native?.hosts.find(host=>host.id===id)?.name||id,
+      onMode:id=>{setModal(null);showMode(id);},onEditMode:id=>setModal({kind:'mode-workspace',item:catalog.modes.find(mode=>mode.id===id)}),
+      onAgent:host=>{setAgentHost(host);goPage('agents');},
+      onFeedback:initial=>setModal({kind:'environment-documents',initial}),
+      onSkill:id=>setModal({kind:'skill-files',item:catalog.skills.find(skill=>skill.id===id)}),
+      onUpdate:item=>setModal({kind:'skill-update',item}),
+      onArchive:item=>editContent({operation:'skill.archive',id:item.id,expected:item.fingerprint})}}>
       <div className={`app${['mode-workspace','agent-guide'].includes(modal?.kind)?' mode-editing':''}`} aria-busy={busy}>
         <aside className="sidebar">
           <PanelResize name="navigation"/>
@@ -1049,6 +1062,7 @@ export default function App() {
                             }
                           />
                           <IconButton icon={History} label="演变记录" onClick={()=>setModal({kind:'mode-history',item:mode})}/>
+                          <IconButton icon={FolderOpen} label="配套资料" onClick={()=>setModal({kind:'mode-files',item:mode})}/>
                           <IconButton
                             icon={Archive}
                             label="归档模式"
@@ -1087,7 +1101,7 @@ export default function App() {
                       )}
                       <details className="mode-method" key={mode.id}>
                         <summary>模式说明</summary>
-                        <Markdown text={mode.document.replace(/^#\s+.+\r?\n?/, '').trim()}/>
+                        <Markdown text={mode.document.replace(/^#\s+.+\r?\n?/, '').trim()} onFile={file=>setModal({kind:'mode-files',item:mode,initialFile:file})}/>
                       </details>
                       <div className="mode-toolbar">
                         <div className="tabs">
@@ -1430,18 +1444,18 @@ export default function App() {
             onClose={() => setModal(null)}
           />
         )}
-        {modal?.kind === 'skill-files' && <SkillFiles item={modal.item} initialFile={modal.initialFile} Dialog={EditorPage} readOnly={readOnly} onClose={()=>setModal(null)}
+        {modal?.kind === 'skill-files' && <SkillFiles item={catalog?.skills.find(skill=>skill.id===modal.item.id)||modal.item} initialFile={modal.initialFile} Dialog={EditorPage} readOnly={readOnly} onClose={()=>setModal(null)}
           readFile={(file,refresh)=>readSkillFile(modal.item,file,refresh)}
           saveFile={saveFile}/>}
-        {modal?.kind === 'agent-guide' && <EnvironmentGuide workspace={modal.workspace} mode={modal.mode} repository={modal.repository} api={api} read={read}
-          onVerified={async root=>{if(await load(root)){setCloud(null);setPage('modes');setModeId(null);setModal(null);}}}
-          onClose={()=>{reads.cancel('agent-guide');setModal(null);}}/>}
+        {modal?.kind === 'agent-guide' && <EnvironmentGuide workspace={modal.workspace} mode={modal.mode} repository={modal.repository} api={api} read={read} initialGoal={modal.initialGoal} title={modal.returnFile?'处理反馈':'整理模式'}
+          onVerified={async root=>{if(await load(root)){setCloud(null);if(modal.returnFile)setModal({kind:'environment-documents',initialFile:modal.returnFile});else{setPage('modes');setModeId(null);setModal(null);}}}}
+          onClose={()=>{reads.cancel('agent-guide');setModal(modal.returnFile?{kind:'environment-documents',initialFile:modal.returnFile}:null);}}/>}
         {modal?.kind === "review" && (
           <Dialog
             title={
               modal.request.operation.endsWith(".archive")
                 ? "归档内容"
-                : "保存更改"
+                : modal.preview.comparison?"替换能力版本":"保存更改"
             }
             onClose={() => setModal(null)}
           >
@@ -1453,25 +1467,15 @@ export default function App() {
                   <Check size={25} />
                 )}
               </span>
-              <h3>{modal.request.id}</h3>
+              <h3>{catalog.skills.find(item=>item.id===modal.request.id)?.title||catalog.modes.find(item=>item.id===modal.request.id)?.title||modal.request.id}</h3>
               <p>
                 {modal.request.operation.endsWith(".archive")
                   ? "从活动库移出，完整文件保留在归档。"
                   : "修改会保存到原技能库。"}
               </p>
             </div>
-            {modal.preview.affectedModes.length > 0 && (
-              <section>
-                <h3>涉及的模式</h3>
-                <div className="connection-tags">
-                  {modal.preview.affectedModes.map((id) => (
-                    <Tag key={id}>
-                      {catalog.modes.find((m) => m.id === id)?.title || id}
-                    </Tag>
-                  ))}
-                </div>
-              </section>
-            )}
+            <ChangeImpact modes={modal.preview.affectedModes}/>
+            {modal.preview.comparison&&<section className="package-comparison" aria-label="候选版本与本地差异"><h3>{modal.preview.comparison.changedFiles} 个文件与本地不同</h3><p>确认替换会采用这份来源的完整包；有差异的本地内容不会自动合并。取消可继续保留本地版本。</p>{modal.preview.comparison.files.map(item=><details key={item.path}><summary><span>{({added:'加入',removed:'移出',changed:'修改'})[item.change]}</span>{item.path}</summary>{item.diff==null?<p>二进制、较长或受保护内容，仅列出变更文件；请在本地核对。</p>:<pre className="file-history-diff">{item.diff}</pre>}{item.truncated&&<p>当前仅显示部分差异。</p>}</details>)}{modal.preview.comparison.truncated&&<p>文件较多，当前列出前 50 项；请在本地核对完整包后再决定。</p>}</section>}
             <details>
               <summary>查看文件变更范围</summary>
               <pre>{modal.preview.changedPaths.join("\n")}</pre>
@@ -1483,8 +1487,7 @@ export default function App() {
                 disabled={busy}
                 onClick={() => task(applyEdit)}
               >
-                确认
-                {modal.request.operation.endsWith(".archive") ? "归档" : "保存"}
+                {modal.preview.comparison?'确认替换完整包':modal.request.operation.endsWith(".archive")?'确认归档':'确认保存'}
               </button>
             </div>
           </Dialog>
@@ -1517,8 +1520,12 @@ export default function App() {
             {!readOnly&&<button className="primary" onClick={() => adoptSkill(modal.skill)}>{catalog?'加入模式':'新建模式'}</button>}
           </div>
         </EditorPage>}
-        {modal?.kind === 'environment-documents' && <EnvironmentDocuments workspace={workspace} api={api} readOnly={readOnly} onClose={()=>setModal(null)} onSaved={()=>setExternalChange(true)}/>}
+        {modal?.kind === 'environment-documents' && <EnvironmentDocuments workspace={workspace} api={api} readOnly={readOnly} initial={modal.initial} initialFile={modal.initialFile} onClose={()=>setModal(null)} onSaved={()=>setExternalChange(true)}
+          onHandoff={(file,record)=>setModal({kind:'agent-guide',workspace,mode:record.scope==='mode'?record.target:undefined,returnFile:file,
+            initialGoal:`请读取 ${workspace}/${file} 的明确反馈。作用范围：${({case:'仅本次结果，不修改长期能力',skill:'能力 '+record.target,mode:'工作模式 '+record.target,profile:'所有模式的工作偏好'})[record.scope]}。先核对对象与当前版本，提出最小修改；修改正式内容前取得用户确认。完成后将实际 history.revision 与对应文件关联回这条反馈，并补充如何核对、实际结果和未完成之处。只使用真实版本；会话结束不代表反馈已解决。`})}/>}
         {modal?.kind === 'archive-browser' && <ArchiveBrowser workspace={workspace} api={api} readOnly={readOnly} onClose={()=>setModal(null)} onSaved={()=>load(workspace)}/>}
+        {modal?.kind === 'mode-files' && <ModeFiles workspace={workspace} mode={modal.item} api={api} initialFile={modal.initialFile} onClose={()=>setModal(null)}/>}
+        {modal?.kind === 'skill-update' && <SkillUpdate workspace={workspace} item={modal.item} api={api} onClose={()=>setModal({kind:'skill-files',item:modal.item})} onReview={(request,preview)=>setModal({kind:'review',request,preview})}/>}
         {modal?.kind === 'mode-history' && <ModeHistory workspace={workspace} mode={catalog.modes.find(item=>item.id===modal.item.id)||modal.item} skills={catalog.skills} api={api} readOnly={readOnly} onClose={()=>setModal(null)} onSaved={()=>load(workspace)} onContinue={item=>setModal({kind:'mode-workspace',item})}/>}
         {modal?.kind === "setup" && <SetupDialog api={api} Dialog={Dialog} Tag={Tag} values={modal.values} activation={modal.activation} resultMessage={modal.resultMessage} title={catalog?.modes.find(m => m.id === modal.values.mode)?.title || modal.values.mode} task={task} onReadNote={({skill,path})=>task(async()=>{const root=modal.values.workspace;if(!await load(root))return;const item=catalogCache.current.get(root)?.skills.find(item=>item.id===skill);const prefix=item?.path.replaceAll('\\','/')+'/';const normalized=path.replaceAll('\\','/');if(!item||!normalized.startsWith(prefix))throw new Error('说明不在对应技能包内，请重新检查');setModal({kind:'skill-files',item,initialFile:normalized.slice(prefix.length)});})} onClose={() => setModal(null)} />}
         {modal?.kind === "add-to-mode" && (
@@ -1732,6 +1739,7 @@ export default function App() {
           </EditorPage>
         )}
       </div>
+    </LibraryContext.Provider>
     </NoticeContext.Provider>
   );
 }

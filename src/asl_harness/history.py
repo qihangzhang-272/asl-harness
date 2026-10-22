@@ -71,13 +71,26 @@ def _ref(mode: str) -> str:
     return 'refs/asl/modes/' + _safe_id(mode, '模式名称').replace('.', '%2E')
 
 
-def _refs(root: Path, mode: str | None = None) -> list[str]:
+def _file_ref(file: str) -> str:
+    return 'refs/asl/files/' + hashlib.sha256(file.encode('utf-8')).hexdigest()
+
+
+def _refs(root: Path, mode: str | None = None, file: str | None = None) -> list[str]:
     ref = _ref(mode) if mode else None
     refs = [ref] if ref and _head(root, ref) else []
-    if not mode:
-        refs = _git(root, 'for-each-ref', '--count=101', '--format=%(refname)', 'refs/asl/modes/', limit=32768).decode().splitlines()
-        if len(refs) > 100:
-            raise HarnessError('HISTORY_LIMIT', '请先选择一个模式再查看版本记录')
+    if file:
+        file_ref = _file_ref(file)
+        if _head(root, file_ref):
+            refs.append(file_ref)
+        parts = file.split('/')
+        if not mode and len(parts) >= 3 and parts[0] == 'modes':
+            mode_ref = _ref(parts[1])
+            if _head(root, mode_ref):
+                refs.append(mode_ref)
+    elif not mode:
+        refs = _git(root, 'for-each-ref', '--count=1001', '--format=%(refname)', 'refs/asl/modes/', 'refs/asl/files/', limit=128 * 1024).decode().splitlines()
+        if len(refs) > 1000:
+            raise HarnessError('HISTORY_LIMIT', '请先选择一个模式或文件，再查看版本记录')
     if _head(root):
         refs.append('HEAD')
     return refs
@@ -89,7 +102,7 @@ def _checked_revision(root: Path, revision: str, refs: list[str]) -> str:
     for ref in refs:
         try:
             _git(root, 'merge-base', '--is-ancestor', revision, ref)
-            return 'save' if ref.startswith('refs/asl/modes/') else 'commit'
+            return 'save' if ref.startswith('refs/asl/') else 'commit'
         except HarnessError as error:
             if error.code != 'HISTORY_UNAVAILABLE':
                 raise
@@ -175,9 +188,11 @@ def history(root: str | Path, *, mode: str | None = None, revision: str | None =
     root = _root(root)
     if type(limit) is not int or not 1 <= limit <= 50 or type(offset) is not int or not 0 <= offset <= 10000:
         raise HarnessError('HISTORY_INVALID', '请选择有效的记录页')
+    if file is not None:
+        _file(file)
     if not _repository(root):
         return {'status': 'not-repository', 'entries': [], 'nextOffset': None}
-    refs = _refs(root, mode)
+    refs = _refs(root, mode, file)
     if revision is not None:
         source = _checked_revision(root, revision, refs)
         parents = _git(root, 'rev-list', '--parents', '--max-count=1', revision, limit=8192).decode().split()[1:]
@@ -205,18 +220,16 @@ def history(root: str | Path, *, mode: str | None = None, revision: str | None =
             diff = ''.join(difflib.unified_diff(before, after, fromfile='之前/' + file, tofile='之后/' + file))
             result.update(file=file, diff=diff[:256 * 1024], truncated=len(diff) > 256 * 1024)
         return result
-    if file is not None:
-        raise HarnessError('HISTORY_INVALID', '请先选择一个版本')
     if not refs:
         return {'status': 'empty', 'entries': [], 'nextOffset': None}
-    paths = [f'modes/{mode}/'] if mode else []
+    paths = [file] if file is not None else [f'modes/{mode}/'] if mode else []
     raw = _git(root, 'log', '--source', '--date-order', '--no-show-signature', f'--max-count={limit + 1}', f'--skip={offset}',
                '--format=%H%x00%cI%x00%s%x00%S', *refs, '--', *paths).decode('utf-8', errors='replace')
     entries = []
     for line in raw.splitlines():
         revision, date, title, source = line.split('\0', 3)
         entries.append({'revision': revision, 'date': date, 'title': title,
-                        'source': 'save' if source.startswith('refs/asl/modes/') else 'commit'})
+                        'source': 'save' if source.startswith('refs/asl/') else 'commit'})
     return {'status': 'ready', 'entries': entries[:limit],
             'nextOffset': offset + limit if len(entries) > limit else None}
 
@@ -237,6 +250,32 @@ def record_mode(root: str | Path, mode: str, *, title: str = '更新模式结构
         if path.stat().st_size > 1024 * 1024:
             raise HarnessError('HISTORY_LIMIT', '模式文件过大，未保存版本记录')
         files[name] = path.read_bytes()
+    return _record(root, ref, files, title, mode)
+
+
+def record_file(root: str | Path, file: str, *, title: str = '更新正文') -> dict:
+    root = _root(root)
+    _file(file)
+    if not _repository(root):
+        return {'status': 'not-repository', 'scope': [file]}
+    path = root / file
+    safe_write_path(root, path)
+    if not path.is_file():
+        return {'status': 'missing-file', 'scope': [file]}
+    if path.stat().st_size > 128 * 1024:
+        raise HarnessError('HISTORY_LIMIT', '正文超过 128 KB，未保存版本记录；内容保存不受影响')
+    data = path.read_bytes()
+    try:
+        if '\0' in data.decode('utf-8'):
+            raise UnicodeError()
+    except UnicodeError as error:
+        raise HarnessError('HISTORY_BINARY', '二进制内容不保存正文版本') from error
+    _review({file: data})
+    return _record(root, _file_ref(file), {file: data}, title, file)
+
+
+def _record(root: Path, ref: str, files: dict[str, bytes], title: str, label: str) -> dict:
+    scope = list(files)
     previous = _head(root, ref)
     if previous:
         entries = _git(root, 'ls-tree', '-r', '-z', previous).split(b'\0')
@@ -257,8 +296,8 @@ def record_mode(root: str | Path, mode: str, *, title: str = '更新模式结构
             _git(root, 'update-index', '--add', '--cacheinfo', '100644', digest, name, index=index)
         tree = _git(root, 'write-tree', index=index, limit=256).decode().strip()
         if any((root / name).read_bytes() != data for name, data in files.items()):
-            raise HarnessError('HISTORY_STALE', '模式已改变，请重新读取后保存版本记录')
-        message = f'{datetime.now():%Y-%m-%d %H:%M}｜{title}：{mode}'
+            raise HarnessError('HISTORY_STALE', '内容已改变，请重新读取后保存版本记录')
+        message = f'{datetime.now():%Y-%m-%d %H:%M}｜{title}：{label}'
         parent = ['-p', previous] if previous else []
         try:
             revision = _git(root, 'commit-tree', tree, *parent, '-m', message, limit=256).decode().strip()

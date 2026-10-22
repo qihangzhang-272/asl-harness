@@ -40,7 +40,8 @@ test('the native entry protects unsent goals and does not block reading on missi
   assert.ok(open);
   assert.doesNotMatch(open,/await/);
   assert.match(app,/reads.cancel\('agent-guide'\)/);
-  assert.match(guide,/<EditorPage title="整理模式"/);
+  assert.match(guide,/title='整理模式'/);
+  assert.match(guide,/<EditorPage title=\{title\}/);
 });
 
 test('native entry styles reuse the incumbent tokens without a redundant sidebar',()=>{

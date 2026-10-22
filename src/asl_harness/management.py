@@ -6,6 +6,8 @@ from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 import re
+import difflib
+import hashlib
 import os
 import stat
 import shutil
@@ -42,7 +44,7 @@ from .workspace import (
 
 EDIT_FIELDS = {
     'archive.restore': {'operation', 'entry', 'expected'},
-    'environment.file.save': {'operation', 'file', 'expected', 'document'},
+    'environment.file.save': {'operation', 'file', 'expected', 'document', 'feedback'},
     'environment.file.archive': {'operation', 'file', 'expected'},
     "mode.save": {"operation", "id", "expected", "document", "skills", "capabilities", "architecture", "placement"},
     "mode.archive": {"operation", "id", "expected"},
@@ -69,6 +71,40 @@ def mode_upstream(path: Path) -> dict | None:
             if all(key in fields for key in ('Repository', 'URL', 'Commit')):
                 return {'repository': fields['Repository'], 'url': fields['URL'], 'commit': fields['Commit']}
     return None
+
+
+def _package_comparison(before, after) -> dict:
+    from .portable import _review
+    old = {path.relative_to(before.path).as_posix(): path for path in before.files}
+    new = {path.relative_to(after.path).as_posix(): path for path in after.files}
+    changes, total, budget = [], 0, 256 * 1024
+    def digest(path):
+        if path is None:
+            return None
+        with path.open('rb') as stream:
+            return hashlib.file_digest(stream, 'sha256').hexdigest()
+    for name in sorted(old.keys() | new.keys()):
+        first, second = old.get(name), new.get(name)
+        if digest(first) == digest(second):
+            continue
+        total += 1
+        if len(changes) >= 50:
+            continue
+        item = {'path': name, 'change': 'added' if first is None else 'removed' if second is None else 'changed', 'diff': None}
+        try:
+            if budget > 0 and all(path is None or path.stat().st_size <= 128 * 1024 for path in (first, second)):
+                texts = [(path.read_bytes() if path else b'') for path in (first, second)]
+                for raw in texts:
+                    _review({f'skills/{before.id}/{name}': raw})
+                    if '\0' in raw.decode('utf-8'):
+                        raise UnicodeError()
+                diff = ''.join(difflib.unified_diff(texts[0].decode('utf-8').splitlines(keepends=True), texts[1].decode('utf-8').splitlines(keepends=True), fromfile='本地/' + name, tofile='选定来源/' + name))
+                item.update(diff=diff[:budget], truncated=len(diff) > budget)
+                budget -= len(item['diff'])
+        except (UnicodeError, HarnessError):
+            pass
+        changes.append(item)
+    return {'files': changes, 'changedFiles': total, 'truncated': total > len(changes)}
 
 
 def catalog(root: str | Path | Workspace) -> dict:
@@ -563,6 +599,8 @@ def _edit(root: str | Path, request: dict, *, check: bool = False, drafts: ExitS
             expected=request.get('expectedSource'), origin=request.get('sourceOrigin'))
         adopted_fingerprint = package_fingerprint(adopted_source)
         skill = _read_skill(adopted_source, identifier, adopted_source)
+        if existing:
+            report['comparison'] = _package_comparison(existing, skill)
         replace(
             workspace, skills={**workspace.skills, identifier: skill}
         )._validate_graph()
@@ -640,10 +678,13 @@ def _edit(root: str | Path, request: dict, *, check: bool = False, drafts: ExitS
     _require_unchanged(observed, 'EDIT_STALE')
     history_before = None
     history_mode = identifier if operation == 'mode.save' else binding.id if binding else None
-    if history_mode:
-        from .history import record_mode
+    history_file = content_file.relative_to(workspace.root).as_posix() if content_file else f'skills/{identifier}/SKILL.md' if operation in {'skill.save', 'skill.import'} else None
+    if history_mode or history_file:
+        from .history import record_mode, record_file
+        def record_current(title='更新内容'):
+            return record_mode(workspace.root, history_mode, title=title) if history_mode else record_file(workspace.root, history_file, title=title)
         try:
-            history_before = record_mode(workspace.root, history_mode, title='保存前版本')
+            history_before = record_current(title='保存前版本')
         except (HarnessError, OSError) as error:
             history_before = {'status': 'unavailable', 'code': getattr(error, 'code', 'HISTORY_UNAVAILABLE'),
                               'message': str(error)}
@@ -680,9 +721,9 @@ def _edit(root: str | Path, request: dict, *, check: bool = False, drafts: ExitS
         view = updated.sync_workspace_view()
         if operation == 'mode.save':
             report['catalog'] = catalog(replace(updated, workspace_document=view.read_text(encoding='utf-8')))
-    if history_mode:
+    if history_mode or history_file:
         try:
-            report['history'] = history_before if history_before['status'] == 'unavailable' else record_mode(workspace.root, history_mode)
+            report['history'] = history_before if history_before['status'] == 'unavailable' else record_current()
         except (HarnessError, OSError) as error:
             report['history'] = {'status': 'unavailable', 'code': getattr(error, 'code', 'HISTORY_UNAVAILABLE'),
                                  'message': str(error)}

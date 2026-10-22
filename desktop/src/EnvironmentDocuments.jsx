@@ -1,57 +1,70 @@
-import React,{useEffect,useState} from 'react';
-import {Plus,FileText,Save,Archive,RotateCw} from 'lucide-react';
+import React,{useContext,useEffect,useRef,useState} from 'react';
+import {Plus,FileText,Save,Archive,RotateCw,History} from 'lucide-react';
 import EditorPage,{useLeaveGuard} from './EditorPage.jsx';
 import PanelResize from './PanelResize.jsx';
 import Markdown from './Markdown.jsx';
+import FeedbackDetails,{blankFeedback} from './FeedbackDetails.jsx';
+import {LibraryContext,ChangeImpact} from './SkillRelationships.jsx';
+import FileHistory from './FileHistory.jsx';
 
-export default function EnvironmentDocuments({workspace,api,readOnly,onClose,onSaved}) {
-  const [file,setFile]=useState('PROFILE.md'),[files,setFiles]=useState([]),[data,setData]=useState(null);
-  const [document,setDocument]=useState(''),[editing,setEditing]=useState(false),[creating,setCreating]=useState(false);
+export default function EnvironmentDocuments({workspace,api,readOnly,onClose,onSaved,initial,initialFile,onHandoff}) {
+  const context=useContext(LibraryContext);
+  const [file,setFile]=useState(()=>initial?`feedback/${crypto.randomUUID()}.md`:initialFile||'PROFILE.md'),[files,setFiles]=useState([]),[data,setData]=useState(null);
+  const [document,setDocument]=useState(initial?'# 新反馈\n\n':''),[editing,setEditing]=useState(!!initial),[creating,setCreating]=useState(!!initial);
+  const [record,setRecord]=useState(()=>initial?blankFeedback(initial):null),[showHistory,setShowHistory]=useState(false),[savedImpact,setSavedImpact]=useState(null);
   const [busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[retry,setRetry]=useState(0);
   const [external,setExternal]=useState(false);
-  const dirty=creating||data!=null&&document!==data.document;
+  const draftVersion=useRef(0);
+  const dirty=creating||data!=null&&(document!==(data.body??data.document)||JSON.stringify(record)!==JSON.stringify(data.feedback??null));
   const leave=useLeaveGuard(dirty,busy);
   useEffect(()=>window.asl.onEnvironmentChanged(event=>{if(event.workspace===workspace&&!event.error)setExternal(true);}),[workspace]);
-  useEffect(()=>{if(external&&!dirty&&!busy){setExternal(false);setRetry(n=>n+1);}},[external,dirty,busy]);
+  useEffect(()=>{if(external&&!dirty&&!busy&&!editing){setExternal(false);setRetry(n=>n+1);}},[external,dirty,busy,editing]);
   useEffect(()=>{
     if(creating)return;
-    let active=true;setBusy(true);setError('');
+    let active=true;const version=draftVersion.current;setBusy(true);setError('');
     api('run','documents',{workspace,file}).then(result=>{
-      if(active){setData(result);setFiles(result.files);setDocument(result.document);setEditing(false);}
-    }).catch(error=>{if(active){setData(null);setError(error.message);}}).finally(()=>{if(active)setBusy(false);});
+      if(active){if(version!==draftVersion.current){setExternal(true);return;}setData(result);setFiles(result.files);setDocument(result.body??result.document);setRecord(result.feedback??null);setEditing(false);}
+    }).catch(error=>{if(active){if(version===draftVersion.current)setData(null);setError(error.message);}}).finally(()=>{if(active)setBusy(false);});
     return()=>{active=false;};
   },[workspace,file,retry,creating]);
-  const select=next=>{if(file!==next||creating)leave(()=>{setCreating(false);setData(null);setNotice('');setFile(next);});};
+  const select=next=>{if(file!==next||creating)leave(()=>{setCreating(false);setData(null);setRecord(null);setNotice('');setShowHistory(false);setSavedImpact(null);setFile(next);});};
   async function save(archive=false){
     setBusy(true);setError('');setNotice('');
     let written=false;
     try{
       const result=await api('run','edit',{workspace,apply:true,request:{operation:`environment.file.${archive?'archive':'save'}`,file,
-        ...(data?.fingerprint?{expected:data.fingerprint}:{}),...(!archive?{document}:{})}});
+        ...(data?.fingerprint?{expected:data.fingerprint}:{}),...(!archive?{document,...(record?{feedback:record}:{})}:{})}});
       if(result.canceled)return;
       written=true;
       const next=await api('run','documents',{workspace,file:archive?'PROFILE.md':file});
-      setCreating(false);setFile(next.file);setData(next);setFiles(next.files);setDocument(next.document);setEditing(false);setExternal(false);
-      setNotice(archive?'已归档':file==='PROFILE.md'?'已保存，已配置的 Agent 可在配置页更新。':'已保存');
+      setCreating(false);setFile(next.file);setData(next);setFiles(next.files);setDocument(next.body??next.document);setRecord(next.feedback??null);setEditing(false);setExternal(false);setSavedImpact(result.affectedModes);
+      setNotice(archive?'已归档':file==='PROFILE.md'?['recorded','unchanged'].includes(result.history?.status)?'已保存并留下正文版本，已配置的 Agent 可在配置页更新。':'已保存；本次未留下正文版本，已配置的 Agent 可在配置页更新。':'已保存');
       onSaved?.();
     }catch(error){setError(`${written?'已保存，重新读取失败：':''}${error.message}`);}finally{setBusy(false);}
   }
+  const bodyView=busy&&!data&&!creating?<p role="status">正在读取…</p>:data||creating?editing?<textarea className="package-code" aria-label="记录内容" readOnly={busy} spellCheck={false} value={document} onChange={event=>{draftVersion.current++;setDocument(event.target.value);}}/>:<div className="package-rendered"><Markdown text={document}/></div>:<button onClick={()=>setRetry(n=>n+1)}>重新读取</button>;
   return <EditorPage title="偏好与记录" onClose={()=>leave(onClose)}>
     <div className="file-workbench environment-documents">
       <aside className="package-sidebar"><nav className="package-tree" aria-label="偏好与反馈">
         <button className={file==='PROFILE.md'?'active':''} disabled={busy} onClick={()=>select('PROFILE.md')}><FileText size={15}/><span>工作偏好</span></button>
         <div className="sidebar-label">反馈记录</div>
         {files.filter(item=>item.path!=='PROFILE.md').map(item=><button key={item.path} className={file===item.path?'active':''} disabled={busy} onClick={()=>select(item.path)} title={item.title}><FileText size={14}/><span>{item.title}</span></button>)}
-        <button disabled={readOnly||busy} onClick={()=>leave(()=>{setCreating(true);setData(null);setFile(`feedback/${crypto.randomUUID()}.md`);setDocument('# 新反馈\n\n');setEditing(true);setError('');setNotice('');})}><Plus size={15}/>新建记录</button>
+        <button disabled={readOnly||busy} onClick={()=>leave(()=>{setCreating(true);setData(null);setRecord(blankFeedback());setShowHistory(false);setFile(`feedback/${crypto.randomUUID()}.md`);setDocument('# 新反馈\n\n');setEditing(true);setError('');setNotice('');})}><Plus size={15}/>新建记录</button>
       </nav><PanelResize name="environment-documents" label="调整记录目录宽度" initial={220} min={140} max={360}/></aside>
-      <section className="package-document" onDoubleClick={event=>{if(!readOnly&&!busy&&(data||creating)&&!event.target.closest('button,a,input,textarea,.mermaid-viewport'))setEditing(true);}}>
+      <section className="package-document" onDoubleClick={event=>{if(!readOnly&&!busy&&(data||creating)&&!event.target.closest('button,a,input,textarea,.mermaid-viewport')){draftVersion.current++;setEditing(true);}}}>
         <header><span>{file==='PROFILE.md'?'工作偏好':creating?'新反馈':files.find(item=>item.path===file)?.title||file}</span><div className="tabs">
+          {file==='PROFILE.md'&&<button disabled={busy} aria-expanded={showHistory} onClick={()=>setShowHistory(value=>!value)}><History size={14}/>改过什么</button>}
           <button disabled={busy||creating} aria-label="重新读取记录" title="重新读取记录" onClick={()=>leave(()=>{setExternal(false);setRetry(n=>n+1);})}><RotateCw size={14}/></button>
           <button disabled={busy||!data&&!creating} className={!editing?'active':''} onClick={()=>setEditing(false)}>预览</button>
-          <button disabled={busy||readOnly||!data&&!creating} className={editing?'active':''} onClick={()=>setEditing(true)}>编辑</button>
+          <button disabled={busy||readOnly||!data&&!creating} className={editing?'active':''} onClick={()=>{draftVersion.current++;setEditing(true);}}>编辑</button>
         </div></header>
         {external&&dirty&&<div className="inline-note">文件有新版本，未保存修改已保留。<button disabled={busy} onClick={()=>leave(()=>{setCreating(false);setExternal(false);setRetry(n=>n+1);})}>重新读取</button></div>}
-        {busy&&!data&&!creating?<p role="status">正在读取…</p>:data||creating?editing?<textarea className="package-code" aria-label="记录内容" readOnly={busy} spellCheck={false} value={document} onChange={event=>setDocument(event.target.value)}/>:<div className="package-rendered"><Markdown text={document}/></div>:<button onClick={()=>setRetry(n=>n+1)}>重新读取</button>}
+        {file!=='PROFILE.md'&&(data||creating)&&<FeedbackDetails key={`${file}:${data?.fingerprint||'new'}`} record={record} onChange={value=>{draftVersion.current++;setRecord(value);}} editing={editing} busy={busy} readOnly={readOnly} saved={!dirty&&!creating} workspace={workspace} api={api}
+          onOpen={value=>leave(()=>value.scope==='profile'?select('PROFILE.md'):value.scope==='mode'?context.onMode(value.target):context.onSkill(value.target))}
+          onHandoff={()=>leave(()=>onHandoff?.(file,record))}>{bodyView}</FeedbackDetails>}
+        {file==='PROFILE.md'&&(editing||savedImpact?.length>0)&&<div className="profile-impact"><p>工作偏好会作用于所有工作模式。保存后，已配置的 Agent 需要更新内容。</p>{savedImpact?.length>0&&<ChangeImpact modes={savedImpact} onNavigate={leave}/>}</div>}
+        {showHistory&&file==='PROFILE.md'&&<div className="profile-history"><FileHistory workspace={workspace} file="PROFILE.md" api={api} onClose={()=>setShowHistory(false)}/></div>}
+        {(file==='PROFILE.md'||!data&&!creating)&&bodyView}
       </section>
     </div>
     {error&&<p className="error-text" role="alert">{error}</p>}

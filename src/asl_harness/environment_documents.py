@@ -1,11 +1,51 @@
 """The existing Profile and feedback documents, not a second content store."""
 from pathlib import Path
 import hashlib
+import json
 import re
 from uuid import uuid4
 
 from .workspace import HarnessError, Workspace, safe_write_path
 from .sync import _environment_fingerprints, _require_unchanged, _rollback_paths
+
+FEEDBACK_KEYS = {'scope', 'target', 'revision', 'file', 'followUp'}
+
+
+def _feedback_text(text: str) -> tuple[dict | None, str]:
+    match = re.match(r'\A<!-- asl:feedback (\{[^\n]*\}) -->\r?\n\r?\n', text)
+    if match:
+        try:
+            record = json.loads(match.group(1))
+            if (isinstance(record, dict) and set(record) == FEEDBACK_KEYS
+                    and all(isinstance(record[key], str) for key in FEEDBACK_KEYS)
+                    and record.get('scope') in {'case', 'skill', 'mode', 'profile'}):
+                return record, text[match.end():]
+        except ValueError:
+            pass
+    return None, text
+
+
+def _validate_feedback(workspace: Workspace, record: dict) -> None:
+    keys = FEEDBACK_KEYS
+    if not isinstance(record, dict) or set(record) != keys or any(not isinstance(record[key], str) for key in keys):
+        raise HarnessError('EDIT_INVALID', '请填写有效的反馈作用范围和处理记录')
+    scope, target = record['scope'], record['target']
+    if scope not in {'case', 'skill', 'mode', 'profile'} or len(record['followUp']) > 8000 or any('\0' in value for value in record.values()):
+        raise HarnessError('EDIT_INVALID', '反馈范围无效或核对记录过长')
+    if scope in {'skill', 'mode'}:
+        if target not in (workspace.skills if scope == 'skill' else workspace.modes):
+            raise HarnessError('EDIT_INVALID', '反馈对象已不存在，请重新选择')
+    elif target:
+        raise HarnessError('EDIT_INVALID', '本次结果和工作偏好不需要额外对象')
+    if not record['revision'] and not record['file']:
+        return
+    file = record['file']
+    if not record['revision'] or not file or scope == 'case' or (scope == 'profile' and file != 'PROFILE.md') or (scope in {'skill', 'mode'} and not file.startswith(f'{scope}s/{target}/')):
+        raise HarnessError('EDIT_INVALID', '请选择作用对象的一次真实修改')
+    from .history import history
+    detail = history(workspace.root, revision=record['revision'], file=file)
+    if detail['status'] != 'ready':
+        raise HarnessError('EDIT_INVALID', '这个库还没有可关联的版本记录')
 
 
 def _path(root: Path, file: str) -> Path:
@@ -52,7 +92,9 @@ def documents(root: str | Path, file: str = 'PROFILE.md') -> dict:
             files.append({'path': relative, 'title': title.group(1).strip() if title else path.stem})
         except HarnessError as error:
             issues.append({'path': relative, 'code': error.code, 'message': str(error)})
-    return {'file': file, 'document': text, 'fingerprint': fingerprint, 'files': files, 'issues': issues}
+    feedback, body = _feedback_text(text) if file != 'PROFILE.md' else (None, text)
+    return {'file': file, 'document': text, 'body': body, 'feedback': feedback,
+            'fingerprint': fingerprint, 'files': files, 'issues': issues}
 
 
 def edit_document(root: str | Path, request: dict, *, check=False) -> dict:
@@ -84,6 +126,17 @@ def edit_document(root: str | Path, request: dict, *, check=False) -> dict:
         document = request.get('document')
         if not isinstance(document, str) or not document.strip() or '\0' in document or len(document.encode('utf-8')) > 1024 * 1024:
             raise HarnessError('EDIT_INVALID', '请输入不超过 1 MB 的非空文本')
+        feedback, body = _feedback_text(document)
+        if 'feedback' in request:
+            feedback = request['feedback']
+        if feedback is not None:
+            if file == 'PROFILE.md':
+                raise HarnessError('EDIT_INVALID', '请在反馈记录中保存作用范围')
+            _validate_feedback(workspace, feedback)
+            metadata = json.dumps(feedback, ensure_ascii=False).replace('<', '\\u003c').replace('>', '\\u003e')
+            document = f'<!-- asl:feedback {metadata} -->\n\n{body}'
+            if len(document.encode('utf-8')) > 1024 * 1024:
+                raise HarnessError('EDIT_INVALID', '反馈记录超过 1 MB')
         if file == 'PROFILE.md':
             from .adapters import MANAGED_START, MANAGED_END
             if MANAGED_START in document or MANAGED_END in document:
@@ -94,6 +147,14 @@ def edit_document(root: str | Path, request: dict, *, check=False) -> dict:
         return result
     _require_unchanged(observed, 'EDIT_STALE')
     safe_write_path(root, target)
+    history_before = None
+    if file == 'PROFILE.md':
+        from .history import record_file
+        try:
+            history_before = record_file(root, file, title='保存前版本')
+        except (HarnessError, OSError) as error:
+            history_before = {'status': 'unavailable', 'message': str(error)}
+        _require_unchanged(observed, 'EDIT_STALE')
     with _rollback_paths(root, changed):
         if archive:
             (root / destination).parent.mkdir(parents=True)
@@ -102,4 +163,9 @@ def edit_document(root: str | Path, request: dict, *, check=False) -> dict:
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(document.encode('utf-8'))
         Workspace.open(root).sync_workspace_view()
+    if history_before is not None:
+        try:
+            result['history'] = history_before if history_before['status'] == 'unavailable' else record_file(root, file)
+        except (HarnessError, OSError) as error:
+            result['history'] = {'status': 'unavailable', 'message': str(error)}
     return result

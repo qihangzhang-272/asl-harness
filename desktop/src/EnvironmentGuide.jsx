@@ -3,9 +3,9 @@ import {ArrowUpRight,LoaderCircle,RotateCw} from 'lucide-react';
 import EditorPage,{useLeaveGuard} from './EditorPage.jsx';
 import './guide.css';
 
-export default function EnvironmentGuide({workspace,mode,repository,api,read,onClose,onVerified}) {
+export default function EnvironmentGuide({workspace,mode,repository,api,read,onClose,onVerified,initialGoal='',title='整理模式'}) {
   const [context,setContext]=useState(null),[agents,setAgents]=useState([]);
-  const [goal,setGoal]=useState(''),[submittedGoal,setSubmittedGoal]=useState('');
+  const [goal,setGoal]=useState(initialGoal),[submittedGoal,setSubmittedGoal]=useState(initialGoal.trim());
   const [loading,setLoading]=useState(true),[pending,setPending]=useState(false);
   const [session,setSession]=useState(null),[error,setError]=useState('');
   const live=useRef(true),generation=useRef(0);
@@ -51,7 +51,7 @@ export default function EnvironmentGuide({workspace,mode,repository,api,read,onC
     if(error.step==='verify')return verify();
     start();
   }
-  return <EditorPage title="整理模式" onClose={()=>leave(onClose)}>
+  return <EditorPage title={title} onClose={()=>leave(onClose)}>
     <section className="environment-guide" aria-label="Agent 整理入口">
       <label className="field"><span>想怎么整理</span><textarea rows={3} maxLength={2000} value={goal} onChange={event=>setGoal(event.target.value)} placeholder="也可以直接在 Agent 中说明"/></label>
       <div className="guide-agents">

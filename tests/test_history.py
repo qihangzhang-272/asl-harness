@@ -22,6 +22,57 @@ def repository(tmp_path):
     return root
 
 
+def test_file_history_lists_only_changes_to_the_requested_safe_file(tmp_path):
+    from asl_harness.history import history
+    root = repository(tmp_path)
+    original = git(root, 'rev-parse', 'HEAD')
+    (root / 'PROFILE.md').write_text('# changed preferences', encoding='utf-8')
+    git(root, 'add', 'PROFILE.md')
+    git(root, 'commit', '-m', '偏好修改')
+    revision = git(root, 'rev-parse', 'HEAD')
+    file = 'skills/creator/SKILL.md'
+    assert [entry['revision'] for entry in history(root, file=file)['entries']] == [original]
+    assert [entry['revision'] for entry in history(root, file='PROFILE.md')['entries']] == [revision, original]
+    assert '+# changed preferences' in history(root, revision=revision, file='PROFILE.md')['diff']
+    with pytest.raises(HarnessError):
+        history(root, file='.env')
+
+
+def test_managed_text_saves_record_only_their_file_without_moving_head_or_index(tmp_path):
+    from asl_harness.history import history
+    from asl_harness.management import catalog, edit, skill_files
+    from asl_harness.environment_documents import documents
+    root = repository(tmp_path)
+    head = git(root, 'rev-parse', 'HEAD')
+    index = (root / '.git/index').read_bytes()
+    skill = next(item for item in catalog(root)['skills'] if item['id'] == 'creator')
+    data = skill_files(root, skill['id'])
+    result = edit(root, {'operation': 'skill.file.save', 'id': skill['id'], 'file': 'SKILL.md',
+                         'document': data['document'] + '\n核对事实来源。\n', 'expected': data['fingerprint']})
+    assert result['history']['status'] == 'recorded'
+    revision = result['history']['revision']
+    file = 'skills/creator/SKILL.md'
+    assert history(root, file=file)['entries'][0]['revision'] == revision
+    assert '+核对事实来源。' in history(root, revision=revision, file=file)['diff']
+    assert git(root, 'ls-tree', '-r', '--name-only', revision) == file
+    profile = documents(root)
+    saved = edit(root, {'operation': 'environment.file.save', 'file': 'PROFILE.md', 'expected': profile['fingerprint'],
+                        'document': '# 偏好\n\n解释不确定性。\n'})
+    assert '+解释不确定性。' in history(root, revision=saved['history']['revision'], file='PROFILE.md')['diff']
+    assert git(root, 'rev-parse', 'HEAD') == head
+    assert (root / '.git/index').read_bytes() == index
+
+
+def test_version_explanations_remain_available_with_many_recorded_files(tmp_path):
+    from asl_harness.history import annotate, history
+    root = repository(tmp_path)
+    revision = git(root, 'rev-parse', 'HEAD')
+    updates = ''.join(f'update refs/asl/files/{number:064x} {revision}\n' for number in range(120))
+    subprocess.run(['git', '-C', str(root), 'update-ref', '--stdin'], input=updates, text=True, check=True, capture_output=True)
+    annotate(root, revision, '文件较多时仍能记录明确修改依据。')
+    assert history(root, revision=revision)['note']['document'].startswith('文件较多')
+
+
 def test_history_is_read_only_and_does_not_adopt_parent_repository(tmp_path):
     from asl_harness.history import history
     root = _environment(tmp_path)
@@ -187,7 +238,7 @@ def test_snapshot_cannot_be_read_as_another_mode_and_git_env_cannot_redirect(tmp
         history(other, revision=revision)
     with pytest.raises(HarnessError):
         history(root, mode='different', revision=revision)
-    for values in ({'limit': 51}, {'offset': -1}, {'limit': True}, {'file': 'PROFILE.md'}):
+    for values in ({'limit': 51}, {'offset': -1}, {'limit': True}, {'file': '.env'}):
         with pytest.raises(HarnessError):
             history(root, **values)
 

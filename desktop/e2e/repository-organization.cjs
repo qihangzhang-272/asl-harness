@@ -6,7 +6,7 @@ const {launch,dispose}=require('./fixture.cjs');
 
 for(const empty of [true,false])test(`repository Skills can be read and chosen one by one into ${empty?'a first':'an existing'} Mode`,{timeout:180000},async()=>{
   const {app,page,run,workspace,errors}=await launch({empty});
-  const url='https://github.com/qa/reading-tools',snapshot=path.join(run,'repository');
+  const url='https://github.com/qa/reading-tools';let snapshot=path.join(run,'repository');
   const original='---\nname: reading\ndescription: 阅读材料\n---\n# 阅读材料\n\n保留完整的研究方法。\n\n[阅读指南](references/guide.md)\n';
   try{
     for(const id of ['reading','unused']){
@@ -16,6 +16,7 @@ for(const empty of [true,false])test(`repository Skills can be read and chosen o
       await fs.mkdir(path.join(snapshot,id,'references'));
       await fs.writeFile(path.join(snapshot,id,'references/guide.md'),'# 阅读指南\n\n先核对来源，再提取证据。\n');
     }
+    snapshot=await fs.realpath(snapshot);
     await app.evaluate(async({app,ipcMain,dialog},{url,snapshot})=>{
       const path=process.getBuiltinModule('node:path');
       const require=process.getBuiltinModule('node:module').createRequire(path.join(app.getAppPath(),'package.json'));
