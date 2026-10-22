@@ -9,6 +9,7 @@ const definitions = {
   archives: ['environment.archive', ['workspace']],
   archiveCleanup: ['environment.archive.cleanup', ['workspace', 'entry']],
   history: ['environment.history', ['workspace']],
+  historyNote: ['environment.history.note', ['workspace','revision']],
   restoreHistory: ['mode.history.restore', ['workspace','mode','revision','expected']],
   files: ['skill.files', ['workspace', 'skill', 'file']],
   sourceFiles: ['skill.files', ['source', 'file']],
@@ -56,7 +57,7 @@ function commandArgs(action, values = {}) {
     throw new Error("不支持的操作");
   const [command, required] = definition;
   const optional =
-    action === 'history' ? ['mode','revision','file','limit','offset'] : action === 'restoreHistory' ? ['apply'] : action === 'archives' ? ['entry','file'] : action === 'archiveCleanup' ? ['expected'] : action === 'guide' ? ['mode'] : action === "readiness"
+    action === 'historyNote' ? ['request','apply'] : action === 'history' ? ['mode','revision','file','limit','offset'] : action === 'restoreHistory' ? ['apply'] : action === 'archives' ? ['entry','file'] : action === 'archiveCleanup' ? ['expected'] : action === 'guide' ? ['mode'] : action === "readiness"
       ? ["project", "probe", "skillsDir"]
       : action === 'disconnect' ? ['apply', 'expected'] : action === "userSync"
       ? ["apply", "expected", "remove", "skillsDir"]
@@ -84,12 +85,13 @@ function commandArgs(action, values = {}) {
       throw new Error(`缺少有效的 ${key}`);
   }
   if (
-    ['edit', 'create'].includes(action) &&
+    ['edit', 'create', 'historyNote'].includes(action) &&
     (!values.request ||
       typeof values.request !== "object" ||
       Array.isArray(values.request))
   )
     throw new Error("修改请求必须是对象");
+  if(action==='historyNote'&&values.apply!==true)throw new Error('请明确保存这条版本说明');
   for (const key of ['entry','file'])
     if (key in values && (typeof values[key] !== 'string' || !values[key].trim() || values[key].includes('\0'))) throw new Error('请选择有效的归档内容');
   for (const key of optional.filter((key) => !["request", "expected", "project", "skillsDir", "mode", "entry", "file", "revision", "limit", "offset"].includes(key)))
@@ -185,7 +187,7 @@ function runCore(action, values, options = {}) {
       },
     );
     child.stdin.on("error", () => {});
-    child.stdin.end(['edit', 'create', 'mcpSave'].includes(action) ? JSON.stringify(values.request) : "");
+    child.stdin.end(['edit', 'create', 'mcpSave', 'historyNote'].includes(action) ? JSON.stringify(values.request) : "");
   });
 }
 

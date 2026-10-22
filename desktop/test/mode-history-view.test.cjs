@@ -50,9 +50,9 @@ test('continuing from a version enters the existing editor without applying rest
   assert.doesNotMatch(text,/onContinue\([^\n]*restoreHistory/);
   assert.match(text,/<MermaidView[^>]* evolve compact/);
   assert.equal((text.match(/<MermaidView/g)||[]).length,1);
-  assert.match(text,/disabled=\{!ready\|\|busy\|\|readOnly\|\|!!missing.length\}/);
-  assert.match(text,/<strong>\{caption\}<\/strong>/);
-  assert.doesNotMatch(text,/aria-valuetext=\{[^\n]*selected.title/);
+  assert.match(text,/disabled=\{!ready\|\|busy\|\|readOnly\|\|!!missing.length\|\|editingNote\}/);
+  assert.match(text,/<strong>\{selectedTitle\}<\/strong>/);
+  assert.match(text,/aria-valuetext=\{[^\n]*selectedTitle/);
 });
 
 test('repeated pagination reads are coalesced while a page is pending',async()=>{

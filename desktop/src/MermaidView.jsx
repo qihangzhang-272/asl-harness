@@ -9,7 +9,7 @@ import {readLayout} from './mermaid-document.mjs';
 import './mermaid.css';
 import {captureDiagram,animateDiagram} from './diagram-evolution.mjs';
 
-export default memo(function MermaidView({source,onNode,nodes=[],onError,items,structure,onElement,onConnect,compact=false,selectedId,onExpand,expanded=false,disabled=false,evolve=false,renderedDiagram}) {
+export default memo(function MermaidView({source,onNode,nodes=[],onError,items,structure,onElement,onConnect,compact=false,selectedId,onExpand,expanded=false,disabled=false,evolve=false,evolutionGroup,renderedDiagram}) {
   const [svg,setSvg]=useState(''),[error,setError]=useState(''),[scale,setScale]=useState('fit');
   const markup=useMemo(()=>({__html:svg}),[svg]);
   const [renderedSource,setRenderedSource]=useState('');
@@ -19,6 +19,7 @@ export default memo(function MermaidView({source,onNode,nodes=[],onError,items,s
   const box=useRef(null),section=useRef(null),[visible,setVisible]=useState(false);
   const camera=useRef(null),[frame,setFrame]=useState(0);
   const previousDiagram=useRef(new Map());
+  const previousGroup=useRef(null);
   const clickTimers=useRef(new Map());
   const callbacks=useRef({});callbacks.current={onNode,onElement,onConnect,nodes};
   const bindingKey=JSON.stringify([nodes.map(n=>[n.alias,n.data.title,n.data.skill?.id]),!!onElement,!!onConnect]);
@@ -29,7 +30,7 @@ export default memo(function MermaidView({source,onNode,nodes=[],onError,items,s
     if(!visible)return;
     let current=true;setError('');
     (renderedDiagram?.source===source?Promise.resolve(renderedDiagram.svg):renderDiagram(source)).then(result=>{if(current){
-      if(evolve)previousDiagram.current=captureDiagram(box.current);
+      if(evolve){previousDiagram.current=previousGroup.current===evolutionGroup?captureDiagram(box.current):new Map();previousGroup.current=evolutionGroup;}
       const rendered=new DOMParser().parseFromString(result,'image/svg+xml').documentElement;
       // Do not recenter the paper under the pointer after a direct manipulation.
       if(camera.current)rendered.setAttribute('viewBox',camera.current);
@@ -38,8 +39,12 @@ export default memo(function MermaidView({source,onNode,nodes=[],onError,items,s
       setSvg(new XMLSerializer().serializeToString(rendered));setRenderedSource(source);
     }}).catch(e=>{if(current){setError(e.message);onError?.(e.message);}});
     return()=>{current=false;};
-  },[source,visible,frame,renderedDiagram,evolve]);
+  },[source,visible,frame,renderedDiagram,evolve,evolutionGroup]);
   useLayoutEffect(()=>{if(evolve)animateDiagram(box.current,previousDiagram.current);},[svg,evolve]);
+  useLayoutEffect(()=>{
+    // Identical SVG bytes in a new version must not retain the previous comparison's marks.
+    if(evolve&&renderedSource===source)box.current?.querySelectorAll('.evolution-changed').forEach(element=>element.classList.remove('evolution-changed','evolution-added','evolution-updated'));
+  },[renderedDiagram,evolutionGroup]);
   useEffect(()=>{
     const viewport=box.current;if(!viewport)return;
     const observer=new ResizeObserver(entries=>{

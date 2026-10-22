@@ -485,7 +485,7 @@ if(primary) app.whenReady().then(() => {
   readHandle('run', "asl:run", async ([action, values], signal) => {
     if (["scan", "unpack", "mcp", "mcpSave", "localModes", "nativeMcp"].includes(action)) throw new Error("请使用对应管理入口");
     commandArgs(action, values);
-    if ((['edit','restoreHistory'].includes(action) && (path.resolve(values.workspace) === example || bundledExample(values.workspace))) ||
+    if ((['edit','restoreHistory','historyNote'].includes(action) && (path.resolve(values.workspace) === example || bundledExample(values.workspace))) ||
         (action === "import" && (path.resolve(values.target) === example || bundledExample(values.target))))
       throw new Error("内置示例只供查看。请先分享模式，再导入为独立技能库后编辑。");
     if (["userSync", "disconnect"].includes(action) && values.apply && !values.expected) throw new Error("请先查看变更预览");
@@ -530,9 +530,9 @@ if(primary) app.whenReady().then(() => {
           defaultId: 0,
           cancelId: 0,
           message:
-            action === 'restoreHistory' ? '恢复到这个版本？' : action === "edit" ? "确认这次内容变更？" : ['import','create'].includes(action) ? '保存这个工作模式？' : action === 'export' ? '保存分享包？' :
+            action === 'historyNote' ? '保存这条变更说明？' : action === 'restoreHistory' ? '恢复到这个版本？' : action === "edit" ? "确认这次内容变更？" : ['import','create'].includes(action) ? '保存这个工作模式？' : action === 'export' ? '保存分享包？' :
               `${values.remove || action === 'disconnect' ? '在' : '配置到'} ${({'codex-app':'Codex','claude-code':'Claude Code','deepseek-harness':'DeepSeek Harness',workbuddy:'WorkBuddy'})[values.host] || 'DeepSeek Harness'}${values.remove || action === 'disconnect' ? ' 中停用此模式？' : '？'}`,
-          detail: action === 'restoreHistory' ? `恢复 ${values.mode} 的结构，并留下新记录。后来的记录仍保留，技能内容不变。` : action === 'disconnect'
+          detail: action === 'historyNote' ? '说明附在这个本地版本上，不修改模式或技能内容。' : action === 'restoreHistory' ? `恢复 ${values.mode} 的结构，并留下新记录。后来的记录仍保留，技能内容不变。` : action === 'disconnect'
             ? `模式：${values.mode}\n位置：${values.project}\n仅停用该位置的 ASL 模式，原技能库与其他配置不变；受管副本会保留到本地归档。`
             : action === "userSync"
             ? `范围：当前用户的所有项目\nAgent：${values.host}\n模式：${values.mode}\n${values.skillsDir ? "自选技能目录：" + values.skillsDir + "\n" : ""}${values.remove ? "停用 ASL 默认模式并移除其受管副本，保留原技能源。" : "按预览同步所选模式，其他原生技能和模型账号保持不变。"}`
