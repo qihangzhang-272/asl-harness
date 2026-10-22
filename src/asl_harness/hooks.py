@@ -6,9 +6,11 @@ import os
 import re
 import sys
 from pathlib import Path
+from datetime import datetime, timezone
+import tempfile
 
 from .adapters import verify_mode_projection
-from .workspace import HarnessError, Workspace
+from .workspace import HarnessError, Workspace, safe_write_path
 
 
 EDIT_EVENTS = {"PostToolUse"}
@@ -159,6 +161,63 @@ def _format_error(error: HarnessError) -> str:
     return f"ASL {error.code}: {error}"
 
 
+def _receipt_path(project: Path, host: str) -> Path:
+    if host not in {'codex-app', 'claude-code', 'deepseek-harness'}:
+        raise ValueError('Unsupported hook host')
+    path = project / '.asl' / f'last-hook-check-{host}.json'
+    safe_write_path(project, path)
+    return path
+
+
+def last_hook_check(project: Path, host: str, mode: str, fingerprint: str) -> dict | None:
+    try:
+        path = _receipt_path(project, host)
+        if path.stat().st_size > 4096:
+            return None
+        data = json.loads(path.read_text(encoding='utf-8'))
+        if (not isinstance(data, dict) or data.get('host') != host or data.get('mode') != mode
+                or data.get('event') not in {'SessionStart', 'PostToolUse', 'Stop'}
+                or data.get('state') not in {'passed', 'warning', 'error'}
+                or not isinstance(data.get('at'), str) or len(data['at']) > 40
+                or type(data.get('warningCount')) is not int or not 0 <= data['warningCount'] <= 10000
+                or not isinstance(data.get('errorCode'), str) or not re.fullmatch(r'[A-Z_0-9]{0,80}', data['errorCode'])):
+            return None
+        datetime.fromisoformat(data['at'])
+        return {key: data[key] for key in ('at', 'event', 'state', 'warningCount', 'errorCode')} | {'stale': data.get('sourceFingerprint') != fingerprint}
+    except (OSError, ValueError, UnicodeError, HarnessError):
+        return None
+
+
+def _record_check(project: Path, host: str, manifest: dict, event: str, *, warnings=(), error=None) -> None:
+    temporary = None
+    try:
+        path = _receipt_path(project, host)
+        mode = manifest.get('mode')
+        if not isinstance(mode, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,140}', mode):
+            return
+        fingerprint = manifest.get('sourceFingerprint')
+        if not isinstance(fingerprint, str) or not re.fullmatch(r'[a-f0-9]{64}', fingerprint):
+            fingerprint = None
+        data = {'at': datetime.now(timezone.utc).isoformat(), 'host': host, 'mode': mode, 'event': event,
+                'state': 'error' if error else 'warning' if warnings else 'passed',
+                'sourceFingerprint': fingerprint, 'warningCount': len(warnings),
+                'errorCode': error.code if error else ''}
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=path.parent, delete=False) as stream:
+            temporary = Path(stream.name)
+            json.dump(data, stream, ensure_ascii=False)
+        safe_write_path(project, path)
+        os.replace(temporary, path)
+    except (OSError, ValueError, HarnessError):
+        pass  # A receipt failure must never change the Hook's validation result.
+    finally:
+        if temporary is not None:
+            try:
+                temporary.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+
 def run_hook(payload: dict, *, host_id: str, preset: Path | None = None) -> tuple[int, str]:
     cwd_value = payload.get("cwd")
     cwd = Path(cwd_value) if isinstance(cwd_value, str) and cwd_value else Path.cwd()
@@ -178,12 +237,14 @@ def run_hook(payload: dict, *, host_id: str, preset: Path | None = None) -> tupl
         try:
             workspace, warnings = _check(project, manifest)
         except HarnessError as error:
+            _record_check(project, host_id, manifest, event, error=error)
             return 0, _format_error(error)
         mode = manifest["mode"]
         count = len(workspace.mode_skill_ids(mode))
         message = f"ASL Mode {mode} is projected with {count} projected Skills."
         if warnings:
             message += " " + " ".join(f"Warning: {item}" for item in warnings)
+        _record_check(project, host_id, manifest, event, warnings=warnings)
         return 0, message
 
     if event in EDIT_EVENTS:
@@ -199,14 +260,18 @@ def run_hook(payload: dict, *, host_id: str, preset: Path | None = None) -> tupl
         try:
             _, warnings = _check(project, manifest)
         except HarnessError as error:
+            _record_check(project, host_id, manifest, event, error=error)
             return 2, _format_error(error)
+        _record_check(project, host_id, manifest, event, warnings=warnings)
         return 0, " ".join(f"ASL warning: {item}" for item in warnings)
 
     if event == "Stop":
         try:
             _, warnings = _check(project, manifest)
         except HarnessError as error:
+            _record_check(project, host_id, manifest, event, error=error)
             return 0, _format_error(error)
+        _record_check(project, host_id, manifest, event, warnings=warnings)
         return 0, " ".join(f"ASL warning: {item}" for item in warnings)
 
     return 0, ""

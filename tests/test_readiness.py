@@ -30,6 +30,28 @@ def test_readiness_distinguishes_declared_config_from_working_connection(tmp_pat
     assert item["verified"] is False
 
 
+def test_last_hook_check_records_only_the_check_and_never_task_or_tool_content(tmp_path):
+    from asl_harness.adapters import project_mode
+    from asl_harness.hooks import run_hook
+    root = _environment(tmp_path)
+    workspace = Workspace.open(root)
+    project = tmp_path / 'project'
+    project_mode(workspace, project, 'creator-studio', host_id='codex-app')
+    code, _ = run_hook({'hook_event_name': 'SessionStart', 'cwd': str(project),
+                        'prompt': 'PRIVATE_SENTINEL', 'session_id': 'PRIVATE_SESSION'}, host_id='codex-app')
+    assert code == 0
+    report = readiness.inspect_mode(workspace, 'creator-studio', 'codex-app', project=project, home=tmp_path / 'home', env={})
+    check = report['hooks']['lastCheck']
+    assert check['event'] == 'SessionStart' and check['state'] == 'passed' and not check['stale']
+    assert report['hooks']['verified'] is False
+    file = project / '.asl/last-hook-check-codex-app.json'
+    assert 'PRIVATE' not in file.read_text(encoding='utf-8')
+    (root / 'PROFILE.md').write_text('# changed preferences', encoding='utf-8')
+    report = readiness.inspect_mode(Workspace.open(root), 'creator-studio', 'codex-app', project=project, home=tmp_path / 'home', env={})
+    assert report['hooks']['lastCheck']['stale']
+    assert 'lastCheck' not in readiness.inspect_mode(Workspace.open(root), 'creator-studio', 'codex-app', project=project, scope='user', home=tmp_path / 'home', env={})['hooks']
+
+
 def test_setup_brief_carries_mode_full_skill_paths_and_machine_gaps_not_secrets(tmp_path):
     root = _environment(tmp_path)
     report = readiness.inspect_mode(Workspace.open(root), "creator-studio", "claude-code", home=tmp_path / "home", env={"PRIVATE_SECRET": "never-copy-this"})

@@ -1,4 +1,7 @@
 .source-tree { flex: 1; min-height: 0; overflow: auto; padding: 0 8px; }
+.hook-last-check{padding:14px 0;border-top:1px solid var(--line-soft);margin-top:14px}
+.hook-last-check strong,.hook-last-check time{display:block;font-size:12px;line-height:1.8}
+.hook-last-check time{color:var(--muted);margin-top:4px}
 .source-tree details { margin: 3px 0; }
 .source-tree summary,.source-heading { width: 100%; display: flex; align-items: center; gap: 7px; padding: 9px 8px; border: 0; background: none; border-radius: 8px; font-size: 13px; cursor: pointer; list-style: none; color: var(--sidebar-ink, #2b3f5c); }
 .source-tree summary::-webkit-details-marker { display: none; }

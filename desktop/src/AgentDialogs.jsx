@@ -58,9 +58,10 @@ export function SetupDialog({ api, Dialog, Tag, values, title, onClose, task, re
       <p className="muted">这些检查核对配置和依赖；模型账号与登录状态请在 {hostName} 中确认，实际任务仍需试用。</p>
       {report.nativeDiscoveryUnverified && <div className="inline-note"><FolderOpen size={18} /><span>所选目录还需与 {hostName} 关联。</span></div>}
       {report.hooks && <details className="setup-notes">
-        <summary>自动检查 · {report.hooks.coverage === 'none' ? '未覆盖' : report.hooks.commandFound ? '尚未实测' : '待配置'}</summary>
+        <summary>自动检查 · {report.hooks.coverage === 'none' ? '未覆盖' : report.hooks.lastCheck ? report.hooks.lastCheck.stale?'内容有新变化':report.hooks.lastCheck.state==='passed'?'已有检查记录':'最近检查需处理' : report.hooks.commandFound ? '尚未实测' : '待配置'}</summary>
         {report.hooks.coverage === 'none' ? <p>{values.host === 'workbuddy' ? '此 Agent 尚未接入自动检查，可按需使用 CLI 手动核对。' : '当前用户默认模式不在项目 Hook 覆盖范围内；可为具体项目配置模式后再检查。'}</p> : <>
-          <p>适用范围：{report.hooks.coverage === 'preset' ? '此 DeepSeek 工作模式' : '所选项目'}。{report.hooks.commandFound ? '已找到检查命令；原生 Hook 是否启用及真实触发尚未核实。' : '未找到检查命令，请在目标 Agent 中补齐 Harness CLI 后再检查。'}</p>
+          <p>适用范围：{report.hooks.coverage === 'preset' ? '此 DeepSeek 工作模式' : '所选项目'}。{report.hooks.lastCheck?'已读取这个位置最近一次自动检查的本地回执。':report.hooks.commandFound ? '已找到检查命令；原生 Hook 是否启用及真实触发尚未核实。' : '未找到检查命令，请在目标 Agent 中补齐 Harness CLI 后再检查。'}</p>
+          {report.hooks.lastCheck&&<div className="hook-last-check"><strong>{({SessionStart:'会话开始时',PostToolUse:'内容修改后',Stop:'会话结束时'})[report.hooks.lastCheck.event]} · {({passed:'配置与引用检查通过',warning:'检查发现待处理项',error:'检查未通过'})[report.hooks.lastCheck.state]}</strong><time>{new Date(report.hooks.lastCheck.at).toLocaleString('zh-CN')}</time>{report.hooks.lastCheck.stale&&<p>源内容后来有变化，请在目标 Agent 中再次检查。</p>}{report.hooks.lastCheck.errorCode&&<code>{report.hooks.lastCheck.errorCode}</code>}<p>只记录检查类型、时间和结果。此回执不代表业务任务已完成或技能效果已验证。</p></div>}
           <p>{values.scope === 'preset' ? '工作模式已包含自动检查设置，仍需在 DeepSeek 中加载并验证。' : '请在目标 Agent 中启用 ASL Environment Host 插件，再用新会话验证。'}缺少 Hook 不影响已配置模式的使用。</p>
           <p className="path-line">检查命令：{report.hooks.commandPath || report.hooks.command}</p>
         </>}

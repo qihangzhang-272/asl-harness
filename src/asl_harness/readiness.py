@@ -115,11 +115,15 @@ def inspect_mode(workspace: Workspace, mode_id: str, host: str, *, project: Path
                 doctor_error = "渠道体检未完成，可让配置助手检查或稍后重试"
     hook_command = shutil.which("asl-harness-hook")
     hook_coverage = scope if host in {"codex-app", "claude-code", "deepseek-harness"} and scope in {"project", "preset"} else "none"
+    last_check = None
+    if hook_coverage != 'none' and project is not None:
+        from .hooks import last_hook_check
+        last_check = last_hook_check(project, host, mode_id, workspace.source_fingerprint(mode_id))
     return {"host": host, "mode": mode_id, "userPaths": {k: str(v) for k, v in locations(host, home=home, env=env).items()} if host in {"codex-app", "claude-code"} else {},
             "machine": {"system": platform.system(), "architecture": platform.machine()},
             "checks": list(checks.values()), "setupNotes": notes,
             "hooks": {"coverage": hook_coverage, "command": "asl-harness-hook", "commandFound": bool(hook_command),
-                      "commandPath": hook_command, "verified": False},
+                      "commandPath": hook_command, "verified": False, **({'lastCheck': last_check} if last_check else {})},
             "needsConfiguration": any(c["status"] in {"missing", "unknown"} for c in checks.values()) or bool(notes),
             "doctor": doctor, "doctorError": doctor_error,
             "notice": "工具或配置存在不等于已经登录、能成功工作；配置助手按实际任务复查。"}
