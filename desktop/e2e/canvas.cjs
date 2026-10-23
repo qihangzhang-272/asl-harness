@@ -9,14 +9,14 @@ test('canvas templates and structure can be created and edited without source or
   const {app,page,workspace,run,errors}=await launch();
   const file=path.join(workspace,'modes/creator-studio/MODE.md');
   const original=await fs.readFile(file,'utf8');
-  await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setSize(1024,720));
+  await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setContentSize(1024,648));
   async function ready(){await page.locator('.mode-workspace-native .mermaid-viewport').waitFor();await page.waitForFunction(()=>!document.querySelector('.mode-workspace-native [aria-busy="true"],.mode-workspace-native .mermaid-viewport[inert]'));}
   async function blank(button='left',selector='.mode-workspace-native .mermaid-edit'){
     const canvas=page.locator(selector);await canvas.scrollIntoViewIfNeeded();
     const point=await canvas.evaluate(element=>{
       const box=element.getBoundingClientRect(),viewport=element.querySelector('.mermaid-viewport').getBoundingClientRect();
-      const toolbar=element.closest('.mode-workspace-native')?.querySelector('.diagram-edit-toolbar')?.getBoundingClientRect();
-      return {x:Math.max(box.left,viewport.left)+8,y:Math.max(box.top,viewport.top,toolbar?.bottom||0)+12};
+      const workspace=element.closest('.mode-workspace-native'),clip=workspace?.getBoundingClientRect(),toolbar=workspace?.querySelector('.diagram-edit-toolbar')?.getBoundingClientRect();
+      return {x:Math.max(box.left,viewport.left)+8,y:Math.max(box.top,viewport.top,clip?.top||0,toolbar?.bottom||0)+12};
     });
     assert.ok(await page.evaluate(({x,y})=>!!document.elementFromPoint(x,y)?.closest('.mermaid-edit'),point),'落点必须在可见画板内');
     await page.mouse.click(point.x,point.y,{button});
@@ -51,7 +51,7 @@ test('canvas templates and structure can be created and edited without source or
     await ready();
     await page.getByRole('button',{name:'缩小图',exact:true}).click();
     await page.getByRole('button',{name:'缩小图',exact:true}).click();
-    assert.equal(await page.locator('text.messageText').filter({hasText:'复核资料'}).evaluate(el=>{const r=el.getBoundingClientRect(),hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return hit===el||el.contains(hit);}),true,'缩小后消息文字不能被连线点击区遮挡');
+    assert.equal(await page.locator('text.messageText').filter({hasText:'复核资料'}).evaluate(el=>{const r=el.getBoundingClientRect(),hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return hit===el||el.contains(hit);}),true,'缩小后消息文字不能被工具栏或连线点击区遮挡');
     await drag(page.locator('text.loopText').filter({hasText:'条件成立'}),page.locator('text.messageText').filter({hasText:'复核资料'}),.5,.1);
     await ready();
     await page.locator('text.loopText').filter({hasText:'条件成立'}).click({button:'right'});
