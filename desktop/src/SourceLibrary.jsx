@@ -40,6 +40,8 @@ export default function SourceLibrary({source, api, onNavigate, onUse, onSave, o
   const [query,setQuery]=useViewState(`repository-query:${source.url}:${source.mode||''}`,'');
   const [limit,setLimit]=useViewState(`repository-limit:${source.url}:${source.mode||''}`,24);
   const report=source.report;
+  const readme=report?report.readme:source.readme;
+  const overview=!source.skill&&!source.mode&&source.view!=='skills';
   const skill=report?.skills.find(s=>repositorySkillKey(s)===source.skill||s.id===source.skill);
   const mode=report?.modes.find(m=>m.id===source.mode);
   const skills=mode?(report.catalog?.skills||[]).filter(s=>mode.skills.includes(s.id)):report?.skills||[];
@@ -51,15 +53,14 @@ export default function SourceLibrary({source, api, onNavigate, onUse, onSave, o
       <div className="heading-actions"><button disabled={busy||source.loading} aria-label="刷新云端模式库" onClick={onRefresh}><RotateCw size={16} className={source.loading?'spin':''}/></button>{onOrganize&&skills.length>0&&<details className="repository-organize"><summary>{skill?'加入模式':'组织技能'}<Plus size={16}/></summary><div><button disabled={busy} onClick={event=>organize(event,null)}><Plus size={15}/>新建模式</button>{localModes.map(item=><button key={item.id} disabled={busy} onClick={event=>organize(event,item)}><Layers3 size={15}/>{item.title}</button>)}</div></details>}{!skill&&mode?<><button disabled={busy} onClick={()=>onSave(mode)}><Download size={16}/>保存到本地</button><button className="primary" disabled={busy} onClick={()=>onUse(mode)}>在 Agent 使用<ArrowUpRight size={16}/></button></>:null}</div>
     </div>
     {source.loading&&!report&&<div className="source-loading" role="status"><span className="loading-line"/><span className="loading-line"/><span className="loading-line"/>正在读取仓库…</div>}
-    {!report&&source.readme&&<div className="repository-readme"><RepositoryMarkdown key={source.url} document={source.readme}/></div>}
     {source.error&&<div className="inline-note" role="alert">{source.error}<button onClick={onRefresh}>重试</button></div>}
     {report?.cacheStatus==='stale'?<div className="inline-note" role="status">更新未完成，保留上次内容。<button onClick={onRefresh}>重试</button></div>:report?.cacheStatus==='cached'?<p className="muted">上次读取 · {new Date(report.checkedAt).toLocaleString()}</p>:null}
     {report&&<>{skill?<><button onClick={showSkills}><ArrowLeft size={16}/>返回技能</button><SkillFiles key={skill.source} item={{...skill,requires:skill.requires||[]}} Dialog={RepositoryPackage} readOnly onClose={showSkills} readFile={file=>api('run','sourceFiles',{source:skill.source,file})}/></>:<>
       <div className="tabs repository-tabs"><button className={source.view!=='skills'?'active':''} onClick={()=>onNavigate({view:'overview',skill:null})}>{mode?'逻辑架构':'仓库介绍'}</button><button className={source.view==='skills'?'active':''} onClick={showSkills}>查看 {skills.length} 个技能</button></div>
       {source.view==='skills'?<><div className="search large"><Search size={17}/><input aria-label="搜索仓库技能" placeholder="搜索技能" value={query} onChange={e=>{setQuery(e.target.value);setLimit(24);}}/></div><div className="repository-skill-grid">{visible.slice(0,limit).map(s=><button className="repository-skill-card" key={repositorySkillKey(s)} onClick={()=>onNavigate({skill:repositorySkillKey(s)})}><span className="source-mode-icon"><Puzzle size={23}/></span><div><h2>{s.title||s.id}</h2><p>{shortText(s.description,130)}</p></div><ChevronRight size={18}/></button>)}</div>{!visible.length&&<p className="muted">没有匹配的技能</p>}{visible.length>limit&&<button onClick={()=>setLimit(limit+24)}>显示更多</button>}</>:mode?<><ArchitectureMap key={`${source.url}:${mode.id}`} mode={mode} skills={skills} onSkill={s=>onNavigate({view:'skills',skill:s.id})}/><details className="mode-method" key={mode.id}><summary>模式说明</summary><Markdown text={mode.document}/></details></>:<>
         {!!report.modes.length&&<div className="source-mode-grid">{report.modes.map(m=><button className="source-mode-card" key={m.id} onClick={()=>onNavigate({mode:m.id,view:'overview',skill:null})}><span className="source-mode-icon"><Layers3 size={24}/></span><h2>{m.title}</h2><p>{modeSummary(m)||'打开模式，查看技能分工与使用说明。'}</p><footer><span>{m.skills.length} 个技能</span><ChevronRight size={17}/></footer></button>)}</div>}
-        {report.readme?<div className="repository-readme"><RepositoryMarkdown key={`${source.url}:${report.commit}`} document={report.readme} report={report}/></div>:<div className="empty-state"><p>仓库未提供 README</p><button onClick={()=>window.asl.external(source.url)}>打开 GitHub<ArrowUpRight size={15}/></button></div>}
       </>}
     </>}</>}
+    {overview&&(readme?<div className="repository-readme"><RepositoryMarkdown key={source.url} sourceUrl={source.url} document={readme} report={report}/></div>:report?<div className="empty-state"><p>仓库未提供 README</p><button onClick={()=>window.asl.external(source.url)}>打开 GitHub<ArrowUpRight size={15}/></button></div>:null)}
   </section>;
 }

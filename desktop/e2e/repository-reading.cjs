@@ -72,3 +72,56 @@ test('authored languages, cross-ref links and reading choices stay inside the Ap
   }catch(error){await page.screenshot({path:path.join(run,'repository-reading-failure.png')});console.error(run);throw error;}
   finally{await dispose(app);}
 });
+
+for(const explicit of [false,true])test(`finishing the repository snapshot preserves ${explicit?'an explicit version':'the selected preview document'} and reading position`,{timeout:90000},async()=>{
+  const {app,page,run,errors}=await launch();
+  const url='https://github.com/qa/early-reader',commit='c'.repeat(40);
+  try{
+    await app.evaluate(async({app,ipcMain},{url,commit})=>{
+      const path=process.getBuiltinModule('node:path');
+      const require=process.getBuiltinModule('node:module').createRequire(path.join(app.getAppPath(),'package.json'));
+      await require('./library.cjs').updatePreferences(path.join(app.getPath('userData'),'libraries.json'),state=>({...state,repositories:[url]}));
+      const text='# 仓库介绍\n\n[使用说明](docs/use.md) · [另一版本]('+url+'/blob/release/docs/release.md)';
+      globalThis.earlyReading={requests:[]};
+      const document=(file,ref)=>({file,ref,url:url+'/blob/'+ref+'/'+file,text:'# '+(file==='docs/use.md'?'使用说明':'版本说明')+'\n\n'+Array.from({length:70},(_,i)=>'阅读段落 '+i+'：保留正在查看的资料。').join('\n\n')});
+      const report={repository:url,snapshot:'early-snapshot',commit,modes:[],skills:[],repositoryFiles:['README.md','docs/use.md'],readme:{file:'README.md',url:url+'/blob/'+commit+'/README.md',text}};
+      const pending=new Promise(resolve=>{globalThis.releaseEarlyReading=()=>resolve({ok:true,value:report});});
+      ipcMain.removeHandler('asl:github-skills');ipcMain.handle('asl:github-skills',()=>pending);
+      const read=ipcMain._invokeHandlers.get('asl:read');ipcMain.removeHandler('asl:read');
+      ipcMain.handle('asl:read',(event,id,method,args)=>method==='repositoryOverview'?{ok:true,value:{file:'README.md',url:url+'/blob/main/README.md',text}}:read(event,id,method,args));
+      ipcMain.removeHandler('asl:repository-overview');ipcMain.handle('asl:repository-overview',(_event,_url,route)=>{
+        globalThis.earlyReading.requests.push({file:route.file,ref:route.ref});
+        return{ok:true,value:document(route.file,route.ref)};
+      });
+      ipcMain.removeHandler('asl:repository-document');ipcMain.handle('asl:repository-document',(_event,_root,file)=>{
+        globalThis.earlyReading.requests.push({file,ref:commit});return{ok:true,value:document(file,commit)};
+      });
+    },{url,commit});
+    await page.reload();await page.locator('.cloud-source>.source-heading').click();
+    await page.getByRole('heading',{name:'仓库介绍',exact:true}).waitFor();
+    await page.getByRole('link',{name:explicit?'另一版本':'使用说明',exact:true}).click();
+    const heading=page.getByRole('heading',{name:explicit?'版本说明':'使用说明',exact:true});
+    await heading.waitFor();
+    const scroll=()=>page.locator('.repository-document').evaluate(reader=>{let el=reader;while(el&&!['auto','scroll'].includes(getComputedStyle(el).overflowY))el=el.parentElement;return el?.scrollTop||0;});
+    await page.locator('.repository-document').evaluate(reader=>{let el=reader;while(el&&!['auto','scroll'].includes(getComputedStyle(el).overflowY))el=el.parentElement;el.scrollTop=960;el.dispatchEvent(new Event('scroll'));});
+    const beforeScroll=await scroll();
+    const beforeTop=await heading.evaluate(el=>el.getBoundingClientRect().top);
+    assert.ok(beforeScroll>=900,'the probe must start away from the top');
+    await app.evaluate(()=>globalThis.releaseEarlyReading());
+    await page.getByRole('button',{name:'查看 0 个技能',exact:true}).waitFor();
+    await heading.waitFor({timeout:4000});
+    assert.ok(Math.abs(await heading.evaluate(el=>el.getBoundingClientRect().top)-beforeTop)<8,'loading placeholders can change scrollTop, but the same content must stay at the same visible position');
+    const requests=await app.evaluate(()=>globalThis.earlyReading.requests);
+    assert.equal(requests.at(-1).ref,explicit?'release':commit,'only preview-relative links follow the inspected snapshot');
+    if(explicit)await page.getByText('其他版本 · release',{exact:true}).waitFor();
+    else assert.equal(await page.locator('.repository-document-version').count(),0);
+    await page.reload();await page.locator('.cloud-source>.source-heading').click();
+    await heading.waitFor();
+    assert.ok(Math.abs(await heading.evaluate(el=>el.getBoundingClientRect().top)-beforeTop)<8,'reopen must restore the same document and reading position');
+    await page.getByRole('button',{name:'返回文档',exact:true}).click();
+    await page.getByRole('heading',{name:'仓库介绍',exact:true}).waitFor();
+    await page.screenshot({path:path.join(run,'early-reader-handoff.png')});
+    assert.deepEqual(errors,[]);console.log('介绍与快照衔接：'+run);
+  }catch(error){await page.screenshot({path:path.join(run,'early-reader-failure.png')});console.error(run);throw error;}
+  finally{await dispose(app);}
+});

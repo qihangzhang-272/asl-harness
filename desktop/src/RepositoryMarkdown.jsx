@@ -4,24 +4,28 @@ import Markdown from './Markdown.jsx';
 import {repositoryDocumentLink,repositoryLanguageOptions} from './repository-links.mjs';
 import {useViewState,useScrollMemory} from './useViewState.jsx';
 
-export default function RepositoryMarkdown({document,report}) {
-  const [history,setHistory]=useViewState(`repository-document:${document.url}`,[]);
+export default function RepositoryMarkdown({document,report,sourceUrl}) {
   const repository=new URL(document.url).pathname.split('/').filter(Boolean).slice(0,2).join('/');
+  const readingKey=sourceUrl||repository.toLowerCase();
+  const [legacyHistory]=useViewState(`repository-document:${document.url}`,[]);
+  const [history,setHistory]=useViewState(`repository-document:${readingKey}`,legacyHistory);
   const [language,setLanguage]=useViewState(`repository-language:${repository.toLowerCase()}`,null);
   const languages=useMemo(()=>repositoryLanguageOptions(document,report?.repositoryFiles),[document.url,document.text,report?.repositoryFiles]);
   const original=repositoryDocumentLink(document.url,document.url);
   const preferred=languages.find(option=>language===null?option.label==='中文':language===(option.language||'original'))||languages[0]||original;
   const saved=history.at(-1);
   // Older reading history stored a relative file path; new entries keep the requested version.
-  const route=(typeof saved==='string'?repositoryDocumentLink(saved,document.url):saved)||preferred;
+  const remembered=typeof saved==='string'?repositoryDocumentLink(saved,document.url):saved;
+  const route=remembered?.preview?{...remembered,ref:original?.ref||remembered.ref}:remembered||preferred;
   const file=route?.file||'',ref=route?.ref||'',hash=route?.hash||'';
+  const preview=!!route?.preview||!saved&&ref===original?.ref;
   const [current,setCurrent]=useState(document),[error,setError]=useState(''),[loading,setLoading]=useState(false),[retry,setRetry]=useState(0);
   const cache=useRef(new Map()),reader=useRef(null);
   const [loadedKey,setLoadedKey]=useState('');
   const cacheKey=`${ref}:${file}`;
   const isOriginal=!file||file===original?.file&&ref===original?.ref;
   const ready=!loading&&!error&&(isOriginal||loadedKey===cacheKey);
-  useScrollMemory(`repository:${document.url}:${cacheKey}:${hash}`,reader,ready);
+  useScrollMemory(`repository:${readingKey}:${preview?'preview':ref}:${file}:${hash}`,reader,ready);
   useLayoutEffect(()=>{
     if(!ready||!hash)return;
     try{
@@ -43,7 +47,8 @@ export default function RepositoryMarkdown({document,report}) {
   },[file,ref,isOriginal,document.text,document.url,cacheKey,report?.snapshot,report?.commit,retry]);
   function follow(href){
     const next=repositoryDocumentLink(href,current.url);if(!next)return false;
-    setHistory(previous=>[...previous,next]);
+    const currentRoute=repositoryDocumentLink(current.url,current.url);
+    setHistory(previous=>[...previous,{...next,...(preview&&next.ref===currentRoute?.ref?{preview:true}:{})}]);
     return true;
   }
   function chooseLanguage(value){
@@ -58,6 +63,6 @@ export default function RepositoryMarkdown({document,report}) {
     {ready&&ref&&ref!==original?.ref&&<p className="repository-document-version">其他版本 · {current.ref||ref}</p>}
     {loading&&<p role="status">正在读取文档…</p>}
     {error&&<div role="alert"><p className="error-text">这份文档暂时读不到。<button onClick={()=>setRetry(n=>n+1)}>重新读取</button></p><p className="muted">暂时保留上次读到的内容。</p><details><summary>查看详情</summary><pre>{error}</pre></details></div>}
-    {(ready||error)&&<Markdown text={current.text} baseUrl={current.url} onLink={follow}/>}
+    <Markdown text={current.text} baseUrl={current.url} onLink={follow}/>
   </div>;
 }
