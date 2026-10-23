@@ -1,7 +1,7 @@
 {
   "name": "asl-desktop",
   "productName": "ASL Workspace",
-  "version": "0.5.17",
+  "version": "0.5.18",
   "private": true,
   "description": "Manage and carry your AI work environments",
   "license": "MIT",
@@ -10,19 +10,19 @@
     "start": "npm run build && electron .",
     "build": "vite build",
     "test": "node --test test/*.test.cjs",
-    "test:e2e": "npm run build && node --test --test-concurrency=1 e2e/workspace.cjs e2e/structure.cjs e2e/canvas.cjs e2e/direct-canvas.cjs e2e/continuity.cjs e2e/panels.cjs e2e/consistency.cjs e2e/recovery.cjs e2e/environment-documents.cjs e2e/agent-results.cjs e2e/archive-browser.cjs e2e/mode-history.cjs e2e/repository-organization.cjs e2e/product-entry.cjs e2e/reading-recovery.cjs e2e/skill-lifecycle.cjs",
+    "test:e2e": "npm run build && node --test --test-concurrency=1 e2e/workspace.cjs e2e/structure.cjs e2e/canvas.cjs e2e/direct-canvas.cjs e2e/continuity.cjs e2e/panels.cjs e2e/consistency.cjs e2e/recovery.cjs e2e/environment-documents.cjs e2e/agent-results.cjs e2e/archive-browser.cjs e2e/mode-history.cjs e2e/repository-organization.cjs e2e/repository-reading.cjs e2e/product-entry.cjs e2e/reading-recovery.cjs e2e/skill-lifecycle.cjs",
     "test:performance": "node e2e/performance.cjs"
   },
   "devDependencies": {
     "electron": "44.3.0",
     "playwright": "1.62.1",
-    "vite": "8.2.2"
+    "vite": "8.2.4"
   },
   "overrides": {
     "lodash-es": "4.18.1"
   },
   "dependencies": {
-    "dompurify": "3.4.16",
+    "dompurify": "3.4.17",
     "lucide-react": "1.43.0",
     "marked": "16.4.2",
     "mermaid": "12.0.0",
