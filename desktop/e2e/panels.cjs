@@ -2,6 +2,7 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const path=require('node:path');
 const fs=require('node:fs/promises');
+const os=require('node:os');
 const {launch,dispose}=require('./fixture.cjs');
 
 test('all navigation rails resize, retain preferences, cancel safely and leave readable content',{timeout:120000},async()=>{
@@ -86,11 +87,13 @@ test('all navigation rails resize, retain preferences, cancel safely and leave r
 });
 
 test('a pending external Skill reread keeps the document and scrollable directory visible',{timeout:120000},async()=>{
-  const {app,page,run,workspace,errors}=await launch();
+  const output=await fs.mkdtemp(path.join(process.env.ASL_E2E_OUTPUT||os.tmpdir(),'asl-e2e-panel-')),workspace=path.join(output,'library');
+  await fs.cp(path.resolve(__dirname,'../../examples/personal-environment'),workspace,{recursive:true});
+  const directory=path.join(workspace,'skills/product-analysis/references');
+  await fs.mkdir(directory,{recursive:true});
+  await Promise.all(Array.from({length:35},(_,i)=>fs.writeFile(path.join(directory,`连续阅读-${i}.md`),'# 资料\n')));
+  const {app,page,run,errors}=await launch({library:workspace,output});
   try{
-    const directory=path.join(workspace,'skills/product-analysis/references');
-    await fs.mkdir(directory,{recursive:true});
-    await Promise.all(Array.from({length:35},(_,i)=>fs.writeFile(path.join(directory,`连续阅读-${i}.md`),'# 资料\n')));
     await app.evaluate(({ipcMain})=>{
       const original=ipcMain._invokeHandlers.get('asl:run');
       ipcMain.removeHandler('asl:run');ipcMain.handle('asl:run',async(event,action,...args)=>{
