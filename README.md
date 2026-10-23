@@ -219,6 +219,8 @@ desktop/out/build-venv/Scripts/python -m pip install pyinstaller==6.22.2 .
 desktop/out/build-venv/Scripts/python scripts/build_desktop.py --output desktop/out/windows-preview
 ```
 
+如果本机默认 Electron 目录无法运行，可在当前构建进程设置 Electron 原生的 `ELECTRON_OVERRIDE_DIST_PATH`，指向已经核对版本和文件完整性的运行时目录。开发渲染与打包使用同一目录；最终 App 只使用随包运行时，不要求接收方设置这个变量。不要通过关闭沙箱或系统防护绕过渲染故障。
+
 ### 使用空白 Environment
 
 ```bash
