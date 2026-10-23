@@ -177,7 +177,7 @@ flowchart TB
     class MODE,HOST,CASE,CHANGE active;
 ```
 
-Environment 是普通文件夹，也是本地 Git 真源。人可以直接阅读和修改，Agent 也可以在授权下维护。普通任务不会自动改写长期环境；只有用户明确反馈、明确采用外部能力，或者真实 Case 暴露出稳定缺口时，才进入长期变化。
+Environment 是普通文件夹，人可以直接阅读和修改，Agent 也可以在授权下维护。通过 GitHub 跨机协作时，已校验、提交和推送的版本是共享基线；本地未提交修改仍是草稿，不自动覆盖或上传。普通任务不会自动改写长期环境；只有用户明确反馈、明确采用外部能力，或者真实 Case 暴露出稳定缺口时，才进入长期变化。
 
 随着使用积累，Environment 会越来越像它的主人：保留常用判断，淘汰无效能力，把反复出现的工作组织成 Mode，而不是把每一次对话都永久写进系统。
 
@@ -185,9 +185,9 @@ Environment 是普通文件夹，也是本地 Git 真源。人可以直接阅读
 
 ### 桌面预览版
 
-[Windows App 0.5.15](https://github.com/qihangzhang-272/asl-harness/releases/download/app-v0.5.15/ASL-Workspace-0.5.15-Windows-x64.zip) · [Mac App 0.5.16（Apple Silicon）](https://github.com/qihangzhang-272/asl-harness/releases/download/app-v0.5.16/ASL-Workspace-0.5.16-macOS-arm64.zip) · [Mac 公开技能内容包](https://github.com/qihangzhang-272/asl-harness/releases/download/app-v0.5.16/Agent-Skill-Library-0.5.16-macOS-arm64.zip) · [Mac 下载、校验值与发行说明](https://github.com/qihangzhang-272/asl-harness/releases/tag/app-v0.5.16)
+[Windows App 0.5.18](https://github.com/qihangzhang-272/asl-harness/releases/download/app-v0.5.18/ASL-Workspace-0.5.18-Windows-x64.zip) · [Mac App 0.5.18（Apple Silicon）](https://github.com/qihangzhang-272/asl-harness/releases/download/app-v0.5.18/ASL-Workspace-0.5.18-macOS-arm64.zip) · [App＋公开技能库（Windows／Mac）](https://github.com/qihangzhang-272/agent-skill-library/releases/tag/app-v0.5.18) · [校验值与发行说明](https://github.com/qihangzhang-272/asl-harness/releases/tag/app-v0.5.18)
 
-Mac 0.5.16 是本机打包的 Apple Silicon 预览版，首次打开与内容包使用方法见 [Mac 使用说明](docs/mac-preview.md)。Windows 当前下载仍为已验证的 0.5.15；本轮没有 Windows 0.5.16 安装包。
+两端共用 App 0.5.18／核心 0.4.11，分别原生构建和验收。只想管理自己的库，下载 App；想直接试用公开技能和 Mode，下载内容版。Mac 首次打开与内容包使用方法见 [Mac 使用说明](docs/mac-preview.md)。
 
 无需安装 Python 或 Node.js。下载后右键 ZIP → **全部解压** → 打开 `ASL Workspace` 文件夹 → 双击 **`ASL Workspace.exe`**。保留整个文件夹，不要只拿走 EXE；GitHub 自动生成的 `Source code` 压缩包是源码，不是 App。
 

@@ -177,7 +177,7 @@ flowchart TB
     class MODE,HOST,CASE,CHANGE active;
 ```
 
-An Environment is an ordinary folder and a local Git source of truth. A person can read and edit it directly, and an Agent can maintain it with permission. Ordinary tasks do not automatically rewrite the durable environment. Lasting changes begin only when the user gives explicit feedback, explicitly adopts an external capability, or real work exposes a stable gap.
+An Environment is an ordinary folder. A person can read and edit it directly, and an Agent can maintain it with permission. For cross-computer collaboration through GitHub, validated, committed and pushed changes form the shared baseline; uncommitted local edits remain drafts and are not silently overwritten or uploaded. Ordinary tasks do not automatically rewrite the durable environment. Lasting changes begin only when the user gives explicit feedback, explicitly adopts an external capability, or real work exposes a stable gap.
 
 Over time, the Environment becomes more like its owner: it retains useful judgment, removes ineffective capabilities, and turns recurring work into Modes without permanently absorbing every conversation.
 
@@ -185,9 +185,9 @@ Over time, the Environment becomes more like its owner: it retains useful judgme
 
 ### Desktop preview
 
-[Windows App 0.5.15](https://github.com/qihangzhang-272/asl-harness/releases/download/app-v0.5.15/ASL-Workspace-0.5.15-Windows-x64.zip) · [Mac App 0.5.16 (Apple Silicon)](https://github.com/qihangzhang-272/asl-harness/releases/download/app-v0.5.16/ASL-Workspace-0.5.16-macOS-arm64.zip) · [Mac App with published Skills](https://github.com/qihangzhang-272/asl-harness/releases/download/app-v0.5.16/Agent-Skill-Library-0.5.16-macOS-arm64.zip) · [Mac downloads, checksums and release notes](https://github.com/qihangzhang-272/asl-harness/releases/tag/app-v0.5.16)
+[Windows App 0.5.18](https://github.com/qihangzhang-272/asl-harness/releases/download/app-v0.5.18/ASL-Workspace-0.5.18-Windows-x64.zip) · [Mac App 0.5.18 (Apple Silicon)](https://github.com/qihangzhang-272/asl-harness/releases/download/app-v0.5.18/ASL-Workspace-0.5.18-macOS-arm64.zip) · [App with published Skills (Windows / Mac)](https://github.com/qihangzhang-272/agent-skill-library/releases/tag/app-v0.5.18) · [Checksums and release notes](https://github.com/qihangzhang-272/asl-harness/releases/tag/app-v0.5.18)
 
-Mac 0.5.16 is a locally built Apple Silicon preview; see the [Mac guide](docs/mac-preview.md) for first launch and the content package. The current Windows download remains the verified 0.5.15 build; this release does not include a Windows 0.5.16 package.
+Both platforms use App 0.5.18 / core 0.4.11, built and tested natively. Choose the App to manage your own library, or the content edition to try the published Skills and Modes immediately. See the [Mac guide](docs/mac-preview.md) for first launch and the content package.
 
 No Python or Node.js installation is needed. Right-click the downloaded ZIP → **Extract All** → open the `ASL Workspace` folder → double-click **`ASL Workspace.exe`**. Keep the complete folder together. GitHub's automatically generated `Source code` archives are not the desktop App.
 
