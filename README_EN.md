@@ -185,9 +185,9 @@ Over time, the Environment becomes more like its owner: it retains useful judgme
 
 ### Desktop preview
 
-[Windows App 0.5.18](https://github.com/qihangzhang-272/asl-harness/releases/download/app-v0.5.18/ASL-Workspace-0.5.18-Windows-x64.zip) · [Mac App 0.5.18 (Apple Silicon)](https://github.com/qihangzhang-272/asl-harness/releases/download/app-v0.5.18/ASL-Workspace-0.5.18-macOS-arm64.zip) · [App with published Skills (Windows / Mac)](https://github.com/qihangzhang-272/agent-skill-library/releases/tag/app-v0.5.18) · [Checksums and release notes](https://github.com/qihangzhang-272/asl-harness/releases/tag/app-v0.5.18)
+[Windows App 0.5.19](https://github.com/qihangzhang-272/asl-harness/releases/download/app-v0.5.19/ASL-Workspace-0.5.19-Windows-x64.zip) · [Mac App 0.5.19 (Apple Silicon)](https://github.com/qihangzhang-272/asl-harness/releases/download/app-v0.5.19/ASL-Workspace-0.5.19-macOS-arm64.zip) · [App with published Skills (Windows / Mac)](https://github.com/qihangzhang-272/agent-skill-library/releases/tag/app-v0.5.19) · [Checksums and release notes](https://github.com/qihangzhang-272/asl-harness/releases/tag/app-v0.5.19)
 
-Both platforms use App 0.5.18 / core 0.4.11, built and tested natively. Choose the App to manage your own library, or the content edition to try the published Skills and Modes immediately. See the [Mac guide](docs/mac-preview.md) for first launch and the content package.
+Both platforms use App 0.5.19 / core 0.4.12, built and tested natively. Choose the App to manage your own library, or the content edition to try the published Skills and Modes immediately. See the [Mac guide](docs/mac-preview.md) for first launch and the content package.
 
 No Python or Node.js installation is needed. Right-click the downloaded ZIP → **Extract All** → open the `ASL Workspace` folder → double-click **`ASL Workspace.exe`**. Keep the complete folder together. GitHub's automatically generated `Source code` archives are not the desktop App.
 

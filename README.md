@@ -185,9 +185,9 @@ Environment 是普通文件夹，人可以直接阅读和修改，Agent 也可�
 
 ### 桌面预览版
 
-[Windows App 0.5.18](https://github.com/qihangzhang-272/asl-harness/releases/download/app-v0.5.18/ASL-Workspace-0.5.18-Windows-x64.zip) · [Mac App 0.5.18（Apple Silicon）](https://github.com/qihangzhang-272/asl-harness/releases/download/app-v0.5.18/ASL-Workspace-0.5.18-macOS-arm64.zip) · [App＋公开技能库（Windows／Mac）](https://github.com/qihangzhang-272/agent-skill-library/releases/tag/app-v0.5.18) · [校验值与发行说明](https://github.com/qihangzhang-272/asl-harness/releases/tag/app-v0.5.18)
+[Windows App 0.5.19](https://github.com/qihangzhang-272/asl-harness/releases/download/app-v0.5.19/ASL-Workspace-0.5.19-Windows-x64.zip) · [Mac App 0.5.19（Apple Silicon）](https://github.com/qihangzhang-272/asl-harness/releases/download/app-v0.5.19/ASL-Workspace-0.5.19-macOS-arm64.zip) · [App＋公开技能库（Windows／Mac）](https://github.com/qihangzhang-272/agent-skill-library/releases/tag/app-v0.5.19) · [校验值与发行说明](https://github.com/qihangzhang-272/asl-harness/releases/tag/app-v0.5.19)
 
-两端共用 App 0.5.18／核心 0.4.11，分别原生构建和验收。只想管理自己的库，下载 App；想直接试用公开技能和 Mode，下载内容版。Mac 首次打开与内容包使用方法见 [Mac 使用说明](docs/mac-preview.md)。
+两端共用 App 0.5.19／核心 0.4.12，分别原生构建和验收。只想管理自己的库，下载 App；想直接试用公开技能和 Mode，下载内容版。Mac 首次打开与内容包使用方法见 [Mac 使用说明](docs/mac-preview.md)。
 
 无需安装 Python 或 Node.js。下载后右键 ZIP → **全部解压** → 打开 `ASL Workspace` 文件夹 → 双击 **`ASL Workspace.exe`**。保留整个文件夹，不要只拿走 EXE；GitHub 自动生成的 `Source code` 压缩包是源码，不是 App。
 

@@ -1,13 +1,13 @@
 # ASL Workspace：Mac 预览版
 
-本轮 App 为 0.5.18，随包核心为 0.4.11。适用于 Apple Silicon（M 系列）Mac，包内声明系统要求为 macOS 13.0 及以上；不是 Intel 或 Universal 版本。本轮使用 GitHub 的原生 Apple Silicon 运行器构建和验收，未逐一验证所有 macOS 版本。
+本轮 App 为 0.5.19，随包核心为 0.4.12。适用于 Apple Silicon（M 系列）Mac，包内声明系统要求为 macOS 13.0 及以上；不是 Intel 或 Universal 版本。本轮使用 GitHub 的原生 Apple Silicon 运行器构建和验收，未逐一验证所有 macOS 版本。
 
 ## 下载与开始使用
 
 按需下载以下其中一个 ZIP，保留同名 `.sha256` 校验文件：
 
-- [只有 App 与 CLI](https://github.com/qihangzhang-272/asl-harness/releases/download/app-v0.5.18/ASL-Workspace-0.5.18-macOS-arm64.zip)：`ASL-Workspace-0.5.18-macOS-arm64.zip`，可创建工作库或导入已有库；校验值见 [Harness 发行页](https://github.com/qihangzhang-272/asl-harness/releases/tag/app-v0.5.18)。
-- [App＋公开技能库](https://github.com/qihangzhang-272/agent-skill-library/releases/download/app-v0.5.18/Agent-Skill-Library-0.5.18-macOS-arm64.zip)：`Agent-Skill-Library-0.5.18-macOS-arm64.zip`，适合首次试用；校验值见 [内容版发行页](https://github.com/qihangzhang-272/agent-skill-library/releases/tag/app-v0.5.18)。内容固定来自 `e925ac24fbbfccaba08bcc5f9e0b09826ae766d1`，不含开发者本机草稿、账号或 Git 历史，Skill 与 Mode 文件未改。
+- [只有 App 与 CLI](https://github.com/qihangzhang-272/asl-harness/releases/download/app-v0.5.19/ASL-Workspace-0.5.19-macOS-arm64.zip)：`ASL-Workspace-0.5.19-macOS-arm64.zip`，可创建工作库或导入已有库；校验值见 [Harness 发行页](https://github.com/qihangzhang-272/asl-harness/releases/tag/app-v0.5.19)。
+- [App＋公开技能库](https://github.com/qihangzhang-272/agent-skill-library/releases/download/app-v0.5.19/Agent-Skill-Library-0.5.19-macOS-arm64.zip)：`Agent-Skill-Library-0.5.19-macOS-arm64.zip`，适合首次试用；校验值见 [内容版发行页](https://github.com/qihangzhang-272/agent-skill-library/releases/tag/app-v0.5.19)。内容固定来自 `e925ac24fbbfccaba08bcc5f9e0b09826ae766d1`，不含开发者本机草稿、账号或 Git 历史，Skill 与 Mode 文件未改。
 
 不需要安装 Python 或 Node.js。完整解压普通 App 包后，将 `ASL Workspace.app` 拖入「应用程序」，再双击打开。内容包完整解压后打开 `Start.command`，使 App 读取旁边的 `Agent Skill Library`；请保留这两个目录及启动文件的相对位置，放在自己可写的位置。
 
@@ -23,4 +23,4 @@
 
 保留 Mac 的浅色中性工作台与现有操作规范。仓库 README 可在 App 内切换作者提供的语言，技能可阅读完整脚本和资料；加入 Mode 先成为草稿，保存才采用。窄窗口下的画板命中和演进保存反馈已修正。DeepSeek 显示实际同步结果；Codex／Claude Code 可回看由本 App 发起的配置会话状态，结束不等于业务任务已完成。
 
-原生构建、完整桌面回归、随包核心、实际 Mermaid 渲染，以及内容 ZIP 解压后的校验结果见发行说明。此次没有执行真实模型任务、修改真实账号或验证宿主业务任务；会话回执不是模型内部状态。深色模式、完整 VoiceOver 和 Intel Mac 未完成验收。
+0.5.19 另修复后台目录加载、重新打开后的阅读位置及带斜杠分支识别，并改善文件占用提示。Windows 与 Mac 原生冻结桌面均为 61／61；随包核心、实际 Mermaid 渲染和内容 ZIP 解压校验结果见发行说明。此次没有执行真实模型任务、修改真实账号或验证宿主业务任务；会话回执不是模型内部状态。深色模式、完整 VoiceOver 和 Intel Mac 未完成验收。
