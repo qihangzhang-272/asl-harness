@@ -10,6 +10,11 @@
 .guide-agents button{min-height:44px}
 .guide-agents [role="status"]{display:flex;align-items:center;gap:8px;color:var(--muted)}
 .environment-guide p{margin:0;line-height:1.6}
+.assistant-session{display:flex;align-items:flex-start;gap:10px;padding:14px 0;color:var(--ink)}
+.assistant-session>svg{flex-shrink:0;margin-top:2px;color:var(--muted)}
+.assistant-session>div{display:grid;gap:4px;min-width:0}
+.assistant-session strong{font-size:14px;font-weight:600}
+.assistant-session span{font-size:13px;line-height:1.6;color:var(--muted)}
 .guide-cli{color:var(--muted);font-size:13px}
 .guide-cli summary{cursor:pointer}
 .guide-cli code{display:block;padding:12px 0;overflow-wrap:anywhere;user-select:all;color:var(--ink)}

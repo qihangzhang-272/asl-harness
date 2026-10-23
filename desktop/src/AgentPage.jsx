@@ -1,12 +1,13 @@
 import React, {useState} from 'react';
 import {RotateCw, ChevronRight, Plug, Plus, Layers3, Check, CircleAlert, Power, ArrowUpRight} from 'lucide-react';
 import McpPanel from './McpPanel.jsx';
+import AssistantSession from './AssistantSession.jsx';
 import {connectionValues as argsFor,updateConnection} from './connection-actions.mjs';
 import {agentNextStep} from './presentation.mjs';
 
 const baseName=value=>(value||'').split(/[\\/]/).filter(Boolean).pop();
 
-export default function AgentPage({native, catalog, busy, Tag, onConnect, onSetup, onOpen, refresh, task, api, hostId, setHostId}) {
+export default function AgentPage({native, catalog, busy, Tag, onConnect, onSetup, onOpen, refresh, task, api, session, hostId, setHostId}) {
   const [mcp,setMcp]=useState(null);
   const [pending,setPending]=useState(null);
   const [notice,setNotice]=useState('');
@@ -39,6 +40,7 @@ export default function AgentPage({native, catalog, busy, Tag, onConnect, onSetu
     {!host?<p role="status">正在读取本机配置…</p>:<>
       <header className="host-heading"><div><h2>{host.name}</h2><span className="muted">{host.configured?'已检测到用户级设置':host.directoryFound?'已检测到用户目录':'尚未检测到用户级设置'}</span></div>
         <button className="primary" disabled={busy||!catalog?.modes.length||!host.scopes.length} onClick={()=>onConnect({host:host.id})}><Plus size={16}/>添加工作模式</button></header>
+      {session&&<AssistantSession api={api} session={session} name={host.name}/>}
       {notice&&<p role="status" className="connection-notice"><Check size={16}/>{notice}</p>}
       {installed.length?<div className="installed-modes">{installed.map(item=><article className="installed-mode" key={item.id}>
         <div className="installed-mode-heading"><span className="installed-mode-icon"><Layers3 size={23}/></span><div><button className="plain-title" onClick={()=>onOpen(item)}>{item.title}<ChevronRight size={15}/></button><small>{item.scope==='user'?'默认模式':item.scope==='preset'?'DeepSeek 工作模式':baseName(item.project)} · {item.skills.length} 个技能</small></div>

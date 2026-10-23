@@ -98,7 +98,7 @@ test('a pending external Skill reread keeps the document and scrollable director
     await app.evaluate(({ipcMain})=>{
       const original=ipcMain._invokeHandlers.get('asl:run');
       ipcMain.removeHandler('asl:run');ipcMain.handle('asl:run',async(event,action,...args)=>{
-        if(action==='files'&&!globalThis.releaseReread)await new Promise(resolve=>globalThis.releaseReread=resolve);
+        if(action==='files')await (globalThis.rereadGate||=new Promise(resolve=>globalThis.releaseReread=resolve));
         return original(event,action,...args);
       });
     });

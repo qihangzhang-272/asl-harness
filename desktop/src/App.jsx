@@ -286,6 +286,11 @@ export default function App() {
   useEffect(() => setMessage(null), [modal?.kind]);
   const [native, setNative] = useState(null);
   const [agentHost,setAgentHost]=useState('codex-app');
+  const [assistantSessions,setAssistantSessions]=useViewState('native-sessions',{});
+  function rememberSession(session){
+    if(!['codex-app','claude-code'].includes(session.assistant))return;
+    setAssistantSessions(previous=>({...previous,[session.assistant]:{id:session.id,assistant:session.assistant,status:session.status}}));
+  }
   const [provider, setProvider] = useState("github-import");
   const [localReport, setLocalReport] = useState(null);
   const [indexing,setIndexing]=useState(false);
@@ -658,23 +663,13 @@ export default function App() {
     setModal({ kind: "local-import", ...skill, mode: targetMode || (page === "modes" ? mode?.id || "" : ""), category: "",
       useExisting: catalog.skills.some(s => s.id === skill.id) });
   }
-  // Explicit "create a new Mode from this discovered skill": land the skill in the
-  // library first (reusing a same-name version), then open a new draft. Cancelling the
-  // import or the draft never creates an empty Mode.
+  // Opening a Mode is a draft; choosing it must not adopt a package before Save.
   async function createModeWithSkill(skill) {
     if (!skill?.id) return;
     if(!catalog){setCloud(null);setModal({kind:'mode-workspace',draft:{roots:[skill.id],packages:[{...skill,path:skill.source}]}});return;}
     const existing = catalog.skills.find(s => s.id === skill.id);
-    if (!existing) {
-      const request = candidateImportRequest(skill, null);
-      if (!request) throw new Error("这个技能没有可导入的完整技能目录，请先在发现页查看它。");
-      const preview = await api("run", "edit", {workspace, request});
-      const confirmed = preview?.sourceFingerprint ? {...request, expectedSource: preview.sourceFingerprint} : request;
-      const result = await api("run", "edit", {workspace, request: confirmed, apply: true});
-      if (result?.canceled) { setMessage({ text: "已取消导入，未新建模式。" }); return; }
-      setCatalog(await api("run", "catalog", {workspace}));
-    }
-    setModal({ kind: "mode-workspace", draft: { roots: [skill.id] } });
+    if (!existing&&!candidateImportRequest(skill, null)) throw new Error("这个技能没有可导入的完整技能目录，请先在发现页查看它。");
+    setModal({ kind: "mode-workspace", draft: { roots: [skill.id], packages:existing?[]:[{...skill,path:skill.source,sourcePreview:true}] } });
   }
   function showMode(id) { setModeId(id || null); setSelected(null); setQuery(""); setPage("modes"); }
   async function inspectDiscovered(skill) {
@@ -919,7 +914,7 @@ export default function App() {
           <div className="content-with-detail" style={editorOpen?{display:'none'}:undefined}>
             <main className="content" ref={contentRef}>
               {!modal && <ReadStatus tasks={reads}/>}
-              {cloud ? <SourceLibrary source={cloud} busy={busy} onNavigate={navigateCloud}
+              {cloud ? <SourceLibrary source={cloud} api={api} busy={busy} onNavigate={navigateCloud}
                 onRefresh={()=>openCloud(cloud.url,cloud.mode,true,true)}
                 onUse={item=>task(()=>importRepositoryMode(item,null,true,cloud.report))}
                 onSave={item=>task(()=>importRepositoryMode(item,null,false,cloud.report))}
@@ -1337,7 +1332,7 @@ export default function App() {
                       ))}
                     </>
                   )}
-                  {page === "agents" && <AgentPage native={native} catalog={catalog} workspace={workspace} busy={busy} Tag={Tag} task={task} api={api} hostId={agentHost} setHostId={setAgentHost}
+                  {page === "agents" && <AgentPage native={native} catalog={catalog} workspace={workspace} busy={busy} Tag={Tag} task={task} api={api} session={assistantSessions[agentHost]} hostId={agentHost} setHostId={setAgentHost}
                     onConnect={values=>setModal({kind:"connect",...values})} onSetup={values=>setModal({kind:"setup",...values})}
                     onOpen={item=>openLocalMode({...item,id:item.mode})}
                     refresh={()=>read("native", "读取 Agent 配置", async call=>setNative(await call("native")))}/>}
@@ -1447,7 +1442,7 @@ export default function App() {
         {modal?.kind === 'skill-files' && <SkillFiles item={catalog?.skills.find(skill=>skill.id===modal.item.id)||modal.item} initialFile={modal.initialFile} Dialog={EditorPage} readOnly={readOnly} onClose={()=>setModal(null)}
           readFile={(file,refresh)=>readSkillFile(modal.item,file,refresh)}
           saveFile={saveFile}/>}
-        {modal?.kind === 'agent-guide' && <EnvironmentGuide workspace={modal.workspace} mode={modal.mode} repository={modal.repository} api={api} read={read} initialGoal={modal.initialGoal} title={modal.returnFile?'处理反馈':'整理模式'}
+        {modal?.kind === 'agent-guide' && <EnvironmentGuide workspace={modal.workspace} mode={modal.mode} repository={modal.repository} api={api} read={read} onSession={rememberSession} initialGoal={modal.initialGoal} title={modal.returnFile?'处理反馈':'整理模式'}
           onVerified={async root=>{if(await load(root)){setCloud(null);if(modal.returnFile)setModal({kind:'environment-documents',initialFile:modal.returnFile});else{setPage('modes');setModeId(null);setModal(null);}}}}
           onClose={()=>{reads.cancel('agent-guide');setModal(modal.returnFile?{kind:'environment-documents',initialFile:modal.returnFile}:null);}}/>}
         {modal?.kind === "review" && (
@@ -1527,7 +1522,7 @@ export default function App() {
         {modal?.kind === 'mode-files' && <ModeFiles workspace={workspace} mode={modal.item} api={api} initialFile={modal.initialFile} onClose={()=>setModal(null)}/>}
         {modal?.kind === 'skill-update' && <SkillUpdate workspace={workspace} item={modal.item} api={api} onClose={()=>setModal({kind:'skill-files',item:modal.item})} onReview={(request,preview)=>setModal({kind:'review',request,preview})}/>}
         {modal?.kind === 'mode-history' && <ModeHistory workspace={workspace} mode={catalog.modes.find(item=>item.id===modal.item.id)||modal.item} skills={catalog.skills} api={api} readOnly={readOnly} onClose={()=>setModal(null)} onSaved={()=>load(workspace)} onContinue={item=>setModal({kind:'mode-workspace',item})}/>}
-        {modal?.kind === "setup" && <SetupDialog api={api} Dialog={Dialog} Tag={Tag} values={modal.values} activation={modal.activation} resultMessage={modal.resultMessage} title={catalog?.modes.find(m => m.id === modal.values.mode)?.title || modal.values.mode} task={task} onReadNote={({skill,path})=>task(async()=>{const root=modal.values.workspace;if(!await load(root))return;const item=catalogCache.current.get(root)?.skills.find(item=>item.id===skill);const prefix=item?.path.replaceAll('\\','/')+'/';const normalized=path.replaceAll('\\','/');if(!item||!normalized.startsWith(prefix))throw new Error('说明不在对应技能包内，请重新检查');setModal({kind:'skill-files',item,initialFile:normalized.slice(prefix.length)});})} onClose={() => setModal(null)} />}
+        {modal?.kind === "setup" && <SetupDialog api={api} Dialog={Dialog} Tag={Tag} values={modal.values} activation={modal.activation} resultMessage={modal.resultMessage} title={catalog?.modes.find(m => m.id === modal.values.mode)?.title || modal.values.mode} task={task} onSession={rememberSession} onReadNote={({skill,path})=>task(async()=>{const root=modal.values.workspace;if(!await load(root))return;const item=catalogCache.current.get(root)?.skills.find(item=>item.id===skill);const prefix=item?.path.replaceAll('\\','/')+'/';const normalized=path.replaceAll('\\','/');if(!item||!normalized.startsWith(prefix))throw new Error('说明不在对应技能包内，请重新检查');setModal({kind:'skill-files',item,initialFile:normalized.slice(prefix.length)});})} onClose={() => setModal(null)} />}
         {modal?.kind === "add-to-mode" && (
           <Dialog title="加入工作模式" onClose={() => setModal(null)}>
             <div className="library-list">

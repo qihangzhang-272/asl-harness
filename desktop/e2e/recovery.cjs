@@ -333,17 +333,19 @@ test('a linked Chinese README lands on its section and Back stays in the reposit
   const {app,page,run,errors}=await launch({empty:true}),url='https://github.com/qa/anchor-reader';
   try{
     await app.evaluate(({ipcMain},url)=>{
-      ipcMain.removeHandler('asl:github-skills');ipcMain.handle('asl:github-skills',()=>({ok:true,value:{repository:url,snapshot:'/qa-anchor',commit:'one',skills:[],modes:[],readme:{text:'# 示例仓库\n\n[中文安装说明](README.zh-CN.md#安装)',url:url+'/blob/main/README.md'}}}));
+      ipcMain.removeHandler('asl:github-skills');ipcMain.handle('asl:github-skills',()=>({ok:true,value:{repository:url,snapshot:'/qa-anchor',commit:'one',skills:[],modes:[],readme:{text:'# 示例仓库\n\n[中文安装说明](README.zh-CN.md#安装)',url:url+'/blob/one/README.md'}}}));
       ipcMain.removeHandler('asl:connect-repository');ipcMain.handle('asl:connect-repository',()=>({ok:true,value:[url]}));
       ipcMain.removeHandler('asl:repository-overview');ipcMain.handle('asl:repository-overview',()=>({ok:true,value:null}));
       ipcMain.removeHandler('asl:repository-document');ipcMain.handle('asl:repository-document',(_,snapshot,file)=>{
         if(file!=='README.zh-CN.md')return {ok:false,error:'文件名含错误章节参数'};
-        return {ok:true,value:{text:'# 中文文档\n\n'+Array(60).fill('背景材料。\n\n').join('')+'## 安装\n\n目标章节。',url:url+'/blob/main/README.zh-CN.md'}};
+        return {ok:true,value:{text:'# 中文文档\n\n'+Array(60).fill('背景材料。\n\n').join('')+'## 安装\n\n目标章节。',url:url+'/blob/one/README.zh-CN.md'}};
       });
     },url);
     await page.getByRole('button',{name:'发现',exact:true}).first().click();
     await page.getByRole('textbox',{name:'GitHub 仓库地址',exact:true}).fill(url);
     await page.getByRole('button',{name:'读取仓库',exact:true}).click();
+    await page.getByRole('combobox',{name:'阅读语言',exact:true}).selectOption('one:README.md');
+    await page.getByRole('heading',{name:'示例仓库',exact:true}).waitFor();
     await page.getByRole('link',{name:'中文安装说明',exact:true}).click();await page.getByRole('heading',{name:'安装',exact:true}).waitFor();
     const y=(await page.getByRole('heading',{name:'安装',exact:true}).boundingBox()).y;
     assert.ok(y>0&&y<await page.evaluate(()=>innerHeight),'目标章节必须真正在屏幕内');

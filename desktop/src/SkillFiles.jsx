@@ -78,13 +78,13 @@ export default function SkillFiles({ item, Dialog, readFile, saveFile, onClose, 
       catch(error){setError(error.message);}finally{setBusy(false);setSaving(false);}
     }}>确认保存更改</button></div></section>}
     {savedImpact&&<section className="file-save-preview" role="status"><h3>能力已保存</h3><p>{historyNotice}</p><ChangeImpact modes={savedImpact} onNavigate={leave}/></section>}
-    <div className="dialog-actions">{!embedded&&<span className="muted">{dirty ? '有未保存修改' : '直接对应本地文件'} · 保存不会执行脚本</span>}<button disabled={busy} onClick={()=>leave(onClose)}>关闭</button><button className="primary" disabled={!dirty || busy || readOnly} onClick={async()=>{
+    <div className="dialog-actions">{!embedded&&<span className="muted">{readOnly?'仅供阅读 · 不会执行脚本':`${dirty ? '有未保存修改' : '直接对应本地文件'} · 保存不会执行脚本`}</span>}<button disabled={busy} onClick={()=>leave(onClose)}>关闭</button>{!readOnly&&<button className="primary" disabled={!dirty || busy} onClick={async()=>{
       setBusy(true); setSaving(true); setError('');
       try { const request={operation:'skill.file.save',id:item.id,file,document,expected:data.fingerprint};
         if(context&&Array.isArray(item.usedBy))setPreview({request,report:await context.api('run','edit',{workspace:context.workspace,request})});
         else{await saveFile(request);const result=await readFile(file,true);setData(result);setDocument(result.document||'');setEditing(false);}
       }
       catch(e){setError(e.message);} finally{setBusy(false);setSaving(false);}
-    }}><Save size={15}/>校验并保存</button></div>
+    }}><Save size={15}/>校验并保存</button>}</div>
   </Dialog>;
 }

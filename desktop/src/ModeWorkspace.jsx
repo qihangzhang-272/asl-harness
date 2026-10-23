@@ -41,7 +41,7 @@ export default function ModeWorkspace({
   Dialog = EditorPage, Field = DefaultField, onSave, onCatalog, onClose, readFile, saveFile, initialTitle = '', preloadedReport, editSource=false,
 }) {
   const source = useMemo(() => readModeDocument(mode?.document), [mode]);
-  const initialSkills=catalog?.skills||draft?.packages||[];
+  const initialSkills=[...(catalog?.skills||[]),...(draft?.packages||[]).filter(skill=>!catalog?.skills.some(saved=>saved.id===skill.id))];
   const [name, setName] = useState(() => draft?.name ?? source.name);
   const [body, setBody] = useState(() => mode
     ? readModeDocument(modeDiagramDocument(mode,catalog?.skills||[])).body
@@ -81,8 +81,8 @@ export default function ModeWorkspace({
   const live=useRef(true);
   useEffect(()=>{live.current=true;return()=>{live.current=false;reads?.cancel('mode-workspace-local');};},[]);
 
-  // Read-back after an import only replaces the skill list; the canvas stays mounted.
-  useEffect(() => { if (catalog?.skills) setLibrarySkills(catalog.skills); }, [catalog]);
+  // A background catalog refresh must not discard sources chosen in this draft.
+  useEffect(() => { if (catalog?.skills) setLibrarySkills(previous=>[...catalog.skills,...previous.filter(skill=>skill.sourcePreview&&!catalog.skills.some(saved=>saved.id===skill.id))]); }, [catalog]);
 
   const candidates = useMemo(
     () => localSkillCandidates(librarySkills, report?.skills || []).filter(candidate=>candidate.state!=='installed'||draft?.repository&&report===draft.report),
@@ -111,39 +111,21 @@ export default function ModeWorkspace({
     } catch (failure) { setError(failure.message); }
   }
 
-  // ParadigmEditor calls this before it adds the skill to its roots. Only a completed
-  // import returns the refreshed catalog; a same-name library version is reused as-is.
+  // Choosing a source changes only the draft. Full packages are adopted on Save.
   async function addLocalSkill(skill) {
     // Resolve the exact source row the editor sent; the same id may have several folders.
     const entry = candidates.find(candidate => candidate.source && candidate.source === skill?.source)
       || candidates.find(candidate => candidate.id === skill?.id) || skill;
     if (!entry?.id) throw new Error('没有可加入的技能来源');
     const existing = librarySkills.find(candidate => candidate.id === entry.id);
-    if(!catalog){
-      const skills=existing?librarySkills:[...librarySkills,{...entry,path:entry.source}];
-      setLibrarySkills(skills);
-      return {skills,staged:true};
-    }
     const request = candidateImportRequest(entry, existing);
     if (!request) return {skills: librarySkills};
-    setImporting(entry.id);
-    setError('');
-    try {
-      const preview = await api('run', 'edit', {workspace, request});
-      const confirmed = preview?.sourceFingerprint ? {...request, expectedSource: preview.sourceFingerprint} : request;
-      const result = await api('run', 'edit', {workspace, request: confirmed, apply: true});
-      if (result?.canceled) throw new Error('已取消导入，未加入当前模式。');
-      const next = await api('run', 'catalog', {workspace});
-      setLibrarySkills(next.skills || []);
-      onCatalog?.(next);
-      return {skills: next.skills || []};
-    } catch (failure) {
-      setError(failure.message);
-      throw failure;
-    } finally { setImporting(''); }
+    const skills=[...librarySkills,{...entry,path:entry.source,sourcePreview:true}];
+    setLibrarySkills(skills);setError('');
+    return {skills,staged:true};
   }
 
-  function handleSave(request) {
+  async function handleSave(request) {
     const next = {...request};
     // A brand-new Mode starts without capabilities; carry the copied/previewed ones,
     // pruned to the members that survive. Existing Modes keep the core's own pruning.
@@ -151,8 +133,34 @@ export default function ModeWorkspace({
       const allowed = new Set(request.skills || []);
       next.capabilities = capabilities.map(group => ({...group, skills: (group.skills || []).filter(skill => allowed.has(skill))}));
     }
-    if(!catalog)next.sources=librarySkills.filter(skill=>memberIds(request.skills,librarySkills).includes(skill.id)).map(skill=>({id:skill.id,source:skill.path||skill.source,...(skill.origin?{sourceOrigin:skill.origin}:{})}));
-    return onSave(next);
+    const members=memberIds(request.skills,librarySkills);
+    if(!catalog){
+      next.sources=librarySkills.filter(skill=>members.includes(skill.id)).map(skill=>({id:skill.id,source:skill.path||skill.source,...(skill.origin?{sourceOrigin:skill.origin}:{})}));
+      return onSave(next);
+    }
+    const pending=librarySkills.filter(skill=>skill.sourcePreview&&members.includes(skill.id));
+    let adopted=0;
+    setImporting('save');setError('');
+    try{
+      for(const entry of pending){
+        const request=candidateImportRequest(entry);
+        const preview=await api('run','edit',{workspace,request});
+        const result=await api('run','edit',{workspace,request:{...request,expectedSource:preview.sourceFingerprint},apply:true});
+        if(result?.canceled)throw new Error('已取消采用技能，模式尚未保存。');
+        adopted++;
+        // Successful imports survive a later failure and are reused on retry.
+        setLibrarySkills(previous=>previous.map(skill=>skill.id===entry.id?{...skill,sourcePreview:false}:skill));
+      }
+      if(adopted){
+        const next=await api('run', 'catalog',{workspace});
+        setLibrarySkills(previous=>[...(next.skills||[]),...previous.filter(skill=>skill.sourcePreview&&!next.skills.some(saved=>saved.id===skill.id))]);
+        onCatalog?.(next);
+      }
+      return await onSave(next);
+    }catch(failure){
+      const message=adopted?`已采用 ${adopted} 个技能，模式尚未保存。${failure.message} 修正后可再次保存，已采用的技能不会重复导入。`:failure.message;
+      throw new Error(message);
+    }finally{setImporting('');}
   }
 
   function requestClose() {

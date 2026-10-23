@@ -1,6 +1,7 @@
 import React,{useEffect,useRef,useState} from 'react';
-import {SlidersHorizontal,FolderOpen,LoaderCircle,AlertCircle,Check,RotateCw,Copy,ArrowUpRight,Circle} from 'lucide-react';
-import EditorPage from './EditorPage.jsx';
+import {SlidersHorizontal,FolderOpen,LoaderCircle,Check,RotateCw,Copy,ArrowUpRight,Circle} from 'lucide-react';
+import EditorPage,{useLeaveGuard} from './EditorPage.jsx';
+import AssistantSession from './AssistantSession.jsx';
 import {agentNextStep} from './presentation.mjs';
 const baseName = (value) => (value || "").split(/[\\/]/).filter(Boolean).pop();
 const AGENT_CHOICES = [
@@ -10,7 +11,7 @@ const AGENT_CHOICES = [
   {id:'workbuddy',name:'WorkBuddy',scopes:['project']},
 ];
 
-export function SetupDialog({ api, Dialog, Tag, values, title, onClose, task, resultMessage, activation, onReadNote }) {
+export function SetupDialog({ api, Dialog, Tag, values, title, onClose, task, resultMessage, activation, onReadNote, onSession }) {
   const [report, setReport] = useState(null);
   const [assistant, setAssistant] = useState("");
   const [session, setSession] = useState(null);
@@ -73,9 +74,9 @@ export function SetupDialog({ api, Dialog, Tag, values, title, onClose, task, re
       {report.doctor && <details className="setup-notes"><summary>联网工具 · {report.doctor.filter(item=>item.status!=='ok').length ? '需检查' : '已检查'}</summary><div className="setup-channels"><h3>Agent Reach</h3>{report.doctor.map(item => <div className="sync-item" key={item.id}><span>{item.name}</span><Tag tone={item.status === "ok" ? "green" : "warning"}>{labels[item.status] || "需检查"}</Tag></div>)}</div></details>}
       {report.doctorError && <><p className="error-text" role="alert">联网工具检查未完成，请重试。</p><details className="setup-notes"><summary>查看详情</summary><pre>{report.doctorError}</pre></details></>}
     </> : !checkError && <div className="inline-note"><LoaderCircle size={18} className="spin" />正在检查本机环境…</div>}
-    {session && <div className="inline-note">{session.status === "failed" ? <AlertCircle size={18} /> : <Check size={18} />}<span>{session.status === "failed" ? "未完成，请在目标 Agent 中检查连接后重试。" : session.status === "ended" ? "会话已结束，可以重新检查。" : "已打开，请在对应 Agent 中继续。"}</span></div>}
+    {session && <AssistantSession api={api} session={session} name={hostName}/>}
     {copied && <p role="status">已复制。在 {hostName} 新会话中粘贴并发送。</p>}
-    <div className="dialog-actions"><button onClick={() => task(() => check(true))} disabled={checking}><RotateCw size={16} className={checking ? "spin" : ""} />重新检查</button><button className={!assistant?'primary':''} disabled={!report || checking} onClick={()=>task(async()=>{await api('copyText',report.brief);setCopied(true);})}><Copy size={16}/>复制给 {hostName}</button>{assistant&&<button className="primary" disabled={!report || checking} onClick={() => task(async () => { const result = await api("setup", assistant, values); if (!result.canceled) {setCopied(false);setSession(result);} })}>在 {hostName} 中继续<ArrowUpRight size={16} /></button>}</div>
+    <div className="dialog-actions"><button onClick={() => task(() => check(true))} disabled={checking}><RotateCw size={16} className={checking ? "spin" : ""} />重新检查</button><button className={!assistant?'primary':''} disabled={!report || checking} onClick={()=>task(async()=>{await api('copyText',report.brief);setCopied(true);})}><Copy size={16}/>复制给 {hostName}</button>{assistant&&<button className="primary" disabled={!report || checking} onClick={() => task(async () => { const result = await api("setup", assistant, values); if (!result.canceled) {setCopied(false);setSession(result);onSession?.(result);} })}>在 {hostName} 中继续<ArrowUpRight size={16} /></button>}</div>
   </Dialog>;
 }
 
@@ -104,6 +105,8 @@ export function ConnectDialog({
   const currentHost=native?.hosts.find(h=>h.id===host);
   const skillsDir=customSkillsDir ?? (currentHost?.userMode?.skillsDir && currentHost.userMode.skillsDir!==currentHost.skillRoot ? currentHost.userMode.skillsDir : "");
   const [preview, setPreview] = useState(null);
+  const [applying,setApplying]=useState(false);
+  const leave=useLeaveGuard(false,applying);
   const previewHeading=useRef(null);
   useEffect(() => setPreview(null), [scope, host, modeId, project, preset, skillsDir]);
   useEffect(()=>{if(preview){previewHeading.current?.focus({preventScroll:true});previewHeading.current?.scrollIntoView({block:'start'});}},[preview]);
@@ -123,7 +126,8 @@ export function ConnectDialog({
   function chooseProject(){task(async()=>{const folder=await api('choose','project');if(folder){setProject(folder);setScope('project');}});}
   function chooseSkillsDirectory(){task(async()=>{const folder=await api('choose','userSkills');if(folder)setSkillsDir(folder);});}
   return (
-    <EditorPage title={selected ? `在 ${selected.name} 使用` : '选择 Agent'} onClose={onClose}>
+    <EditorPage title={selected ? `在 ${selected.name} 使用` : '选择 Agent'} onClose={()=>leave(onClose)}>
+      <div className="agent-config-content" inert={applying} aria-busy={applying}>
       <Field label="工作模式">
         <select
           value={mode.id}
@@ -227,6 +231,8 @@ export function ConnectDialog({
               disabled={!native || !!locationError || !selected || (host === "deepseek-harness" ? !preset : scope === "project" ? !project : !!preview?.conflicts.length)}
               onClick={() =>
                 task(async () => {
+                  setApplying(true);
+                  try{
                   let result;
                   let target = scope === "project" ? project : "";
                   if (scope === "user" && host !== "deepseek-harness") {
@@ -258,13 +264,14 @@ export function ConnectDialog({
                       : result.discovery === "requires-connection" ? "已放入所选目录，还需关联 Agent。" : `${selected.name} 的模式已同步。`;
                     onApplied(status, { workspace, mode: mode.id, host, scope: host === "deepseek-harness" ? "preset" : scope, ...(target && { project: target }), ...(scope === "user" && skillsDir && { skillsDir }) }, result);
                   }
+                  }finally{setApplying(false);}
                 })
               }
             >
-              {scope === "user" && !preview ? "继续" : `配置到 ${selected?.name || 'Agent'}`}
-              <ArrowUpRight size={16} />
+              {applying ? <><LoaderCircle size={16} className="spin"/>正在同步…</> : <>{scope === "user" && !preview ? "继续" : `配置到 ${selected?.name || 'Agent'}`}<ArrowUpRight size={16}/></>}
             </button>
           </div>
+      </div>
     </EditorPage>
   );
 }

@@ -100,8 +100,9 @@ test('native Agent entry protects unsent goals and does not require editing or c
       // The native model process is the test boundary; no model task is launched.
       ipcMain.removeHandler('asl:organize');ipcMain.handle('asl:organize',(_,id,values)=>{
         globalThis.organizeProbe.calls.push({id,values});
-        return globalThis.organizeProbe.fail?{ok:false,error:'测试会话未打开'}:{ok:true,value:{id:'test-session',status:'opened'}};
+        return globalThis.organizeProbe.fail?{ok:false,error:'测试会话未打开'}:{ok:true,value:{id:'test-session',assistant:'codex-app',status:'opened'}};
       });
+      ipcMain.removeHandler('asl:setup-status');ipcMain.handle('asl:setup-status',()=>({ok:true,value:{id:'test-session',status:'opened'}}));
     });
     const open=async()=>{await page.locator('.source-tree button').filter({hasText:'Creator Studio'}).click();await page.getByRole('button',{name:'交给 AI 整理',exact:true}).first().click();await page.getByRole('button',{name:'在 Codex 中继续',exact:true}).waitFor();await page.waitForFunction(()=>!document.querySelector('.guide-agents button').disabled);};
     await open();page.removeAllListeners('dialog');let confirmations=0,discard=false;
@@ -117,7 +118,7 @@ test('native Agent entry protects unsent goals and does not require editing or c
     await page.getByText('查看详情',{exact:true}).click();await page.getByText('测试会话未打开',{exact:false}).waitFor();
     assert.equal(await goal.inputValue(),'整理技能关系，不修改技能内容','启动失败保留未发送目标');
     await app.evaluate(()=>{globalThis.organizeProbe.fail=false;});
-    await page.getByRole('button',{name:'重试',exact:true}).click();await page.getByText('已在 Codex 打开，可直接对话。',{exact:true}).waitFor();
+    await page.getByRole('button',{name:'重试',exact:true}).click();await page.getByText('Codex · 会话已打开',{exact:true}).waitFor();
     const calls=await app.evaluate(()=>globalThis.organizeProbe.calls);assert.equal(calls.length,2);assert.equal(calls[1].values.mode,'creator-studio');assert.equal(calls[1].values.goal,'整理技能关系，不修改技能内容');
     assert.equal(await page.getByText('整理已完成',{exact:true}).count(),0,'打开会话不能冒充完成');
     await page.screenshot({path:path.join(run,'guide-consistency.png')});
@@ -216,9 +217,12 @@ test('cloud translation, filtering and retry remain inside the selected reposito
     await app.evaluate(({ipcMain},url)=>{
       globalThis.cloudProbe={reads:0};
       const text='# 仓库说明\n\n[中文](README.zh-CN.md)\n\n'+Array(60).fill('长正文用于检查阅读位置。\n\n').join('');
-      ipcMain.removeHandler('asl:github-skills');ipcMain.handle('asl:github-skills',()=>({ok:true,value:{repository:url,snapshot:'/qa-reading',commit:'one',modes:[],readme:{text,url:url+'/blob/main/README.md'},skills:[{id:'reading',title:'阅读测试技能',description:'这只是简介',repositoryPath:'skills/reading',source:'/qa-reading/skills/reading',origin:url+'/tree/main/skills/reading'}]}}));
-      ipcMain.removeHandler('asl:repository-document');ipcMain.handle('asl:repository-document',()=>({ok:true,value:{text:'# 中文说明\n\n'+Array(60).fill('这是可继续阅读的中文正文。\n\n').join(''),url:url+'/blob/main/README.zh-CN.md'}}));
-      ipcMain.removeHandler('asl:source-document');ipcMain.handle('asl:source-document',()=>++globalThis.cloudProbe.reads===1?{ok:false,error:'技能暂不可读取'}:{ok:true,value:'# 完整技能原文\n\n重试之后的原文。'});
+      ipcMain.removeHandler('asl:github-skills');ipcMain.handle('asl:github-skills',()=>({ok:true,value:{repository:url,snapshot:'/qa-reading',commit:'one',modes:[],readme:{text,url:url+'/blob/one/README.md'},skills:[{id:'reading',title:'阅读测试技能',description:'这只是简介',repositoryPath:'skills/reading',source:'/qa-reading/skills/reading',origin:url+'/tree/one/skills/reading'}]}}));
+      ipcMain.removeHandler('asl:repository-document');ipcMain.handle('asl:repository-document',()=>({ok:true,value:{text:'# 中文说明\n\n'+Array(60).fill('这是可继续阅读的中文正文。\n\n').join(''),url:url+'/blob/one/README.zh-CN.md'}}));
+      const run=ipcMain._invokeHandlers.get('asl:run');ipcMain.removeHandler('asl:run');
+      ipcMain.handle('asl:run',(event,action,values)=>action==='sourceFiles'
+        ?++globalThis.cloudProbe.reads===1?{ok:false,error:'技能暂不可读取'}:{ok:true,value:{document:'# 完整技能原文\n\n重试之后的原文。',files:[{path:'SKILL.md',group:'说明'}]}}
+        :run(event,action,values));
     },url);
     // Fixture records use the same queue as startup view writes; an external file
     // overwrite while the App is live can race and erase the test's own record.
@@ -227,7 +231,7 @@ test('cloud translation, filtering and retry remain inside the selected reposito
       await require('./library.cjs').updatePreferences(path.join(app.getPath('userData'),'libraries.json'),state=>({...state,repositories:[url]}));
     },url);
     await page.reload();await page.locator('.mode-library-overview').waitFor();await page.locator('.cloud-source>.source-heading').click();
-    await page.getByRole('link',{name:'中文',exact:true}).click();await page.getByRole('heading',{name:'中文说明',exact:true}).waitFor();
+    await page.getByRole('heading',{name:'中文说明',exact:true}).waitFor();
     await page.locator('.content').hover();await page.mouse.wheel(0,850);await page.waitForFunction(()=>document.querySelector('.content').scrollTop>500);
     const position=await page.locator('.content').evaluate(el=>el.scrollTop);
     await page.getByRole('button',{name:'全部技能',exact:true}).first().click();await page.locator('.cloud-source>.source-heading').click();

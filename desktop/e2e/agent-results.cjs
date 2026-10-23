@@ -4,6 +4,89 @@ const path=require('node:path');
 const fs=require('node:fs/promises');
 const {launch,dispose}=require('./fixture.cjs');
 
+test('DeepSeek sync acknowledges progress, keeps failures recoverable and shows the verified result',{timeout:90000},async()=>{
+  const {app,page,workspace,run,errors}=await launch();
+  try{
+    await app.evaluate(({ipcMain},workspace)=>{
+      const path=process.getBuiltinModule('node:path');
+      const hosts=[{id:'deepseek-harness',name:'DeepSeek Harness',scopes:['preset'],configured:true}];
+      const native={hosts,presets:[{name:'standard',path:path.join(workspace,'standard'),managed:false}],connections:[],mcpSources:[],projects:[],assistants:[]};
+      globalThis.syncProbe={attempts:0,complete:null,native};
+      const read=ipcMain._invokeHandlers.get('asl:read');ipcMain.removeHandler('asl:read');
+      ipcMain.handle('asl:read',(event,id,method,args)=>method==='native'?{ok:true,value:native}:read(event,id,method,args));
+      for(const method of ['asl:native','asl:native-locations']){ipcMain.removeHandler(method);ipcMain.handle(method,()=>({ok:true,value:native}));}
+      ipcMain.removeHandler('asl:preset-target');ipcMain.handle('asl:preset-target',()=>({ok:true,value:path.join(workspace,'preset')}));
+      const core=ipcMain._invokeHandlers.get('asl:run');ipcMain.removeHandler('asl:run');
+      ipcMain.handle('asl:run',(_event,action,values)=>{
+        if(action==='readiness')return {ok:true,value:{checks:[],setupNotes:[],hooks:{coverage:'preset',commandFound:false}}};
+        if(action!=='preset')return core(_event,action,values);
+        globalThis.syncProbe.attempts++;
+        return new Promise(resolve=>{globalThis.syncProbe.complete=success=>{
+          if(success)native.connections=[{id:'isolated-preset',host:'deepseek-harness',title:'Creator Studio',workspace,mode:'creator-studio',scope:'preset',project:values.output,location:values.output,skills:['product-analysis'],status:'configured',issues:[]}];
+          resolve(success?{ok:true,value:{presetRegistered:true}}:{ok:false,error:'隔离测试：同步未完成，请重试'});
+        };});
+      });
+    },workspace);
+    await page.reload();await page.getByRole('button',{name:'Agent 配置',exact:true}).first().click();
+    await page.getByRole('tab',{name:/DeepSeek Harness/}).click();
+    await page.getByRole('button',{name:'添加工作模式',exact:true}).click();
+    await page.getByRole('button',{name:'配置到 DeepSeek Harness',exact:true}).click();
+    await page.getByRole('button',{name:'正在同步…',exact:true}).waitFor({timeout:2000});
+    await app.evaluate(()=>globalThis.syncProbe.complete(false));
+    await page.getByRole('button',{name:'配置到 DeepSeek Harness',exact:true}).waitFor();
+    await page.getByRole('button',{name:'配置到 DeepSeek Harness',exact:true}).click();
+    await page.getByRole('button',{name:'正在同步…',exact:true}).waitFor();
+    await app.evaluate(()=>globalThis.syncProbe.complete(true));
+    await page.getByText('已添加到 DeepSeek，请在新会话中选择这个工作模式。',{exact:true}).first().waitFor();
+    await page.getByRole('button',{name:'关闭',exact:true}).click();
+    await page.locator('.installed-mode').getByText('Creator Studio',{exact:true}).waitFor();
+    await page.locator('.installed-mode').getByText('配置已核对',{exact:true}).waitFor();
+    assert.equal(await app.evaluate(()=>globalThis.syncProbe.attempts),2);assert.deepEqual(errors,[]);
+    await page.screenshot({path:path.join(run,'deepseek-sync-result.png')});console.log('DeepSeek同步反馈：'+run);
+  }finally{await dispose(app);}
+});
+
+test('owned Agent session receipts update in place without relaunch or a model call',{timeout:90000},async()=>{
+  const {app,page,run,errors}=await launch();
+  try{
+    await app.evaluate(({ipcMain})=>{
+      globalThis.sessionProbe={status:'opened',starts:0,reads:0};
+      ipcMain.removeHandler('asl:assistants');
+      ipcMain.handle('asl:assistants',()=>({ok:true,value:[{id:'codex-app',name:'Codex CLI',available:true}]}));
+      ipcMain.removeHandler('asl:organize');
+      ipcMain.handle('asl:organize',()=>{globalThis.sessionProbe.starts++;return {ok:true,value:{id:'isolated-session',assistant:'codex-app',status:'opened'}};});
+      ipcMain.removeHandler('asl:setup-status');
+      ipcMain.handle('asl:setup-status',()=>{
+        globalThis.sessionProbe.reads++;
+        return globalThis.sessionProbe.status==='unavailable'?{ok:false,error:'temporary read failure'}:{ok:true,value:{id:'isolated-session',status:globalThis.sessionProbe.status}};
+      });
+    });
+    await page.locator('.source-tree button').filter({hasText:'Creator Studio'}).first().click();
+    await page.getByRole('button',{name:'交给 AI 整理',exact:true}).first().click();
+    await page.getByRole('button',{name:'在 Codex 中继续',exact:true}).click();
+    await page.locator('.assistant-session').getByText('Codex · 会话已打开',{exact:true}).waitFor();
+    await page.screenshot({path:path.join(run,'assistant-opened.png')});
+    await app.evaluate(()=>{globalThis.sessionProbe.status='unavailable';});
+    await page.locator('.assistant-session').getByText('Codex · 状态暂不可用',{exact:true}).waitFor();
+    await app.evaluate(({BrowserWindow})=>{globalThis.sessionProbe.status='ended';BrowserWindow.getAllWindows()[0].setContentSize(920,740);});
+    await page.locator('.assistant-session').getByText('Codex · 会话已结束',{exact:true}).waitFor();
+    const box=await page.locator('.assistant-session').boundingBox();
+    assert.ok(box.x>=0&&box.x+box.width<=920&&box.y>=0&&box.y+box.height<=740);
+    assert.equal(await app.evaluate(()=>globalThis.sessionProbe.starts),1);
+    assert.ok(await app.evaluate(()=>globalThis.sessionProbe.reads)>=3);
+    assert.deepEqual(errors,[]);
+    await page.screenshot({path:path.join(run,'assistant-ended-narrow.png')});
+    await page.locator('.editor-page-heading').getByRole('button',{name:'返回',exact:true}).click();
+    await page.getByRole('button',{name:'Agent 配置',exact:true}).first().click();
+    await page.getByRole('tab',{name:/Codex/}).click();
+    await page.locator('.agent-manager .assistant-session').getByText('Codex · 会话已结束',{exact:true}).waitFor();
+    await page.reload();
+    await page.locator('.agent-manager .assistant-session').getByText('Codex · 会话已结束',{exact:true}).waitFor();
+    assert.equal(await app.evaluate(()=>globalThis.sessionProbe.starts),1,'返回和重开只读取原回执，不再次启动 Agent');
+    console.log('会话自动状态验收：'+run);
+  }finally{await dispose(app);}
+});
+
 test('Agent results preserve drift, Hook scope, runtime sources and conflict protection',{timeout:120000},async()=>{
   const {app,page,workspace,run,errors}=await launch();
   const canonicalWorkspace=await fs.realpath(workspace);

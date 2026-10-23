@@ -176,8 +176,10 @@ test('cloud navigation preserves local position and refresh keeps the same repos
           readme:{text:'# 仓库介绍\n\n![附件](https://github.com/user-attachments/assets/example)\n\n![文件](./cover.png)',url:url+'/blob/main/README.md'},
           skills:['first','second'].map(folder=>({id:'same-name',title:folder==='first'?'持续阅读':'同名技能',description:'仓库技能',repositoryPath:'skills/'+folder,source:snapshot+'/skills/'+folder,origin:url+'/tree/main/skills/'+folder}))}};
       });
-      ipcMain.removeHandler('asl:source-document');
-      ipcMain.handle('asl:source-document',(_,source)=>({ok:true,value:'# 技能正文\n\n'+(source.endsWith('/first')?'选中的技能。':'另一个同名技能。')}));
+      const run=ipcMain._invokeHandlers.get('asl:run');ipcMain.removeHandler('asl:run');
+      ipcMain.handle('asl:run',(event,action,values)=>action==='sourceFiles'
+        ?{ok:true,value:{document:'# 技能正文\n\n'+(values.source.endsWith('/first')?'选中的技能。':'另一个同名技能。'),files:[{path:'SKILL.md',group:'说明'}]}}
+        :run(event,action,values));
     },url);
     const state=JSON.parse(await fs.readFile(preferences,'utf8'));
     state.repositories=[url];
