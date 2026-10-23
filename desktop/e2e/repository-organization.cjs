@@ -51,6 +51,9 @@ for(const empty of [true,false])test(`repository Skills can be read and chosen o
       ipcMain.removeHandler('asl:github-skills');
       ipcMain.handle('asl:github-skills',()=>({ok:true,value:{repository:url,snapshot,commit:'one',modes:[],skills:['reading','unused'].map(id=>({id,title:id==='reading'?'阅读材料':'未选技能',description:'整理阅读材料',requires:[],source:path.join(snapshot,id),origin:url+'/tree/main/'+id})),readme:{text:'# 阅读工具仓库',url:url+'/blob/main/README.md'}}}));
       ipcMain.removeHandler('asl:repository-overview');ipcMain.handle('asl:repository-overview',()=>({ok:true,value:null}));
+      const invoke=ipcMain._invokeHandlers.get('asl:run');ipcMain.removeHandler('asl:run');
+      globalThis.repositoryFailures=[];
+      ipcMain.handle('asl:run',async(event,action,values)=>{const result=await invoke(event,action,values);if(!result.ok)globalThis.repositoryFailures.push({action,operation:values?.request?.operation,apply:values?.apply,result});return result;});
       dialog.showMessageBox=async()=>({response:1});
       dialog.showOpenDialog=async()=>({canceled:false,filePaths:[snapshot]});
     },{url,snapshot});
@@ -149,6 +152,10 @@ for(const empty of [true,false])test(`repository Skills can be read and chosen o
       await page.getByRole('button',{name:'取消',exact:true}).click();
     }
     await page.screenshot({path:path.join(run,'repository-mode.png')});console.log('仓库逐项组织：'+run);
-  }catch(error){console.error(run,errors,await page.locator('body').innerText());throw error;}
+  }catch(error){
+    const evidence={error:String(error),errors,failures:await app.evaluate(()=>globalThis.repositoryFailures),text:await page.locator('body').innerText()};
+    await fs.writeFile(path.join(run,'repository-organization-failure.json'),JSON.stringify(evidence,null,2));
+    await page.screenshot({path:path.join(run,'repository-organization-failure.png')});console.error(run,evidence);throw error;
+  }
   finally{await dispose(app);}
 });
