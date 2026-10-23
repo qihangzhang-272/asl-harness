@@ -77,5 +77,5 @@
 .evolution-context>span:first-child{margin-right:auto}
 .evolution-context button{font-size:12px;padding:4px 8px;background:transparent;border:0;box-shadow:none}
 .evolution-error{padding:10px 12px;color:var(--danger);font-size:13px}.evolution-error details{max-height:100px;overflow:auto}
-@media(max-width:1100px){.evolution-workbench:has(.history-trace){grid-template-columns:minmax(0,1fr)}.history-trace{position:absolute;right:0;top:0;bottom:0;z-index:4;width:min(330px,100%);border-color:var(--line);box-shadow:-8px 10px 30px #1d1d1f12}.evolution-summary{display:none}.evolution-selection{display:block}.evolution-dock{padding-inline:14px}.evolution-sequence{--step:144px}}
+@media(max-width:1100px){.evolution-workbench:has(.history-trace){grid-template-columns:minmax(0,1fr)}.history-trace{position:absolute;right:0;top:0;bottom:0;z-index:4;width:min(330px,100%);border-color:var(--line);box-shadow:-8px 10px 30px #1d1d1f12}.evolution-summary:not([data-notice=true]){display:none}.evolution-selection{display:block}.evolution-dock{padding-inline:14px}.evolution-sequence{--step:144px}}
 @media(prefers-reduced-motion:reduce){.evolution-canvas *{scroll-behavior:auto!important}.evolution-rail :is(i,b){transition:none}}

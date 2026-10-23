@@ -20,7 +20,7 @@ test('Mode evolution directly scrubs one live canvas, restores safely and contin
   const history=core(library,['environment.history','--mode','creator-studio']);assert.ok(history.entries.length>=4);
   const older=history.entries.find(entry=>core(library,['environment.history','--mode','creator-studio','--revision',entry.revision]).snapshot.document.includes('初步分析'));
   const {app,page,run,errors}=await launch({library,output});
-  await app.evaluate(({BrowserWindow})=>{const win=BrowserWindow.getAllWindows()[0];win.restore();win.show();win.webContents.setBackgroundThrottling(false);});
+  await app.evaluate(({BrowserWindow})=>{const win=BrowserWindow.getAllWindows()[0];win.restore();win.setContentSize(1024,768);win.show();win.webContents.setBackgroundThrottling(false);});
   async function capture(name){
     const bytes=await app.evaluate(async({BrowserWindow})=>{const win=BrowserWindow.getAllWindows()[0],[width,height]=win.getContentSize();return(await win.capturePage()).resize({width,height,quality:'best'}).toPNG();});
     await fs.writeFile(path.join(run,name),Buffer.from(bytes));

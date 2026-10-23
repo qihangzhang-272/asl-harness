@@ -194,7 +194,7 @@ export default function ModeHistory({workspace,mode,skills,api,readOnly,onClose,
       </aside>}
       </div>
       <footer className="evolution-dock">
-        <div className="evolution-caption"><div className="evolution-selection"><strong>{selectedTitle}</strong><span className="evolution-summary" role="status">
+        <div className="evolution-caption"><div className="evolution-selection"><strong>{selectedTitle}</strong><span className="evolution-summary" data-notice={!!notice} role="status">
           {notice||(!ready?'正在读取…':selected.revision==='current'?'当前工作区':changes.added.length||changes.removed.length?`加入 ${changes.added.length} · 移出 ${changes.removed.length}`:changes.structure?'调整结构':date)}
         </span></div>
         <div className="evolution-navigation">
