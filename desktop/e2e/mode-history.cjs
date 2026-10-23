@@ -49,6 +49,9 @@ test('Mode evolution directly scrubs one live canvas, restores safely and contin
     await waitDrawing(older.revision);
     assert.match(await page.locator('.evolution-canvas').innerText(),/初步分析/);
     assert.ok(await page.locator('.evolution-canvas .evolution-changed').count()>0,'实际渲染的命名空间不能阻断节点变化提示');
+    const trace=page.getByRole('button',{name:'变化说明',exact:true});
+    if(await trace.getAttribute('aria-expanded')!=='true')await trace.click();
+    await page.locator('.history-trace').waitFor();
     assert.equal(await page.locator('.history-trace').count(),1,'选中版本应有同版本的变更依据');
     await page.getByRole('button',{name:'补充说明',exact:true}).click();
     const explanation=page.getByRole('textbox',{name:'变更说明',exact:true});

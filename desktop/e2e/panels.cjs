@@ -91,17 +91,18 @@ test('a pending external Skill reread keeps the document and scrollable director
     const directory=path.join(workspace,'skills/product-analysis/references');
     await fs.mkdir(directory,{recursive:true});
     await Promise.all(Array.from({length:35},(_,i)=>fs.writeFile(path.join(directory,`连续阅读-${i}.md`),'# 资料\n')));
+    await app.evaluate(({ipcMain})=>{
+      const original=ipcMain._invokeHandlers.get('asl:run');
+      ipcMain.removeHandler('asl:run');ipcMain.handle('asl:run',async(event,action,...args)=>{
+        // Install before the first read: no unobserved request may complete after the external write.
+        if(action==='files'&&(globalThis.rereadCount=(globalThis.rereadCount||0)+1)>1)await (globalThis.rereadGate||=new Promise(resolve=>globalThis.releaseReread=resolve));
+        return original(event,action,...args);
+      });
+    });
     await page.getByRole('button',{name:'全部技能',exact:true}).first().click();
     await page.locator('.skill-table-row').filter({has:page.locator('[title="product-analysis"]')}).click();
     await page.locator('.package-tree button[title^="references/连续阅读-"]').last().waitFor();
     const before=await page.locator('.package-rendered').innerText();
-    await app.evaluate(({ipcMain})=>{
-      const original=ipcMain._invokeHandlers.get('asl:run');
-      ipcMain.removeHandler('asl:run');ipcMain.handle('asl:run',async(event,action,...args)=>{
-        if(action==='files')await (globalThis.rereadGate||=new Promise(resolve=>globalThis.releaseReread=resolve));
-        return original(event,action,...args);
-      });
-    });
     await fs.appendFile(path.join(workspace,'skills/product-analysis/SKILL.md'),'\n外部更新后的阅读内容。\n');
     await app.evaluate(async()=>{const deadline=Date.now()+10000;while(typeof globalThis.releaseReread!=='function'){if(Date.now()>deadline)throw Error('文件读取未到达受控边界');await new Promise(resolve=>setTimeout(resolve,20));}});
     await page.waitForFunction(()=>document.querySelector('[aria-label="重新读取文件"]')?.disabled);
