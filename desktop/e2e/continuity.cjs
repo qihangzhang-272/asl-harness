@@ -167,7 +167,7 @@ test('cloud navigation preserves local position and refresh keeps the same repos
   const url='https://github.com/qa/continuity',preferences=path.join(run,'home/app/libraries.json');
   try {
     // Deterministic remote snapshots at the IPC boundary; all navigation uses real UI.
-    await app.evaluate(({ipcMain},url)=>{
+    await app.evaluate(async({app,ipcMain},url)=>{
       let revision=0;
       ipcMain.removeHandler('asl:github-skills');
       ipcMain.handle('asl:github-skills',()=>{
@@ -180,10 +180,10 @@ test('cloud navigation preserves local position and refresh keeps the same repos
       ipcMain.handle('asl:run',(event,action,values)=>action==='sourceFiles'
         ?{ok:true,value:{document:'# 技能正文\n\n'+(values.source.endsWith('/first')?'选中的技能。':'另一个同名技能。'),files:[{path:'SKILL.md',group:'说明'}]}}
         :run(event,action,values));
+      const path=process.getBuiltinModule('node:path');
+      const require=process.getBuiltinModule('node:module').createRequire(path.join(app.getAppPath(),'package.json'));
+      await require('./library.cjs').updatePreferences(path.join(app.getPath('userData'),'libraries.json'),state=>({...state,repositories:[url]}));
     },url);
-    const state=JSON.parse(await fs.readFile(preferences,'utf8'));
-    state.repositories=[url];
-    await fs.writeFile(preferences,JSON.stringify(state));
     await page.reload();
     await page.locator('.mode-library-overview').waitFor();
     await page.locator('.source-tree button').filter({hasText:'Creator Studio'}).click();
