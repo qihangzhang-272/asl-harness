@@ -1,7 +1,7 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { randomUUID, createHash } = require('node:crypto');
-const { githubSnapshot, githubRepository } = require('./market.cjs');
+const { githubSnapshot, githubRepository, githubRevision } = require('./market.cjs');
 const { isLibrary } = require('./library.cjs');
 // Keep each URL's last successful read; reuse matching inspected snapshots across aliases.
 const cache = new Map();
@@ -57,15 +57,17 @@ async function readOverview(url, fetch, signal, document) {
   const request=(url,options={})=>fetch(url,{...options,signal:AbortSignal.any([signal,AbortSignal.timeout(20000)].filter(Boolean))});
   const snapshot=repo.kind?await githubSnapshot(url,request):null;
   if(document&&(typeof document.file!=='string'||!document.file.toLowerCase().endsWith('.md')||document.file.includes('\\')||document.file.includes(':')||document.file.split('/').some(p=>p==='..'||p==='.')||typeof document.ref!=='string'))throw new Error('文档路径无效');
-  const endpoint=`https://api.github.com/repos/${repo.owner}/${repo.repo}/${document?'contents/'+document.file.split('/').map(encodeURIComponent).join('/'):'readme'+(snapshot?.subpath?'/'+snapshot.subpath.split('/').map(encodeURIComponent).join('/'):'')}`;
-  const ref=document?.ref||snapshot?.commit;
+  const revision=document?.ref&&!/^[a-f0-9]{40}$/.test(document.ref)?await githubRevision({...repo,kind:'blob',tail:[...document.ref.split('/'),...document.file.split('/')]},request):null;
+  const file=revision?revision.subpath.join('/'):document?.file;
+  const endpoint=`https://api.github.com/repos/${repo.owner}/${repo.repo}/${document?'contents/'+file.split('/').map(encodeURIComponent).join('/'):'readme'+(snapshot?.subpath?'/'+snapshot.subpath.split('/').map(encodeURIComponent).join('/'):'')}`;
+  const ref=revision?.commit||document?.ref||snapshot?.commit;
   const response=await request(endpoint+(ref?'?ref='+encodeURIComponent(ref):''),{headers:{Accept:'application/vnd.github+json','User-Agent':'ASL-Workspace'}});
   if(response.status===404)return null;
   if(!response.ok)throw new Error(response.status===403?'GitHub 限制了请求频率，请稍后重试':`仓库介绍暂时不可用（${response.status}）`);
   const raw=await response.text();if(raw.length>2*1024*1024)throw new Error('README 过大，请到 GitHub 查看');
   const body=JSON.parse(raw),text=Buffer.from(body.content||'',body.encoding==='base64'?'base64':'utf8').toString('utf8');
   if(text.length>1024*1024||typeof body.html_url!=='string'||!body.html_url.startsWith(repo.url+'/blob/'))throw new Error('README 内容或地址无效');
-  return{file:body.path,text,url:body.html_url};
+  return{file:body.path,text,url:body.html_url,...(revision?{ref:revision.ref}:{})};
 }
 
 async function readRepository(url, { fetch, core, temp, selected, repositories, cacheRoot, refresh=false }, signal) {

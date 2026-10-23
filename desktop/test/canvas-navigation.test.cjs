@@ -37,7 +37,8 @@ test('same-repository reader uses the inspected snapshot and rejects traversal o
 test('early README reader can navigate translations before archive inspection completes',async()=>{
   const {readOverview}=require('../repository-import.cjs');
   const result=await readOverview('https://github.com/a/b',async url=>{
-    assert.equal(url,'https://api.github.com/repos/a/b/contents/README.zh.md?ref=main');
+    if(url==='https://api.github.com/repos/a/b/commits/main')return{ok:true,text:async()=>JSON.stringify({sha:'a'.repeat(40)})};
+    assert.equal(url,'https://api.github.com/repos/a/b/contents/README.zh.md?ref='+'a'.repeat(40));
     return{ok:true,text:async()=>JSON.stringify({path:'README.zh.md',html_url:'https://github.com/a/b/blob/main/README.zh.md',content:Buffer.from('中文').toString('base64'),encoding:'base64'})};
   },undefined,{file:'README.zh.md',ref:'main'});
   assert.equal(result.text,'中文');

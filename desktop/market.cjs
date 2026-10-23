@@ -98,27 +98,32 @@ function githubRepository(value) {
   if (tail.some(p => !p || p === "." || p === ".." || /[\\/\0]/.test(p))) throw new Error("技能目录地址无效");
   return { owner, repo, tail, kind, url: `https://github.com/${owner}/${repo}` };
 }
-async function githubSnapshot(value, fetch) {
-  const repo = githubRepository(value);
+async function githubRevision(repo, fetch) {
   const base = `https://api.github.com/repos/${repo.owner}/${repo.repo}`;
-  let ref, subpath = [];
+  let ref, name, subpath = [];
   if (repo.tail.length) {
     // Try longest ref first so branch names containing slashes are not silently changed.
-    for (let i = repo.tail.length; i > 0; i--) {
-      try { ref = await readJson(fetch, `${base}/commits/${encodeURIComponent(repo.tail.slice(0, i).join("/"))}`); subpath = repo.tail.slice(i); break; }
+    for (let i = repo.tail.length - (repo.kind === "blob" ? 1 : 0); i > 0; i--) {
+      try { name = repo.tail.slice(0, i).join("/"); ref = await readJson(fetch, `${base}/commits/${encodeURIComponent(name)}`); subpath = repo.tail.slice(i); break; }
       catch (error) { if (!/404|422/.test(error.message)) throw error; }
     }
     if (!ref) throw new Error("GitHub 分支或版本不存在");
   } else {
     const metadata = await readJson(fetch, base);
-    ref = await readJson(fetch, `${base}/commits/${encodeURIComponent(metadata.default_branch)}`);
+    name = metadata.default_branch;
+    ref = await readJson(fetch, `${base}/commits/${encodeURIComponent(name)}`);
   }
   if (!/^[a-f0-9]{40}$/.test(ref.sha || "")) throw new Error("GitHub 未返回可核对的版本");
+  return { commit: ref.sha, ref: name, subpath };
+}
+async function githubSnapshot(value, fetch) {
+  const repo = githubRepository(value);
+  const { commit, subpath } = await githubRevision(repo, fetch);
   if (repo.kind === "blob") {
     if (subpath.at(-1) !== "SKILL.md") throw new Error("请选择技能目录或 SKILL.md 链接");
     subpath.pop();
   }
-  return { ...repo, commit: ref.sha, subpath: subpath.join("/"),
-    archive: `https://codeload.github.com/${repo.owner}/${repo.repo}/zip/${ref.sha}` };
+  return { ...repo, commit, subpath: subpath.join("/"),
+    archive: `https://codeload.github.com/${repo.owner}/${repo.repo}/zip/${commit}` };
 }
-module.exports = { publicUrl, parseDshCatalog, discover, githubRepository, githubSnapshot };
+module.exports = { publicUrl, parseDshCatalog, discover, githubRepository, githubRevision, githubSnapshot };

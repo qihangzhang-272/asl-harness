@@ -55,7 +55,7 @@ export default function RepositoryMarkdown({document,report}) {
       {!!history.length&&<button onClick={()=>setHistory(previous=>previous.slice(0,-1))}><ArrowLeft size={15}/>返回文档</button>}
       {languages.length>1&&<label>阅读语言<select aria-label="阅读语言" value={`${preferred?.ref}:${preferred?.file}`} onChange={event=>chooseLanguage(event.target.value)}>{languages.map(option=><option key={`${option.ref}:${option.file}`} value={`${option.ref}:${option.file}`}>{option.label}</option>)}</select></label>}
     </div>}
-    {ready&&ref&&ref!==original?.ref&&<p className="repository-document-version">其他版本 · {ref}</p>}
+    {ready&&ref&&ref!==original?.ref&&<p className="repository-document-version">其他版本 · {current.ref||ref}</p>}
     {loading&&<p role="status">正在读取文档…</p>}
     {error&&<div role="alert"><p className="error-text">这份文档暂时读不到。<button onClick={()=>setRetry(n=>n+1)}>重新读取</button></p><p className="muted">暂时保留上次读到的内容。</p><details><summary>查看详情</summary><pre>{error}</pre></details></div>}
     {(ready||error)&&<Markdown text={current.text} baseUrl={current.url} onLink={follow}/>}
