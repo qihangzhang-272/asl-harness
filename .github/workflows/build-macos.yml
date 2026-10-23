@@ -7,7 +7,7 @@ on:
         description: 已发布内容库的完整提交 SHA
         type: string
         required: true
-        default: 8dc3e269f5fd933421558cb3c96a5010651418ed
+        default: e925ac24fbbfccaba08bcc5f9e0b09826ae766d1
 
 permissions:
   contents: read
