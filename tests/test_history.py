@@ -68,7 +68,7 @@ def test_version_explanations_remain_available_with_many_recorded_files(tmp_path
     root = repository(tmp_path)
     revision = git(root, 'rev-parse', 'HEAD')
     updates = ''.join(f'update refs/asl/files/{number:064x} {revision}\n' for number in range(120))
-    subprocess.run(['git', '-C', str(root), 'update-ref', '--stdin'], input=updates, text=True, check=True, capture_output=True)
+    subprocess.run(['git', '-C', str(root), 'update-ref', '--stdin'], input=updates.encode('ascii'), check=True, capture_output=True)
     annotate(root, revision, '文件较多时仍能记录明确修改依据。')
     assert history(root, revision=revision)['note']['document'].startswith('文件较多')
 

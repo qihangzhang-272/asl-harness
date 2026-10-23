@@ -12,6 +12,7 @@ from test_mode_only import _environment
 @pytest.mark.parametrize('platform', ['win32', 'darwin', 'linux'])
 def test_development_renderer_uses_native_electron_path(monkeypatch, platform):
     from asl_harness import mermaid
+    monkeypatch.delenv('ELECTRON_OVERRIDE_DIST_PATH', raising=False)
     monkeypatch.setattr(mermaid.sys, 'platform', platform)
     monkeypatch.setattr(mermaid.sys, 'frozen', False, raising=False)
     desktop = Path(mermaid.__file__).resolve().parents[2] / 'desktop'
@@ -19,11 +20,23 @@ def test_development_renderer_uses_native_electron_path(monkeypatch, platform):
     assert mermaid.renderer_command() == [str(desktop / 'node_modules/electron/dist' / binary), str(desktop), '--validate-mermaid']
 
 
+@pytest.mark.parametrize('platform', ['win32', 'darwin', 'linux'])
+def test_development_renderer_shares_electrons_runtime_override(tmp_path, monkeypatch, platform):
+    from asl_harness import mermaid
+    monkeypatch.setattr(mermaid.sys, 'platform', platform)
+    monkeypatch.setattr(mermaid.sys, 'frozen', False, raising=False)
+    monkeypatch.setenv('ELECTRON_OVERRIDE_DIST_PATH', str(tmp_path))
+    binary = {'win32': 'electron.exe', 'darwin': 'Electron.app/Contents/MacOS/Electron', 'linux': 'electron'}[platform]
+    desktop = Path(mermaid.__file__).resolve().parents[2] / 'desktop'
+    assert mermaid.renderer_command() == [str(tmp_path / binary), str(desktop), '--validate-mermaid']
+
+
 @pytest.mark.parametrize('platform', ['win32', 'darwin'])
 def test_frozen_renderer_stays_inside_native_app_bundle(tmp_path, monkeypatch, platform):
     from asl_harness import mermaid
     monkeypatch.setattr(mermaid.sys, 'platform', platform)
     monkeypatch.setattr(mermaid.sys, 'frozen', True, raising=False)
+    monkeypatch.setenv('ELECTRON_OVERRIDE_DIST_PATH', str(tmp_path / 'untrusted-runtime'))
     root = tmp_path / ('ASL Workspace.app/Contents' if platform == 'darwin' else 'ASL Workspace')
     core = root / ('Resources/core/asl-harness' if platform == 'darwin' else 'resources/core/asl-harness.exe')
     monkeypatch.setattr(mermaid.sys, 'executable', str(core))

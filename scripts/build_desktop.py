@@ -58,7 +58,7 @@ def build(output: Path) -> Path:
     mac = sys.platform == 'darwin'
     root = Path(__file__).resolve().parents[1]
     desktop = root / "desktop"
-    runtime = desktop / "node_modules/electron/dist"
+    runtime = Path(os.environ.get('ELECTRON_OVERRIDE_DIST_PATH') or desktop / "node_modules/electron/dist")
     output = output.resolve()
     if output.exists():
         raise ValueError("Use a new output directory; existing builds are never deleted")

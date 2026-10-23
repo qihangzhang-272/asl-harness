@@ -17,7 +17,8 @@ def renderer_command() -> list[str]:
     else:
         desktop = Path(__file__).resolve().parents[2] / 'desktop'
         binary = 'Electron.app/Contents/MacOS/Electron' if sys.platform == 'darwin' else ('electron.exe' if sys.platform == 'win32' else 'electron')
-        executable = desktop / 'node_modules/electron/dist' / binary
+        runtime = Path(os.environ.get('ELECTRON_OVERRIDE_DIST_PATH') or desktop / 'node_modules/electron/dist')
+        executable = runtime / binary
         return [str(executable), str(desktop), '--validate-mermaid']
 
 

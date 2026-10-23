@@ -64,7 +64,8 @@ def test_packaged_smoke_checks_real_render_and_invalid_rejection(tmp_path, monke
 
 
 @pytest.mark.parametrize('platform', ['win32', 'darwin'])
-def test_native_bundle_includes_every_desktop_entry_and_frozen_core(tmp_path, monkeypatch, platform):
+@pytest.mark.parametrize('external_runtime', [False, True])
+def test_native_bundle_includes_every_desktop_entry_and_frozen_core(tmp_path, monkeypatch, platform, external_runtime):
     source = Path(__file__).resolve().parents[1]
     spec = importlib.util.spec_from_file_location('asl_build_bundle', source / 'scripts/build_desktop.py')
     module = importlib.util.module_from_spec(spec)
@@ -79,7 +80,11 @@ def test_native_bundle_includes_every_desktop_entry_and_frozen_core(tmp_path, mo
     (desktop / 'dist').mkdir()
     (desktop / 'dist/index.html').write_text('app', encoding='utf-8')
     (root / 'examples/personal-environment').mkdir(parents=True)
-    runtime = desktop / 'node_modules/electron/dist'
+    runtime = tmp_path / 'external-runtime' if external_runtime else desktop / 'node_modules/electron/dist'
+    if external_runtime:
+        monkeypatch.setenv('ELECTRON_OVERRIDE_DIST_PATH', str(runtime))
+    else:
+        monkeypatch.delenv('ELECTRON_OVERRIDE_DIST_PATH', raising=False)
     if platform == 'darwin':
         contents = runtime / 'Electron.app/Contents'
         (contents / 'MacOS').mkdir(parents=True)

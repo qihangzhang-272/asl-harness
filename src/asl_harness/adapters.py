@@ -174,7 +174,6 @@ def _project_skill(
             result = subprocess.run(
                 ["cmd", "/c", "mklink", "/J", str(target), str(source)],
                 capture_output=True,
-                text=True,
             )
             if result.returncode == 0 and _is_junction(target):
                 projection = "junction"
