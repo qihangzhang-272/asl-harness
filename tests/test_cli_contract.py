@@ -1,6 +1,7 @@
 import json
 from io import StringIO
 from pathlib import Path
+import sys
 import tomllib
 
 import pytest
@@ -61,6 +62,54 @@ def test_source_read_contract_is_discoverable_and_rejects_ambiguous_location(tmp
                       ['--source', str(source), '--workspace', str(source)]]:
         code, result, _ = _json_command(['skill.files', *arguments], capsys)
         assert code == 2 and not result['ok']
+
+
+def test_file_access_failure_is_actionable_and_keeps_agent_diagnostics(tmp_path, capsys, monkeypatch):
+    source = tmp_path / 'reading'
+    source.mkdir()
+    file = source / 'SKILL.md'
+    original = b'# Original\n'
+    file.write_bytes(original)
+    read = Path.read_bytes
+    def deny_read(path):
+        if path == file:
+            raise PermissionError(13, 'Access is denied', str(file))
+        return read(path)
+    with monkeypatch.context() as blocked:
+        blocked.setattr(Path, 'read_bytes', deny_read)
+        code, result, stderr = _json_command(['skill.files', '--source', str(source)], capsys)
+    assert code == 2 and not result['ok'] and not stderr
+    assert result['error']['code'] == 'FILE_ACCESS_DENIED'
+    assert '占用' in result['error']['message'] and '权限' in result['error']['message']
+    assert str(file) not in result['error']['message']
+    assert result['error']['details'][0]['file'] == str(file)
+    assert 'Access is denied' in result['error']['details'][0]['message']
+    assert file.read_bytes() == original
+
+
+@pytest.mark.skipif(sys.platform != 'win32', reason='Windows native file-sharing contract')
+def test_windows_locked_file_returns_access_failure_without_changing_the_skill(tmp_path, capsys):
+    import ctypes
+    from ctypes import wintypes
+    source = tmp_path / 'reading'
+    source.mkdir()
+    file = source / 'SKILL.md'
+    original = b'# Original\n'
+    file.write_bytes(original)
+    kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+    kernel.CreateFileW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, ctypes.c_void_p,
+                                  wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE]
+    kernel.CreateFileW.restype = wintypes.HANDLE
+    kernel.CloseHandle.argtypes = [wintypes.HANDLE]
+    handle = kernel.CreateFileW(str(file), 0x80000000, 0, None, 3, 0, None)
+    assert handle != ctypes.c_void_p(-1).value, ctypes.WinError(ctypes.get_last_error())
+    try:
+        code, result, _ = _json_command(['skill.files', '--source', str(source)], capsys)
+    finally:
+        kernel.CloseHandle(handle)
+    assert code == 2 and result['error']['code'] == 'FILE_ACCESS_DENIED'
+    assert Path(result['error']['details'][0]['file']) == file
+    assert file.read_bytes() == original
 
 
 def test_cli_declares_host_confirmation_for_skill_changes_without_fake_approval_fields(tmp_path, capsys):

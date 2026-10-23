@@ -409,6 +409,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         print(output)
         return 2
+    except PermissionError as error:
+        output = json.dumps(
+            {"ok": False, "error": {"code": "FILE_ACCESS_DENIED",
+             "message": "文件被占用或当前无权访问。请关闭占用它的程序或检查权限，然后重试。",
+             "details": [{"file": error.filename, "message": str(error)}]}},
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
+        print(output)
+        return 2
     except (OSError, TypeError, ValueError, yaml.YAMLError) as error:
         output = json.dumps(
             {"ok": False, "error": {"code": "INPUT_INVALID", "message": str(error)}},
