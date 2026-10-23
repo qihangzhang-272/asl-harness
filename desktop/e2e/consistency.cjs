@@ -180,6 +180,16 @@ test('right-click creates a peer Mode and an independent valid library without c
 test('local categories and file reading positions survive navigation and narrow tables remain legible',{timeout:120000},async()=>{
   const {app,page,workspace,run,errors}=await launch();
   try{
+    await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setContentSize(1024,648));
+    await app.evaluate(({ipcMain})=>{
+      const original=ipcMain._invokeHandlers.get('asl:run');globalThis.readingRequests=[];
+      ipcMain.removeHandler('asl:run');ipcMain.handle('asl:run',async(event,action,values)=>{
+        if(action!=='files')return original(event,action,values);
+        await new Promise(resolve=>setTimeout(resolve,300));
+        const result=await original(event,action,values);
+        globalThis.readingRequests.push({file:values.file,ok:result.ok,heading:result.value?.document?.split('\n')[0],error:result.error});return result;
+      });
+    });
     const directory=path.join(workspace,'skills/product-analysis/references');await fs.mkdir(directory,{recursive:true});
     await fs.writeFile(path.join(directory,'reading.md'),'# 阅读位置\n\n'+Array.from({length:90},(_,i)=>`第${i}段测试内容。\n\n`).join(''));
     await page.getByRole('button',{name:'全部技能',exact:true}).first().click();
@@ -208,7 +218,8 @@ test('local categories and file reading positions survive navigation and narrow 
     const screenshot=await app.evaluate(async({BrowserWindow})=>{const w=BrowserWindow.getAllWindows().find(w=>w.isVisible());return (await w.capturePage()).toPNG().toString('base64');});
     await fs.writeFile(path.join(run,'table-125-percent.png'),Buffer.from(screenshot,'base64'));
     assert.deepEqual(errors,[]);console.log('阅读与窄屏验收：'+run);
-  }finally{await page.close();await app.close();}
+  }catch(error){console.error('阅读失败：',run,errors,await app.evaluate(()=>globalThis.readingRequests),await page.locator('body').innerText());await page.screenshot({path:path.join(run,'reading-failure.png')}).catch(()=>{});throw error;}
+  finally{await page.close();await app.close();}
 });
 
 test('cloud translation, filtering and retry remain inside the selected repository',{timeout:120000},async()=>{
