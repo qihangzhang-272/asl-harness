@@ -64,3 +64,25 @@ test('adding an existing library skill saves graph and membership together witho
   assert.equal(calls.length,1);const request=calls[0][2].request;
   assert.equal(request.operation,'mode.save');assert.equal(request.placement,'research');assert.deepEqual([...request.skills],['first','known']);assert.equal(request.document,'# 图');
 });
+
+test('nested reading positions follow the document when content above it changes height',async()=>{
+  const source=await fs.readFile(path.join(__dirname,'../src/useViewState.jsx'),'utf8');
+  const storage=new Map(),callbacks=new Map();let cleanup;
+  const parent={style:{overflowY:'auto'},scrollTop:0,getBoundingClientRect:()=>({top:0}),
+    addEventListener:(name,fn)=>callbacks.set(name,fn),removeEventListener:name=>callbacks.delete(name)};
+  const content={style:{overflowY:'visible'},parentElement:parent,offset:600,getBoundingClientRect:()=>({top:content.offset-parent.scrollTop})};
+  const hook=vm.runInNewContext(source.replace(/^import[^\n]*\n/,'').replaceAll('export function','function')+'\nuseScrollMemory',{
+    localStorage:{getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value)},
+    getComputedStyle:element=>element.style,useLayoutEffect:fn=>{cleanup=fn();},
+  });
+  hook('reader',{current:content});parent.scrollTop=960;callbacks.get('scroll')();cleanup();
+  content.offset=347;parent.scrollTop=0;
+  hook('reader',{current:content});
+  assert.equal(parent.scrollTop,707,'same paragraph stays in the viewport despite a 253px header change');
+  assert.equal(content.getBoundingClientRect().top,-360);cleanup();
+  storage.set('asl.view.scroll.legacy','960');parent.scrollTop=0;
+  hook('legacy',{current:content});assert.equal(parent.scrollTop,960,'existing numeric records remain readable');cleanup();
+  storage.set('asl.view.scroll.page','230');parent.scrollTop=0;
+  hook('page',{current:parent});assert.equal(parent.scrollTop,230);callbacks.get('scroll')();
+  assert.equal(storage.get('asl.view.scroll.page'),'230','a scroll container keeps its original numeric contract');cleanup();
+});

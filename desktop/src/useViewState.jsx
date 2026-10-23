@@ -15,13 +15,16 @@ export function useViewState(key,fallback){
 export function useScrollMemory(key,ref,ready=true){
   useLayoutEffect(()=>{
     let element=ref.current;if(!element||!ready)return;
+    const content=element;
     if(!['auto','scroll'].includes(getComputedStyle(element).overflowY)){
       element=element.parentElement;
       while(element&&!['auto','scroll'].includes(getComputedStyle(element).overflowY))element=element.parentElement;
       if(!element)return;
     }
-    element.scrollTop=Number(read(`scroll.${key}`,0))||0;
-    const save=()=>write(`scroll.${key}`,element.scrollTop);
+    const offset=()=>content===element?0:content.getBoundingClientRect().top-element.getBoundingClientRect().top+element.scrollTop;
+    const saved=read(`scroll.${key}`,0);
+    element.scrollTop=Number.isFinite(saved?.relative)?offset()+saved.relative:Number(saved)||0;
+    const save=()=>write(`scroll.${key}`,content===element?element.scrollTop:{relative:element.scrollTop-offset()});
     element.addEventListener('scroll',save,{passive:true});
     return()=>{save();element.removeEventListener('scroll',save);};
   },[key,ref,ready]);

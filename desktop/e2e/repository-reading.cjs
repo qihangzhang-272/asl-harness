@@ -1,5 +1,6 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
+const fs=require('node:fs/promises');
 const path=require('node:path');
 const {launch,dispose}=require('./fixture.cjs');
 
@@ -82,11 +83,12 @@ for(const explicit of [false,true])test(`finishing the repository snapshot prese
       const require=process.getBuiltinModule('node:module').createRequire(path.join(app.getAppPath(),'package.json'));
       await require('./library.cjs').updatePreferences(path.join(app.getPath('userData'),'libraries.json'),state=>({...state,repositories:[url]}));
       const text='# 仓库介绍\n\n[使用说明](docs/use.md) · [另一版本]('+url+'/blob/release/docs/release.md)';
-      globalThis.earlyReading={requests:[]};
+      globalThis.earlyReading={requests:[],holdReopen:false};
       const document=(file,ref)=>({file,ref,url:url+'/blob/'+ref+'/'+file,text:'# '+(file==='docs/use.md'?'使用说明':'版本说明')+'\n\n'+Array.from({length:70},(_,i)=>'阅读段落 '+i+'：保留正在查看的资料。').join('\n\n')});
       const report={repository:url,snapshot:'early-snapshot',commit,modes:[],skills:[],repositoryFiles:['README.md','docs/use.md'],readme:{file:'README.md',url:url+'/blob/'+commit+'/README.md',text}};
       const pending=new Promise(resolve=>{globalThis.releaseEarlyReading=()=>resolve({ok:true,value:report});});
-      ipcMain.removeHandler('asl:github-skills');ipcMain.handle('asl:github-skills',()=>pending);
+      const reopened=new Promise(resolve=>{globalThis.releaseReopenedReading=()=>resolve({ok:true,value:report});});
+      ipcMain.removeHandler('asl:github-skills');ipcMain.handle('asl:github-skills',()=>globalThis.earlyReading.holdReopen?reopened:pending);
       const read=ipcMain._invokeHandlers.get('asl:read');ipcMain.removeHandler('asl:read');
       ipcMain.handle('asl:read',(event,id,method,args)=>method==='repositoryOverview'?{ok:true,value:{file:'README.md',url:url+'/blob/main/README.md',text}}:read(event,id,method,args));
       ipcMain.removeHandler('asl:repository-overview');ipcMain.handle('asl:repository-overview',(_event,_url,route)=>{
@@ -115,9 +117,15 @@ for(const explicit of [false,true])test(`finishing the repository snapshot prese
     assert.equal(requests.at(-1).ref,explicit?'release':commit,'only preview-relative links follow the inspected snapshot');
     if(explicit)await page.getByText('其他版本 · release',{exact:true}).waitFor();
     else assert.equal(await page.locator('.repository-document-version').count(),0);
+    await app.evaluate(()=>{globalThis.earlyReading.holdReopen=true;});
     await page.reload();await page.locator('.cloud-source>.source-heading').click();
     await heading.waitFor();
-    assert.ok(Math.abs(await heading.evaluate(el=>el.getBoundingClientRect().top)-beforeTop)<8,'reopen must restore the same document and reading position');
+    const reopenedTop=await heading.evaluate(el=>el.getBoundingClientRect().top);
+    await fs.writeFile(path.join(run,'early-reader-position.json'),JSON.stringify({explicit,beforeScroll,beforeTop,reopenedTop,scroll:await scroll()},null,2));
+    assert.ok(Math.abs(reopenedTop-beforeTop)<8,'reopen must restore the same document and reading position before the full report arrives');
+    await app.evaluate(()=>globalThis.releaseReopenedReading());
+    await page.getByRole('button',{name:'查看 0 个技能',exact:true}).waitFor();
+    assert.ok(Math.abs(await heading.evaluate(el=>el.getBoundingClientRect().top)-beforeTop)<8,'finishing the reopened report must preserve the same reading position');
     await page.getByRole('button',{name:'返回文档',exact:true}).click();
     await page.getByRole('heading',{name:'仓库介绍',exact:true}).waitFor();
     await page.screenshot({path:path.join(run,'early-reader-handoff.png')});
