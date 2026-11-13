@@ -130,6 +130,12 @@
 
 <!-- ASL:PROJECT STATUS START -->
 
+### DSH 原生工作区公开分发 · 2026-11-13 · 用户验收通过，仓库与安装包已公开
+
+- ASL 共享画板与原生插件已推送；公开 [dsh-asl](https://github.com/qihangzhang-272/dsh-asl) 固定上游源码，含预构建包、配置、架构约束与能力矩阵。Windows DSH 视觉和缩放经用户确认。
+- 独立检出含真实核心写入的 48 项检查与公开 CI 通过，[v0.3.14](https://github.com/qihangzhang-272/dsh-asl/releases/tag/v0.3.14) 已发布并下载核对。社区目录 [PR #106](https://github.com/zhu1090093659/dsh-community-plugins/pull/106) 待审；awesome 目录要求仓库满一天，条目分支已准备，尚未投稿。详见 [公开分发记录](plans/2026-11-13-DSH插件公开分发.md)。
+
+
 ### Windows 产品体验收敛 · 2026-10-23 · 0.5.19 两端已公开、桌面入口已更新，心跳已取消
 
 - **范围：**执行用户已确认的[阅读与采用方案](plans/2026-10-23-source-reading-and-mode-adoption.md)，保留 Mac 视觉；[同一执行记录](plans/2026-10-23-Windows适配与产品体验收敛.md)保留各候选、失败事实和证据。真实 Skill／Mode、账号、私人归档与投影不写入，测试仅使用隔离样例。
