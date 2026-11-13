@@ -1,0 +1,9 @@
+- insert:
+    - id: asl-workspace
+      name: dsh-asl-workspace
+    - id: asl-workspace-skill
+      name: '@deepseek-ai/dsh-skill-filesystem'
+      config:
+        providerName: asl-workspace-plugin
+        includeDefaultRoots: false
+        bundledSkillDir: !!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('dsh-asl-workspace/package.json')), 'skills')
