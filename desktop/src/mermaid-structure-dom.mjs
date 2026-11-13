@@ -42,7 +42,7 @@ export function attachStructureDrag(svg,entries,model,onMove) {
   function stop(){
     if(drag){drag.element.classList.remove('is-dragging');drag.target?.classList.remove('is-drop-target');if(drag.target)delete drag.target.dataset.drop;drag=null;}
     window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',finish);
-    window.removeEventListener('pointercancel',cancel);window.removeEventListener('keydown',key);window.removeEventListener('blur',cancel);
+    window.removeEventListener('pointercancel',cancel);window.removeEventListener('keydown',key,true);window.removeEventListener('blur',cancel);
   }
   function cancel(event){if(event?.pointerId!==undefined&&event.pointerId!==drag?.pointerId)return;suppressClick=!!drag?.started;stop();}
   function key(event){if(event.key==='Escape'){event.preventDefault();cancel();}}
@@ -76,7 +76,7 @@ export function attachStructureDrag(svg,entries,model,onMove) {
       event.preventDefault();
       stop();suppressClick=false;drag={element,item,pointerId:event.pointerId,x:event.clientX,y:event.clientY,started:false};
       window.addEventListener('pointermove',move);window.addEventListener('pointerup',finish);
-      window.addEventListener('pointercancel',cancel);window.addEventListener('keydown',key);window.addEventListener('blur',cancel);
+      window.addEventListener('pointercancel',cancel);window.addEventListener('keydown',key,true);window.addEventListener('blur',cancel);
     };
   }
   return ()=>{stop();svg.removeEventListener('click',click,true);entries.forEach(({element})=>{delete element.dataset.aslEdit;element.onpointerdown=null;});};

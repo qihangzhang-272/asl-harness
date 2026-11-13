@@ -9,6 +9,7 @@ import React, {
   useState,
 } from "react";
 import SkillFiles from './SkillFiles.jsx';
+import {useTheme} from './useTheme.mjs';
 import SkillCanvas from './SkillCanvas.jsx';
 import EditorPage,{useLeaveGuard} from './EditorPage.jsx';
 import PanelResize from './PanelResize.jsx';
@@ -259,6 +260,7 @@ function SkillEditor({ item, texts, onSave, onClose }) {
 
 
 export default function App() {
+  const theme=useTheme();
   const [initial, setInitial] = useState(null);
   const [workspace, setWorkspace] = useState(null);
   const [catalog, setCatalog] = useState(null);
@@ -829,7 +831,7 @@ export default function App() {
       onSkill:id=>setModal({kind:'skill-files',item:catalog.skills.find(skill=>skill.id===id)}),
       onUpdate:item=>setModal({kind:'skill-update',item}),
       onArchive:item=>editContent({operation:'skill.archive',id:item.id,expected:item.fingerprint})}}>
-      <div className={`app${['mode-workspace','agent-guide'].includes(modal?.kind)?' mode-editing':''}`} aria-busy={busy}>
+      <div className={`app asl-desktop${['mode-workspace','agent-guide'].includes(modal?.kind)?' mode-editing':''}`} data-asl-theme={theme} aria-busy={busy}>
         <aside className="sidebar">
           <PanelResize name="navigation"/>
           <div className="brand" title={initial?.version ? `ASL Harness v${initial.version}${initial.packaged ? '' : ' · 开发版'}` : undefined}>

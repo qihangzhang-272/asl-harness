@@ -86,12 +86,12 @@ export function flowCanvas(svg,model,layout={nodes:{},edges:{}},apply=true) {
   return {nodes,port,snapshot,place,route,restore,fit};
 }
 
-export function attachFlowDrag(svg,canvas,onCommit) {
+export function attachFlowDrag(svg,canvas,onCommit,selection) {
   let drag=null,suppress=false;
   function stop(){
     if(drag)drag.node.element.classList.remove('is-moving');drag=null;
     window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',finish);
-    window.removeEventListener('pointercancel',cancel);window.removeEventListener('blur',cancel);window.removeEventListener('keydown',key);
+    window.removeEventListener('pointercancel',cancel);window.removeEventListener('blur',cancel);window.removeEventListener('keydown',key,true);
   }
   function cancel(event){if(event?.pointerId!=null&&event.pointerId!==drag?.pointerId)return;const current=drag;suppress=!!current?.started;stop();if(current?.started)canvas.restore();}
   function key(event){if(event.key==='Escape')cancel();}
@@ -99,9 +99,9 @@ export function attachFlowDrag(svg,canvas,onCommit) {
     if(!drag||event.pointerId!==drag.pointerId)return;
     const p=pointerPoint(svg,event.clientX,event.clientY);
     if(!drag.started&&Math.hypot(event.clientX-drag.clientX,event.clientY-drag.clientY)<4)return;
-    event.preventDefault();if(!drag.started)drag.node.element.parentElement.appendChild(drag.node.element);
+    event.preventDefault();if(!drag.started){drag.node.element.parentElement.appendChild(drag.node.element);selection?.start(drag.id);}
     drag.started=true;drag.node.element.classList.add('is-moving');
-    canvas.place(drag.id,{x:drag.position.x+p.x-drag.start.x,y:drag.position.y+p.y-drag.start.y});canvas.route();
+    for(const [id,position] of drag.positions)canvas.place(id,{x:position.x+p.x-drag.start.x,y:position.y+p.y-drag.start.y});canvas.route();
   }
   async function finish(event){
     if(!drag||event.pointerId!==drag.pointerId)return;
@@ -114,9 +114,10 @@ export function attachFlowDrag(svg,canvas,onCommit) {
     node.element.onpointerdown=event=>{
       if(event.button!==0||event.target.closest('.mermaid-label-editor,.mermaid-port')||drag)return;
       event.preventDefault();suppress=false;
-      drag={id,node,pointerId:event.pointerId,clientX:event.clientX,clientY:event.clientY,start:pointerPoint(svg,event.clientX,event.clientY),position:{...node.position},started:false};
+      const selected=selection?.ids()||[],ids=selected.includes(id)?selected:[id];
+      drag={id,node,pointerId:event.pointerId,clientX:event.clientX,clientY:event.clientY,start:pointerPoint(svg,event.clientX,event.clientY),positions:ids.filter(id=>canvas.nodes.has(id)).map(id=>[id,{...canvas.nodes.get(id).position}]),started:false};
       window.addEventListener('pointermove',move,{passive:false});window.addEventListener('pointerup',finish);
-      window.addEventListener('pointercancel',cancel);window.addEventListener('blur',cancel);window.addEventListener('keydown',key);
+      window.addEventListener('pointercancel',cancel);window.addEventListener('blur',cancel);window.addEventListener('keydown',key,true);
     };
   }
   return ()=>{cancel();svg.removeEventListener('click',click,true);for(const n of canvas.nodes.values())n.element.onpointerdown=null;};

@@ -8,12 +8,13 @@ export function editRenderedLabel(element,item,onCommit) {
   if(item.kind==='edge'&&!label){const p=element.getPointAtLength(element.getTotalLength()/2),center=new DOMPoint(p.x,p.y).matrixTransform(element.getScreenCTM()).matrixTransform(inverse);width=160;height=28;point.x=center.x-width/2;point.y=center.y-height/2;}
   const object=document.createElementNS('http://www.w3.org/2000/svg','foreignObject');
   object.classList.add('mermaid-label-editor');object.setAttribute('x',point.x-8);object.setAttribute('y',point.y-3);object.setAttribute('width',Math.max(60,width+16));object.setAttribute('height',Math.max(26,height+6));
+  object.classList.toggle('is-edge',item.kind==='edge');
   const input=document.createElement('div');input.contentEditable='true';input.setAttribute('role','textbox');input.setAttribute('aria-label',item.kind==='node'?'节点文字':'连线文字');input.spellcheck=false;input.textContent=item.label;
   if(label)label.style.visibility='hidden';
   let finished=false;
   const protect=event=>event.preventDefault();
   const discard=()=>finish(false);
-  const restore=()=>{if(label)label.style.visibility='';object.remove();document.removeEventListener('asl:before-content-refresh',protect);document.removeEventListener('asl:discard-drafts',discard);svg.removeEventListener('asl:release-inline',restore);document.dispatchEvent(new Event('asl:editor-state'));};
+  const restore=()=>{const focused=object.contains(document.activeElement);if(label)label.style.visibility='';object.remove();if(focused)svg.closest('.mermaid-viewport')?.focus({preventScroll:true});document.removeEventListener('asl:before-content-refresh',protect);document.removeEventListener('asl:discard-drafts',discard);svg.removeEventListener('asl:release-inline',restore);document.dispatchEvent(new Event('asl:editor-state'));};
   const finish=save=>{
     if(finished)return;finished=true;const value=input.innerText.trim();
     if(!save||value===item.label){restore();return;}

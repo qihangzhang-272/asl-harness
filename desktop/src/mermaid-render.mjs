@@ -6,16 +6,21 @@ export async function renderDiagram(source) {
   if(typeof source!=='string'||!source.trim()||source.length>50000)throw new Error('图内容需为 1–50000 字的 Mermaid 原文');
   const layout=readLayout(source);
   library ||= import('mermaid').then(({default:mermaid})=>{
+    // Measure with the same Stitch tokens used by both mounted frontends.
+    const style=getComputedStyle(document.querySelector('.asl-ws,.asl-desktop')||document.documentElement);
+    const token=(name,fallback)=>style.getPropertyValue(name).trim()||fallback;
+    const size=(name,fallback)=>parseFloat(token(name,''))||fallback;
     mermaid.initialize({startOnLoad:false,securityLevel:'strict',suppressErrorRendering:true,maxTextSize:50000,maxEdges:500,
       secure:['securityLevel','startOnLoad','suppressErrorRendering','maxTextSize','maxEdges','themeCSS','htmlLabels'],
-      htmlLabels:false,theme:'base',look:'classic',fontFamily:'-apple-system, BlinkMacSystemFont, Segoe UI, Microsoft YaHei, sans-serif',
-      themeVariables:{primaryColor:'#ffffff',primaryBorderColor:'#7c828c',primaryTextColor:'#1d1d1f',lineColor:'#747a84',secondaryColor:'#f0f1f3',tertiaryColor:'#f5f5f7',fontSize:'15px',
+      htmlLabels:false,theme:'base',look:'classic',fontFamily:style.fontFamily,
+      themeVariables:{primaryColor:'#ffffff',primaryBorderColor:'#c5cbd4',primaryTextColor:'#252a34',lineColor:'#a0a9b6',secondaryColor:'#f0f3f7',tertiaryColor:'#f7f8fa',fontSize:'16px',edgeLabelBackground:'#f7f8fa',clusterBkg:'#f1f4f8',clusterBorder:'#dce1e8',
         actorBkg:'#ffffff',actorBorder:'#7c828c',actorTextColor:'#1d1d1f',signalColor:'#747a84',signalTextColor:'#1d1d1f',
         noteBkgColor:'#f0f1f3',noteBorderColor:'#7c828c',noteTextColor:'#1d1d1f',
         ...Object.fromEntries(Array.from({length:12},(_,i)=>[[`cScale${i}`,['#ffffff','#f0f1f3','#f5f5f7'][i%3]],[`cScaleLabel${i}`,'#1d1d1f'],[`cScaleInv${i}`,'#7c828c']]).flat()),
+        ...(token('--diagram-font-size','')?{fontSize:token('--diagram-font-size','16px'),primaryColor:token('--node-bg','#ffffff'),primaryTextColor:token('--ink','#1d1d1f'),primaryBorderColor:token('--node-stroke','#c5cbd4'),lineColor:token('--edge-stroke','#a0a9b6'),edgeLabelBackground:token('--edge-label-bg','#f7f8fa'),secondaryColor:token('--surface','#ffffff'),tertiaryColor:token('--surface-muted','#f0f3f7'),clusterBkg:token('--surface','#ffffff'),clusterBorder:token('--line','#dce1e8')}:{}),
       },
-      themeCSS:'.mindmap-node .label text { text-anchor: middle; } .mindmap-node .node-bkg ~ .label text { text-anchor: start; } .mindmap-node .label-container { stroke: #7c828c; stroke-width: 1px; } [class*="section-edge-"] { stroke: #747a84; stroke-width: 1.5px; }',
-      flowchart:{htmlLabels:false,curve:'basis',nodeSpacing:38,rankSpacing:58,padding:18},
+      themeCSS:'.node .label { font-weight: 550; } .node > rect.basic { rx: 10px; ry: 10px; } .edgeLabel { font-size: '+token('--diagram-font-size','12px')+'; color: #596579; } .edgeLabel rect { rx: 4px; ry: 4px; } .mindmap-node .label text { text-anchor: middle; } .mindmap-node .node-bkg ~ .label text { text-anchor: start; } .mindmap-node .label-container { stroke: #c5cbd4; stroke-width: 1px; } [class*="section-edge-"] { stroke: #a0a9b6; stroke-width: 1.5px; }',
+      flowchart:{htmlLabels:false,curve:'basis',nodeSpacing:size('--diagram-node-spacing',42),rankSpacing:size('--diagram-rank-spacing',64),padding:size('--diagram-padding',14)},
     });return mermaid;
   });
   const mermaid=await library;await document.fonts.ready;

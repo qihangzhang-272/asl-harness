@@ -142,6 +142,7 @@ function runCore(action, values, options = {}) {
   const executable = options.executable || process.env.ASL_CORE_EXECUTABLE;
   const program =
     executable ||
+    options.python ||
     process.env.ASL_PYTHON ||
     (process.platform === "win32" ? "python" : "python3");
   const parameters = executable

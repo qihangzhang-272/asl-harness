@@ -1,14 +1,25 @@
-.mermaid-view{position:relative;margin:18px 0;overflow:hidden;min-height:120px;display:flex;flex-direction:column}
+.mermaid-view{--diagram-accent:#326bd6;--diagram-ease:cubic-bezier(.2,.8,.2,1);position:relative;margin:18px 0;overflow:hidden;min-height:120px;display:flex;flex-direction:column}
 .mermaid-viewport{overflow:auto;max-height:72vh;padding:32px 24px 48px;scrollbar-width:thin;flex:1;min-height:0}
 .mermaid-drawing{min-width:260px;margin:auto}
 .mermaid-drawing>svg{display:block;width:100%;height:auto;max-width:none!important;margin:auto;overflow:visible}
 .mermaid-drawing [role=button]{cursor:pointer;outline:none}
-.mermaid-drawing [role=button]:is(:hover,:focus-visible) rect{stroke:#3479dc;stroke-width:2px}
+.mermaid-drawing g.node{transition:opacity 160ms var(--diagram-ease)}
+.mermaid-drawing g.node>:is(rect,polygon,circle,ellipse,path.label-container){transition:stroke 150ms,fill 150ms,filter 180ms;filter:drop-shadow(0 2px 2px #25365009)}
+.mermaid-drawing g.node:is(:hover,:focus-visible)>:is(rect,polygon,circle,ellipse,path.label-container){stroke:var(--diagram-accent)!important;filter:drop-shadow(0 3px 5px #25365016)}
+.mermaid-drawing g.node:focus-visible>:is(rect,polygon,circle,ellipse,path.label-container){stroke-width:2px!important;transition:none}
+.mermaid-drawing .flowchart-link:not(.mermaid-edge-hit){transition:stroke 160ms,opacity 160ms;vector-effect:non-scaling-stroke}
+.mermaid-drawing .edgeLabels>g{transition:opacity 160ms}
+.mermaid-drawing g.node.is-muted{opacity:.5}
+.mermaid-drawing :is(.flowchart-link,.edgeLabels>g).is-muted{opacity:.22}
+.mermaid-drawing .flowchart-link.is-related:not(.mermaid-edge-hit){stroke:var(--diagram-accent)!important;stroke-width:1.6px!important}
+.mermaid-drawing g.node.is-related>:is(rect,polygon,circle,ellipse,path.label-container){stroke:#8eafe7!important}
+.mermaid-drawing .flowchart-link.is-selected:not(.mermaid-edge-hit){stroke-dasharray:6 5!important;animation:mermaid-direction 900ms linear infinite}
+@keyframes mermaid-direction{to{stroke-dashoffset:-22}}
 .mermaid-tools{position:absolute;right:12px;bottom:10px;display:flex;gap:2px;padding:3px;border-radius:10px;background:#fffffff0;border:1px solid #dce7f6}
 .mermaid-tools button{padding:6px;border:0;background:transparent;box-shadow:none}
 .mermaid-tools .mermaid-scale{min-width:52px;font-variant-numeric:tabular-nums;font-size:12px;color:var(--ink)}
 .mermaid-tools button:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
-.mermaid-reading-hint{position:absolute;left:24px;top:0;margin:0;color:var(--muted);font-size:12px;line-height:1.6;pointer-events:none}
+.mermaid-reading-hint{position:absolute;left:24px;top:10px;margin:0;padding:4px 8px;border-radius:6px;background:var(--surface,#fff);color:var(--muted,#626d7f);font-size:11px;line-height:1.6;pointer-events:none}
 .mermaid-pending,.mermaid-error{padding:20px;color:#566f93}
 .mermaid-error pre{white-space:pre-wrap;font:12px/1.5 Consolas,monospace;color:#963e3e;max-height:150px;overflow:auto}
 .mermaid-placeholder{white-space:normal!important;background:none!important;padding:0!important;font:inherit!important}
@@ -26,7 +37,6 @@
 .mermaid-label-editor>div{width:100%;height:100%;display:flex;align-items:center;justify-content:center;text-align:center;outline:none;color:#233957;font:15px/1.5 'Segoe UI','Microsoft YaHei',sans-serif;white-space:pre-wrap;overflow-wrap:anywhere;cursor:text;border:0;border-radius:0;background:transparent}
 .mermaid-connect-status{margin:6px 0;font-size:12px}
 .mermaid-connect-status{display:flex;gap:12px;align-items:center}
-@media(prefers-reduced-motion:reduce){.mermaid-drawing{transition:none}}
 .canvas-menu{position:fixed;z-index:1200;width:288px;padding:6px;border:1px solid #dbe6f7;border-radius:14px;background:#f9fcfff5;backdrop-filter:blur(24px);box-shadow:0 16px 48px #284d7829;font-size:13px;overflow-y:auto;scrollbar-width:thin}
 .canvas-menu button{width:100%;display:flex;align-items:center;gap:10px;padding:10px;border:0;box-shadow:none;background:transparent;text-align:left;border-radius:8px}
 .canvas-menu button span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -36,7 +46,7 @@
 .canvas-menu-search input{width:100%;border:0;background:transparent;outline:none;box-shadow:none;padding:6px 0;font-size:13px}
 .canvas-skill-options{max-height:248px;overflow:auto;padding:4px 0;scrollbar-width:thin}
 .canvas-skill-options p{font-size:12px;color:#627797;padding:8px}
-.mermaid-port{fill:#fff;stroke:#4587ee;stroke-width:1.5px;opacity:0;cursor:crosshair;pointer-events:all}
+.mermaid-port{fill:#fff;stroke:#4587ee;stroke-width:1.5px;opacity:0;cursor:crosshair;pointer-events:all;transition:opacity 120ms,fill 120ms}
 .node:hover>.mermaid-port,.node:focus-within>.mermaid-port,.mermaid-port.is-connecting{opacity:1}
 .mermaid-port:hover{fill:#397de0;stroke:#fff;stroke-width:2px}
 .mermaid-drawing svg.is-connecting .mermaid-port{opacity:1}
@@ -52,8 +62,36 @@
 .mermaid-drawing [data-drop=after]{filter:drop-shadow(0 4px 1px #5597ee)!important}
 .mermaid-drawing [data-drop=inside] rect{stroke:#3479dc!important;stroke-width:3px!important}
 .mermaid-drawing text[data-asl-edit]:hover{fill:#2568d2!important}
-.mermaid-drawing g.node.is-selected rect{stroke:#2d6cd5!important;stroke-width:2px!important;fill:#e3eeff!important}
-.mermaid-tools{position:static;align-self:flex-start;margin:0 16px 14px;gap:4px;padding:5px;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:none}
+.mermaid-drawing g.node.is-selected>:is(rect,polygon,circle,ellipse,path.label-container){stroke:var(--diagram-accent)!important;stroke-width:2px!important;fill:#f0f5ff!important;filter:drop-shadow(0 0 3px #326bd633)}
+.mermaid-tools{position:static;align-self:flex-start;margin:0 16px 14px;gap:4px;padding:5px;background:var(--surface,#fff);border:1px solid var(--line,#dce1e8);border-radius:12px;box-shadow:0 3px 12px #2536500a}
 .architecture-section.is-expanded{inset:12px;background:var(--canvas);z-index:60}
 .architecture-section.is-expanded .mermaid-edit,.architecture-section.is-expanded .mermaid-view{flex:1;min-height:0;display:flex;flex-direction:column}
 .architecture-section.is-expanded .mermaid-viewport{flex:1;max-height:none;align-items:center}
+.mermaid-view.is-interactive .mermaid-viewport{position:relative;overflow:hidden;display:flex;align-items:center;outline:none;touch-action:none}
+.mermaid-view.is-interactive .mermaid-drawing{flex-shrink:0;min-width:0}
+.mermaid-view.is-interactive.is-reading .mermaid-viewport{align-items:flex-start}
+.mermaid-view.is-reading .mermaid-drawing{margin-top:14px;margin-bottom:0}
+.mermaid-view.is-interactive .mermaid-viewport:focus-visible{box-shadow:inset 0 0 0 2px var(--brand,#2e66ce)}
+.mermaid-viewport[data-tool=hand],.mermaid-viewport[data-tool=hand] *{cursor:grab!important}
+.mermaid-viewport[data-dragging=pan],.mermaid-viewport[data-dragging=pan] *{cursor:grabbing!important}
+.mermaid-tools{flex-wrap:wrap;align-items:center;max-width:calc(100% - 32px)}
+.mermaid-tools button{display:flex;align-items:center;justify-content:center;gap:5px;min-height:34px;min-width:34px;color:var(--ink,#1d1d1f);border-radius:8px;cursor:pointer;transition:background 150ms,transform 120ms var(--diagram-ease)}
+.mermaid-tools button:active:not(:disabled){transform:scale(.94)}
+.mermaid-tools button:hover:not(:disabled){background:var(--canvas,#f5f5f7)}
+.mermaid-tools button[aria-pressed=true]{color:var(--brand,#2e66ce);background:var(--brand-soft,#eaf0fb)}
+.mermaid-tools button:disabled{opacity:.35;cursor:default}
+.mermaid-tool-divider{height:20px;width:1px;background:var(--line,#e7e8eb);margin:0 3px}
+.mermaid-marquee{position:absolute;pointer-events:none;border:1px solid #2e66ce;background:#2e66ce12;z-index:3}
+.mermaid-open-skill{position:absolute;z-index:4;border:1px solid #d7e3f7;border-radius:8px;background:var(--surface,#fff);color:var(--diagram-accent);padding:5px 9px;box-shadow:0 3px 12px #25365014;font:inherit;font-size:12px;line-height:1.6;cursor:pointer;animation:mermaid-tool-arrive 160ms var(--diagram-ease)}
+@keyframes mermaid-tool-arrive{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:translateY(0)}}
+.mermaid-open-skill[hidden],.mermaid-marquee[hidden]{display:none}
+.mermaid-drawing [data-select-key].is-selected:is(path,text),.mermaid-drawing [data-select-key].is-selected :is(rect,polygon,circle,path.label-container){stroke:#2e66ce!important;stroke-width:2px!important}
+.mermaid-drawing [data-select-key].is-selected .mermaid-port{opacity:1}
+.mermaid-shortcut-panel{position:absolute;right:16px;bottom:62px;z-index:8;width:min(440px,calc(100% - 32px));max-height:calc(100% - 80px);overflow:auto;padding:16px 18px;background:var(--surface,#fff);border:1px solid var(--line,#d3d5d9);border-radius:12px;box-shadow:0 8px 32px #1d1d1f18;color:var(--ink,#1d1d1f);font-size:12px}
+.mermaid-shortcut-panel header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.mermaid-shortcut-panel header button{border:0;background:transparent;cursor:pointer;color:inherit;padding:5px;border-radius:5px}
+.mermaid-shortcut-panel dl{margin:0}.mermaid-shortcut-panel dl>div{display:flex;gap:16px;justify-content:space-between;padding:7px 0;border-top:1px solid var(--line,#e7e8eb)}
+.mermaid-shortcut-panel dd{margin:0;text-align:right;color:var(--muted,#51545b)}
+.mermaid-shortcut-panel p{font-size:11px;line-height:1.7;color:var(--muted,#51545b);margin:12px 0 0}
+.canvas-menu kbd{margin-left:auto;color:var(--muted,#62666f);font:inherit;font-size:11px;white-space:nowrap}
+@media(prefers-reduced-motion:reduce){.mermaid-view *,.mermaid-view *::before,.mermaid-view *::after{animation:none!important;transition:none!important}}
