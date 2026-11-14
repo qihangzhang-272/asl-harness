@@ -8,8 +8,8 @@ import domain from './domain.cjs';
 export const name='dsh-asl-workspace';
 export const inject=['webServer','connection','tools'];
 export const Config=z.object({
-  sourceRoot:z.string().required().description('现有 ASL Harness 开发仓库或完整安装目录'),
-  environment:z.string().required().description('现有 ASL Environment 目录'),
+  sourceRoot:z.string().description('现有 ASL Harness 开发仓库或完整安装目录；使用工作区前配置'),
+  environment:z.string().description('现有 ASL Environment 目录；使用工作区前配置'),
   python:z.string().description('现有 Python 3.11+，需安装 ASL 核心依赖'),
   coreExecutable:z.string().description('正式安装版 ASL 核心，复用随包 Mermaid 渲染器'),
   bindings:z.dict(z.array(z.object({package:z.string().required(),panel:z.string().required(),title:z.string().required()}))).default({}),
@@ -18,7 +18,18 @@ export const Config=z.object({
 class WorkspaceService extends Service {
   constructor(ctx,config){
     super(ctx,'aslWorkspace');
-    this.domain=new domain.WorkspaceDomain({...config,storage:join(process.env.DSH_HOME||join(homedir(),'.dsh'),'asl-workspace')});
+    this.workspaceConfig=config;
+  }
+  get domain(){
+    if(this.workspaceDomain)return this.workspaceDomain;
+    const config=this.workspaceConfig;
+    if(!config.sourceRoot?.trim()||!config.environment?.trim())throw Object.assign(new Error('ASL 工作区尚未配置。请在当前 DSH profile 的 cordis.patch.yml 中设置 sourceRoot（包含 desktop/bridge.cjs 的完整 ASL 仓库）和 environment（含 skills/、modes/ 的技能库），然后重启 DSH。安装步骤：https://github.com/qihangzhang-272/dsh-asl#开始使用'),{code:'ASL_SETUP_REQUIRED'});
+    try{
+      this.workspaceDomain=new domain.WorkspaceDomain({...config,storage:join(process.env.DSH_HOME||join(homedir(),'.dsh'),'asl-workspace')});
+    }catch(error){
+      throw Object.assign(new Error('ASL 桥接运行时未能加载。请检查 cordis.patch.yml 的 sourceRoot 是否指向包含 desktop/bridge.cjs 的完整 ASL 仓库；GitHub 直装不会初始化 upstream 子模块，请按安装指南递归克隆 ASL 后配置路径并重启 DSH。原因：'+error.message),{code:'ASL_SETUP_INVALID',cause:error});
+    }
+    return this.workspaceDomain;
   }
   dispatch(action,args,options){return this.domain.dispatch(action,args,options);}
 }
@@ -29,7 +40,7 @@ export function apply(ctx,config){
   ctx.inject(['systemPrompt'],promptCtx=>promptCtx.systemPrompt.context({
     name:'asl-workspace',order:100,required:true,interpolate:false,
     text:({agent})=>{
-      const view=service.domain.context(agent?.session.id);
+      const view=service.workspaceDomain?.context(agent?.session.id);
       return view?'ASL 当前工作内容（每步刷新）：'+JSON.stringify(view)+'。修改前用 asl_workspace context 核对目标，再 read 最新完整原文。save/adopt 必须携带 contextRevision；save 还须携带读取所得 expected 指纹。使用共享工具直接修改，不用 shell 绕过保存校验。界面有草稿时先请用户保存或放弃。只有工具保存成功后才能说已修改。':'';
     },
   }));

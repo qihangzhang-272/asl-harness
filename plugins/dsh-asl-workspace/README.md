@@ -40,7 +40,9 @@ npm pack
 dsh plugin --profile desktop add <本地 tgz 路径>
 ```
 
-在 DSH profile 的 `cordis.patch.yml` 配置路径：
+商店或 GitHub 直装可先安全挂载插件；首次使用前仍需准备完整 ASL 仓库和 Environment。未配置路径时，工作区和共享工具会返回配置指引，不阻断 DSH 启动。直装不会初始化 `upstream` 子模块，请另行递归克隆公开仓库或使用已有完整 ASL 仓库。
+
+在 DSH profile 的 `cordis.patch.yml` 配置路径后重启 DSH：
 
 ```yaml
 - id: asl-workspace
