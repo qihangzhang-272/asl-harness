@@ -7,6 +7,10 @@ description: 在 DSH 中组织 Mode Mermaid 画板、发现专业技能并直接
 
 使用当前 DeepSeek Harness 会话完成任务，不启动第二套 Agent。Mode 是能力子图，连线表达关系，不是固定执行流程。UI 与 `asl_workspace` 工具调用同一个服务。
 
+正常业务任务先读取适用技能，然后用宿主文件工具把文章、卡片或其他产物保存在当前项目中；保存成功后调用 `artifact` 登记真实路径。不要把业务正文写回 SKILL.md 或 MODE.md。
+
+节点单击与 `inspection` 只是只读预览，不改变可写目标、不启动执行，也不代表执行到了该节点。右侧预览与原生 Sidebar 可以打开同一文件；进度窗只展示真实工具回执。用户点击预览内编辑或双击正文后，也可以直接编辑 Markdown；其 context 可写目标与草稿保护和完整文件页一致。
+
 工具参数 `action` 为动作，`args` 直接传参数对象，无须再次编码为字符串（旧字符串调用仍兼容）：
 
 | action | 参数与用途 |
@@ -15,6 +19,7 @@ description: 在 DSH 中组织 Mode Mermaid 画板、发现专业技能并直接
 | context | `{}`，当前调用会话的 Mode、文件、图、选区、草稿状态与 contextRevision；无连接返回 null，不能猜测修改对象 |
 | recommend | `{goal}`，推荐 Mode；有歧义时让用户选择 |
 | read | `{kind:"skill"或"mode",identifier,file}`，返回 document、files、fingerprint |
+| artifact | `{path}`，以当前调用会话的工作目录校验已保存的业务文件，登记后显示在产物预览；不能登记技能定义、Mode、秘密文件或目录外文件 |
 | save | `{kind,identifier,file,contextRevision,expected:读取的fingerprint,document}`，直接写回当前内容，保留核心指纹、引用、渲染检查及历史记录 |
 | discover | `{query}`，GitHub 专业技能搜索 |
 | repository | `{url}`，固定 commit 下载完整技能包并检查 |

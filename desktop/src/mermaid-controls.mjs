@@ -104,6 +104,14 @@ export function attachCanvasControls(viewport,entries,canvas,state,options){
   for(const type of ['copy','cut','paste'])section.addEventListener(type,clipboard);
   return {
     choose,selection,nodeIds,paint,focus:()=>viewport.focus({preventScroll:true}),
+    revealSelection(){
+      if(state.keys.length!==1||gesture||viewport.querySelector('.is-moving,.mermaid-label-editor'))return;
+      const entry=byKey.get(state.keys[0]);if(!entry||entry.item.kind!=='node')return;
+      const bounds=viewport.getBoundingClientRect(),rect=entry.element.getBoundingClientRect();if(!bounds.width||!bounds.height)return;
+      const dx=rect.left<bounds.left+24||rect.right>bounds.right-24?bounds.left+bounds.width/2-rect.left-rect.width/2:0;
+      const dy=rect.top<bounds.top+24||rect.bottom>bounds.bottom-72?bounds.top+(bounds.height-72)/2-rect.top-rect.height/2:0;
+      if(dx||dy){const pan=options.getPan();options.pan({x:pan.x+dx,y:pan.y+dy});paint();}
+    },
     setTool(tool){state.tool=tool;options.onTool(tool);paint();viewport.focus({preventScroll:true});},
     layout:()=>canvas?.snapshot(),
     selectIds(ids){state.pendingIds=ids;},

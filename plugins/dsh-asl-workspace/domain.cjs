@@ -1,4 +1,5 @@
 const path = require('node:path');
+const {checkedPath}=require('./execution.cjs');
 const id = value => { if (typeof value !== 'string' || !/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,100}$/.test(value)) throw new Error('标识无效'); return value; };
 const text = value => { if (typeof value !== 'string' || !value.trim() || Buffer.byteLength(value)>1024*1024) throw new Error('内容不能为空或超过 1 MB'); return value; };
 
@@ -23,7 +24,7 @@ class WorkspaceDomain {
     if(typeof sessionId!=='string'||!sessionId||sessionId.length>200)throw new Error('会话标识无效');
     if(view===null){this.views.delete(sessionId);return null;}
     if(!view||!['mode','skill'].includes(view.kind))throw new Error('工作上下文无效');
-    const value={mode:id(view.mode),kind:view.kind,identifier:id(view.identifier),file:view.kind==='mode'?'MODE.md':view.file,dirty:!!view.dirty,diagram:view.diagram||null,selection:view.selection||[],region:view.region||null};
+    const value={mode:id(view.mode),kind:view.kind,identifier:id(view.identifier),file:view.kind==='mode'?'MODE.md':view.file,dirty:!!view.dirty,diagram:view.diagram||null,selection:view.selection||[],region:view.region||null,inspection:view.inspection||null};
     if(typeof value.file!=='string'||!value.file||value.file.length>1000||value.file.includes('..')||path.isAbsolute(value.file))throw new Error('文件路径无效');
     if(JSON.stringify(value).length>16000)throw new Error('工作上下文过大');
     const previous=this.views.get(sessionId),key=JSON.stringify(value);
@@ -67,6 +68,13 @@ class WorkspaceDomain {
   async read(kind, identifier, file, signal) {
     if(!['mode','skill'].includes(kind))throw new Error('文件类型无效');
     return this.call(kind==='mode'?'modeFiles':'files',{workspace:this.environment,[kind==='mode'?'mode':'skill']:id(identifier),file:file||(kind==='mode'?'MODE.md':'SKILL.md')},signal);
+  }
+  async fileLocation(identifier,file='',signal){
+    const catalog=await this.catalog(signal),skill=catalog.skills.find(s=>s.id===id(identifier));
+    if(!skill?.path)throw new Error('技能目录不可用，请重新读取');
+    const content=await this.read('skill',identifier,'SKILL.md',signal);
+    if(typeof file!=='string'||file&& !content.files.some(entry=>entry.path===file||entry.path.startsWith(file+'/')))throw new Error('文件不在当前技能目录中');
+    return checkedPath(skill.path,file);
   }
   serialize(work) {
     const next=this.queue.then(work);this.queue=next.catch(()=>{});return next;
@@ -116,6 +124,7 @@ class WorkspaceDomain {
       case 'catalog':return this.catalog(signal);
       case 'recommend':return this.recommend(args.goal,signal);
       case 'read':return this.read(args.kind,args.identifier,args.file,signal);
+      case 'fileLocation':return this.fileLocation(args.identifier,args.file,signal);
       case 'save':return this.save(args,signal,sessionId);
       case 'discover':return this.market.discover('github',args.query,fetch);
       case 'repository':return this.repository.readRepository(args.url,{fetch,core:(action,values,s)=>this.call(action,values,s),temp:path.join(this.storage,'downloads'),repositories:this.repositories,cacheRoot:path.join(this.storage,'cache')},signal);

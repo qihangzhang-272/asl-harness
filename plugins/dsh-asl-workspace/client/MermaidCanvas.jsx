@@ -1,4 +1,4 @@
-import React,{useEffect,useMemo,useRef,useState} from 'react';
+import React,{useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {Button,Input} from '@deepseek-ai/dsh-client-ui-primitives';
 import {Code2,Plus,Scan,X,FileText,LoaderCircle,Check} from 'lucide-react';
 import MermaidView from '../../../desktop/src/MermaidView.jsx';
@@ -8,7 +8,7 @@ import {structureItems,editStructure} from '../../../desktop/src/mermaid-structu
 import {modeDiagramDocument,skillNodes} from '../../../desktop/src/mode-diagrams.mjs';
 import {diagramsFor,bindingsFor,referencedSkills} from './diagram-model.mjs';
 
-export default function MermaidCanvas({mode,skills,api,refreshKey,onSkill,onDiscover,onDirty,onContext}){
+export default function MermaidCanvas({mode,skills,api,refreshKey,onSkill,onPreview,onDiscover,onDirty,onContext}){
   const [file,setFile]=useState(null),[document,setDocument]=useState(''),[index,setIndex]=useState(0),[selected,setSelected]=useState('');
   const [sourceOpen,setSourceOpen]=useState(false),[sourceDraft,setSourceDraft]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false),[expanded,setExpanded]=useState(false),[inlineEditing,setInlineEditing]=useState(false);
   const [adding,setAdding]=useState(false),[title,setTitle]=useState(''),[members,setMembers]=useState([]),[frameMode,setFrameMode]=useState(false),[frame,setFrame]=useState(null);
@@ -18,6 +18,7 @@ export default function MermaidCanvas({mode,skills,api,refreshKey,onSkill,onDisc
   const saving=useRef(false),sourceDirty=useRef(false),frameStart=useRef(null);
   const diagrams=useMemo(()=>diagramsFor(document,mode,skills),[document,mode,skills]),drawing=diagrams[index];
   const bindings=useMemo(()=>bindingsFor(drawing?.source||'',skills),[drawing?.source,skills]);
+  const previewSelection=useCallback(value=>{setSelection(value);if(value.length===1&&value[0].kind==='node'){const ids=bindings.get(value[0].id)||[];if(ids.length)onPreview(ids);}},[bindings,onPreview]);
   const candidates=useMemo(()=>skillNodes(skills,mode.architecture?.nodes),[skills,mode.architecture?.nodes]);
   const nodes=[...bindings].map(([alias,ids])=>({alias,data:{skills:ids,title:candidates.find(n=>n.data.skill.id===ids[0])?.data.title||ids[0],skill:{id:alias}}}));
   const dirty=!!file&&document!==file.document;
@@ -87,7 +88,7 @@ export default function MermaidCanvas({mode,skills,api,refreshKey,onSkill,onDisc
       {!file?<div className="asl-empty"><LoaderCircle className="asl-spin"/>正在读取 Mode…</div>:sourceOpen?<div className="asl-mermaid-source">
         <div><textarea aria-label="Mermaid 图原文" spellCheck={false} value={sourceDraft} onChange={e=>setSourceDraft(e.target.value)}/><footer><span>原文是图的唯一来源</span><Button className="asl-btn is-primary" variant="primary" onClick={()=>{change(sourceDraft);setSourceOpen(false);}}>应用修改</Button></footer></div><MermaidView source={sourceDraft}/>
       </div>:<MermaidEdit key={index} source={drawing?.source} empty={!drawing} nodes={nodes} candidates={candidates}
-        selectedId={selected} onNode={selectNode} onChange={change} onSource={openSource} onSelection={setSelection}
+        selectedId={selected} onNode={selectNode} onChange={change} onSource={openSource} onSelection={previewSelection}
         onUndo={history.length&&!busy?undo:null} onRedo={redo.length&&!busy?redoChange:null}
         expanded={expanded} onExpand={()=>setExpanded(!expanded)}
         onCreate={type=>{revise(appendDiagramTemplate(modeDiagramDocument({...mode,document},skills),type));setIndex(diagrams.length);setSelected('');}}/>}

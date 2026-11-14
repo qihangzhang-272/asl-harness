@@ -70,3 +70,30 @@ test('closed or unresponsive workspaces cannot leave an editable stale target',(
   assert.equal(domain.context('session'),null);
   assert.throws(()=>domain.assertAgentWrite('session',{}),/工作区未连接/);
 });
+
+
+test('inspection does not authorize skill writes; inline editing uses the same draft gate',async()=>{
+  const {domain}=fixture();
+  const mode={mode:'investment',kind:'mode',identifier:'investment',inspection:{kind:'skill',identifier:'research',file:'SKILL.md'}};
+  const preview=domain.updateContext('session',mode);
+  const args={kind:'skill',identifier:'research',file:'SKILL.md',document:'# 修改',expected:'before',contextRevision:preview.contextRevision};
+  await assert.rejects(()=>domain.dispatch('save',args,{sessionId:'session'}),/不是当前工作内容/);
+  domain.updateContext('session',{...mode,kind:'skill',identifier:'research',file:'SKILL.md',dirty:true});
+  await assert.rejects(()=>domain.dispatch('save',args,{sessionId:'session'}),/未保存修改/);
+  const editing=domain.updateContext('session',{...mode,kind:'skill',identifier:'research',file:'SKILL.md',dirty:false});
+  const saved=await domain.dispatch('save',{...args,contextRevision:editing.contextRevision},{sessionId:'session'});
+  assert.equal(saved.document,'# 修改');
+});
+
+test('file locations are limited to files and folders listed by the core',async()=>{
+  const fs=require('node:fs/promises'),os=require('node:os'),path=require('node:path');
+  const root=await fs.mkdtemp(path.join(os.tmpdir(),'asl-skill-location-'));
+  try{
+    await fs.mkdir(path.join(root,'references'));await fs.writeFile(path.join(root,'SKILL.md'),'# skill');await fs.writeFile(path.join(root,'references/guide.md'),'guide');await fs.writeFile(path.join(root,'hidden.md'),'hidden');
+    const {domain}=fixture();domain.catalog=async()=>({skills:[{id:'research',path:root}]});domain.read=async()=>({files:[{path:'SKILL.md'},{path:'references/guide.md'}]});
+    assert.equal((await domain.fileLocation('research','references')).directory,true);
+    assert.equal((await domain.fileLocation('research','SKILL.md')).path,path.join(root,'SKILL.md'));
+    await assert.rejects(()=>domain.fileLocation('research','hidden.md'),/不在当前技能/);
+    await assert.rejects(()=>domain.fileLocation('research','../outside'),/不在当前技能/);
+  }finally{await fs.rm(root,{recursive:true,force:true});}
+});

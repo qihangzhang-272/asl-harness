@@ -18,10 +18,10 @@ async function loadHost(){
 }
 const host=loadHost();
 
-async function mount(config){
+async function mount(config,services={}){
   const plugin=await host;
   let handler,tool,prompt;
-  const ctx={get:()=>null,connection:{requestRejection:()=>null},webServer:{register(value){handler=value.handler;}},tools:{register(value){tool=value;}},effect:fn=>fn(),inject(_services,fn){fn({systemPrompt:{context(value){prompt=value;}}});}};
+  const ctx={get:name=>services[name]||null,connection:{requestRejection:()=>null},webServer:{register(value){handler=value.handler;}},tools:{register(value){tool=value;}},effect:fn=>fn(),inject(_services,fn){fn({systemPrompt:{context(value){prompt=value;}}});}};
   plugin.apply(ctx,config);
   return {plugin,ctx,tool,prompt,async api(action,args={}){
     const req=Readable.from([JSON.stringify({action,args})]);Object.assign(req,{url:'/asl-workspace/api',method:'POST',headers:{}});
@@ -67,5 +67,24 @@ test('configured host still shares its domain between API, prompt and Agent',asy
     await app.api('setContext',{sessionId:'s',view:{mode:'creator',kind:'skill',identifier:'writing',file:'SKILL.md'}});
     const context=JSON.parse(await app.tool.execute({action:'context'},{agent:{session:{id:'s'}}}));
     assert.equal(context.identifier,'writing');assert.match(app.prompt.text({agent:{session:{id:'s'}}}),/writing/);
+  }finally{rmSync(root,{recursive:true,force:true});}
+});
+
+
+test('artifact receipts use the executing session directory and reject missing, secret and definition files',async()=>{
+  const root=mkdtempSync(path.join(tmpdir(),'asl-artifact-'));
+  try{
+    mkdirSync(path.join(root,'desktop'));mkdirSync(path.join(root,'skills/writing'),{recursive:true});mkdirSync(path.join(root,'modes'));
+    writeFileSync(path.join(root,'desktop/bridge.cjs'),'exports.runCore=async()=>({modes:[],skills:[{id:"writing",path:'+JSON.stringify(path.join(root,'skills/writing'))+'}]});');
+    for(const name of ['market','repository-import'])writeFileSync(path.join(root,'desktop',name+'.cjs'),'module.exports={};');
+    writeFileSync(path.join(root,'article.md'),'# 真实产物');writeFileSync(path.join(root,'.env'),'SECRET');writeFileSync(path.join(root,'skills/writing/SKILL.md'),'# 技能');
+    const sessions={get:id=>id==='session-a'?{header:{cwd:root},snapshotEvents:()=>[]}:null};
+    const app=await mount({sourceRoot:root,environment:root},{sessions,agents:{get:()=>({status:'idle'})}});
+    const result=JSON.parse(await app.tool.execute({action:'artifact',args:{path:'article.md',sessionId:'spoofed'}},{agent:{session:{id:'session-a'}}}));
+    assert.equal(result.artifact.path,path.join(root,'article.md'));
+    const preview=await app.api('artifactPreview',{sessionId:'session-a',path:'article.md'});assert.equal(preview.result.document,'# 真实产物');
+    for(const file of ['missing.md','.env','skills/writing/SKILL.md'])assert.equal((await app.api('artifact',{sessionId:'session-a',path:file})).status,400);
+    assert.equal((await app.api('activity',{sessionId:'unknown'})).status,400);
+    await assert.rejects(()=>app.tool.execute({action:'artifactPreview',args:{path:'article.md'}},{agent:{session:{id:'session-a'}}}),/仅用于界面/);
   }finally{rmSync(root,{recursive:true,force:true});}
 });
