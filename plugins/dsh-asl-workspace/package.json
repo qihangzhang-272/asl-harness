@@ -1,6 +1,6 @@
 {
   "name": "dsh-asl-workspace",
-  "version": "0.3.16",
+  "version": "0.3.17",
   "description": "DeepSeek Harness 原生工作区，复用 ASL App 的 Mermaid 编辑画板",
   "license": "MIT",
   "type": "module",

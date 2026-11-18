@@ -1,7 +1,7 @@
 import React,{useEffect,useState} from 'react';
 import {ChevronDown,ChevronUp,FileText,MessageCircle} from 'lucide-react';
 
-const states={running:'DeepSeek 正在工作',idle:'DeepSeek 已就绪',waiting:'等待确认',failed:'执行出错',unknown:'正在连接会话'};
+const states={running:'DeepSeek 正在工作',idle:'DeepSeek 已就绪',completed:'本轮已完成',waiting:'等待确认',failed:'执行出错',unknown:'正在连接会话'};
 const tools={running:'执行中',completed:'完成',failed:'失败',interrupted:'已中断'};
 export default function RunPeek({api,sessionId,onArtifact,onSkill,onChat}){
   const [activity,setActivity]=useState(null),[error,setError]=useState(''),[open,setOpen]=useState(false);

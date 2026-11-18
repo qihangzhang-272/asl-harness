@@ -72,11 +72,14 @@ export function apply(ctx,config){
         const catalog=await service.dispatch('catalog');
         const roots=await definitionRoots(catalog);
         const value=execution.executionSnapshot(session.snapshotEvents(),ctx.get('agents')?.get(sessionId)?.status||'unknown',catalog.skills);
-        const files=[];
+        const files=new Map();
         for(const artifact of value.artifacts){
-          try{const location=await execution.checkedPath(cwd,artifact.path);if(!location.directory&&!roots.some(root=>within(root,location.path)))files.push({...artifact,...location,title:artifact.title||basename(location.path)});}catch{}
+          try{
+            const location=await execution.checkedPath(cwd,artifact.path);
+            if(!location.directory&&!roots.some(root=>within(root,location.path)))files.set(location.path,{...artifact,...location,title:artifact.title||basename(location.path)});
+          }catch{}
         }
-        return {...value,artifacts:files,cwd};
+        return {...value,artifacts:[...files.values()],cwd};
       }
       const location=await artifactLocation(args,sessionId);
       if(location.directory)throw new Error('请选择产物文件');

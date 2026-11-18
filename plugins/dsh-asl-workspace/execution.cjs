@@ -4,17 +4,21 @@ const parse=value=>{if(value&&typeof value==='object')return value;try{return JS
 
 // Read the host's durable tool pairs; canvas selection never enters this projection.
 function executionSnapshot(events,status,skills){
-  const calls=new Map(),artifacts=new Map();let turn=0;
+  const calls=new Map(),artifacts=new Map();let turn=0,turnCompleted=false;
   for(const event of events){
     const data=event.data||{};
     if(event.type==='turn/start'){
       turn=data.turn;
+      turnCompleted=false;
       for(const call of calls.values())if(call.status==='running')call.status='interrupted';
     }
-    if(event.type==='turn/end')for(const call of calls.values())if(call.status==='running')call.status='interrupted';
+    if(event.type==='turn/end'){
+      turnCompleted=data.reason?.kind==='completed';
+      for(const call of calls.values())if(call.status==='running')call.status='interrupted';
+    }
     if(event.type==='tool/call')calls.set(data.callId,{id:data.callId,name:data.name,args:parse(data.arguments),seq:event.seq,turn:data.turn,status:'running'});
     if(event.type!=='tool/result')continue;
-    const message=data.message||{},call=calls.get(message.callId);if(!call)continue;
+    const message=data.message||{},call=calls.get(message.toolCallId??message.callId);if(!call)continue;
     call.status=message.isError?'failed':'completed';
     if(message.isError)continue;
     const args=call.args;
@@ -36,7 +40,7 @@ function executionSnapshot(events,status,skills){
     const args=call.args,name=call.name==='asl_workspace'&&args.action==='read'?parse(args.args).identifier:call.name==='skill'?(args.name||args.skill):null;
     const skill=skills.find(s=>s.id===name);if(skill&&['running','completed'].includes(call.status)){recentSkill={id:skill.id,title:skill.title};if(status==='running'&&call.status==='running')activeSkill=recentSkill;}
   }
-  return {status,turn,activeSkill,recentSkill,tools:tools.slice(-16).map(({args,...call})=>call),artifacts:[...artifacts.values()].slice(-30)};
+  return {status:status==='idle'&&turnCompleted?'completed':status,turn,activeSkill,recentSkill,tools:tools.slice(-16).map(({args,...call})=>call),artifacts:[...artifacts.values()].slice(-30)};
 }
 
 async function checkedPath(root,value){

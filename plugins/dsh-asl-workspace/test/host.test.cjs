@@ -78,10 +78,23 @@ test('artifact receipts use the executing session directory and reject missing, 
     writeFileSync(path.join(root,'desktop/bridge.cjs'),'exports.runCore=async()=>({modes:[],skills:[{id:"writing",path:'+JSON.stringify(path.join(root,'skills/writing'))+'}]});');
     for(const name of ['market','repository-import'])writeFileSync(path.join(root,'desktop',name+'.cjs'),'module.exports={};');
     writeFileSync(path.join(root,'article.md'),'# 真实产物');writeFileSync(path.join(root,'.env'),'SECRET');writeFileSync(path.join(root,'skills/writing/SKILL.md'),'# 技能');
-    const sessions={get:id=>id==='session-a'?{header:{cwd:root},snapshotEvents:()=>[]}:null};
+    const events=[];
+    const sessions={get:id=>id==='session-a'?{header:{cwd:root},snapshotEvents:()=>events}:null};
     const app=await mount({sourceRoot:root,environment:root},{sessions,agents:{get:()=>({status:'idle'})}});
     const result=JSON.parse(await app.tool.execute({action:'artifact',args:{path:'article.md',sessionId:'spoofed'}},{agent:{session:{id:'session-a'}}}));
     assert.equal(result.artifact.path,path.join(root,'article.md'));
+    events.push(
+      {seq:1,type:'turn/start',data:{turn:1}},
+      {seq:2,type:'tool/call',data:{turn:1,callId:'write-1',name:'write',arguments:'{"file_path":"article.md"}'}},
+      {seq:3,type:'tool/result',data:{turn:1,message:{role:'tool',toolCallId:'write-1',content:[{type:'text',text:'Written'}],isError:false}}},
+      {seq:4,type:'tool/call',data:{turn:1,callId:'artifact-1',name:'asl_workspace',arguments:'{"action":"artifact","args":{"path":"article.md"}}'}},
+      {seq:5,type:'tool/result',data:{turn:1,message:{role:'tool',toolCallId:'artifact-1',content:[{type:'text',text:JSON.stringify(result)}],isError:false}}},
+      {seq:6,type:'turn/end',data:{turn:1,reason:{kind:'completed'}}},
+    );
+    const activity=(await app.api('activity',{sessionId:'session-a'})).result;
+    assert.deepEqual(activity.tools.map(tool=>tool.status),['completed','completed']);
+    assert.equal(activity.status,'completed');
+    assert.deepEqual(activity.artifacts.map(artifact=>artifact.path),[result.artifact.path]);
     const preview=await app.api('artifactPreview',{sessionId:'session-a',path:'article.md'});assert.equal(preview.result.document,'# 真实产物');
     for(const file of ['missing.md','.env','skills/writing/SKILL.md'])assert.equal((await app.api('artifact',{sessionId:'session-a',path:file})).status,400);
     assert.equal((await app.api('activity',{sessionId:'unknown'})).status,400);
